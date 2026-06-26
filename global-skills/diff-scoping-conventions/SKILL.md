@@ -39,22 +39,27 @@ Every agent that scopes a change computes the set with this identical logic.
 
 ## The change-set hash
 
-The hash is a SHA-256 over the diff plus the contents of every untracked file:
+The hash is a SHA-256 over the diff plus the contents of every untracked file. It
+is implemented **once**, in the shared hook `./.claude/hooks/compute-change-hash.sh`,
+so every caller agrees byte-for-byte:
 
 ```bash
-{ git diff HEAD; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}'
+{ git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}'
 ```
 
-Two agents record this hash, for two different purposes:
+Three callers use the hook, never a re-typed copy:
 
-- **testing** writes it as `tested_change_hash` in `test-results.json` — its
-  record of exactly what the test run covered.
-- **documentation** writes it as `reviewed_change_hash` in
-  `.pipeline/review-manifest.json`, computed **last**, after every README and
-  `system_architecture.md` edit. This is the deployment gate's **currency
-  anchor** — because documentation edits the tree after testing runs, its hash
-  (not testing's) is what the commit must match.
+- **testing** runs `compute-change-hash.sh` and records the result as
+  `tested_change_hash` in `test-results.json` — its record of exactly what the
+  test run covered.
+- **documentation** runs it via `./.claude/hooks/write-review-manifest.sh`, which
+  writes `reviewed_change_hash` to `.pipeline/review-manifest.json` **last**, after
+  every README and `system_architecture.md` edit. This is the deployment gate's
+  **currency anchor** — because documentation edits the tree after testing runs,
+  its hash (not testing's) is what the commit must match.
+- **deployment-gate.sh** runs the same `compute-change-hash.sh` to recompute the
+  current hash and compare it against `reviewed_change_hash`.
 
-Use the command verbatim everywhere so the deployment gate's recompute matches
-byte-for-byte. On a no-HEAD repo, `git diff HEAD` produces nothing on both sides,
-so the hashes still agree.
+Always call the shared hook rather than re-typing the pipeline, so the gate's
+recompute matches byte-for-byte. On a no-HEAD repo, `git diff HEAD` produces
+nothing on both sides, so the hashes still agree.

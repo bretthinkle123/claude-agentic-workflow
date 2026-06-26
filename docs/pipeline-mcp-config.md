@@ -196,13 +196,13 @@ project-scoped servers only):
 
 ```yaml
 # planning.md      — aws-knowledge + terraform (infra design); NO context7
-tools: Read, Grep, Glob, WebSearch, Write, mcp__aws-knowledge, mcp__terraform
+tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform
 
 # implementation.md — context7 (library APIs) + aws-knowledge + terraform
-tools: Read, Write, Edit, Bash, mcp__context7, mcp__aws-knowledge, mcp__terraform
+tools: Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform
 
 # security.md      — NO MCP (deterministic scanners only; SAST stays a shell hook)
-tools: Read, Bash, Grep, Write
+tools: Read, Bash, Grep, Write, Skill
 
 # debugging.md     — none (no Sentry: this pipeline fixes LOCAL failures pre-merge)
 tools: Read, Edit, Bash, Grep

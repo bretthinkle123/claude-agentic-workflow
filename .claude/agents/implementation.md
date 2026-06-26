@@ -1,7 +1,7 @@
 ---
 name: implementation
 description: Writes code against an approved plan in .pipeline/plan.md. Use after the planning agent's output has been reviewed and approved.
-tools: Read, Write, Edit, Bash, mcp__context7, mcp__aws-knowledge, mcp__terraform
+tools: Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform
 model: sonnet
 effort: medium
 maxTurns: 25

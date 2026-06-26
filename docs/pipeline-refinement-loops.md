@@ -1,5 +1,7 @@
 # Pipeline refinement loops
 
+> **[UNIMPLEMENTED]** — every loop documented here is a candidate design; none is wired into the live agents, hooks, or settings.json. Each becomes active only by following its own "Implementation notes" section.
+
 Documents planned or candidate loop patterns for the agentic pipeline. Each
 entry records the design, token cost, and trigger conditions so the decision to
 implement is informed rather than speculative.

@@ -1,4 +1,5 @@
 #!/bin/bash
+# [UNIMPLEMENTED] — appends per-stage telemetry to .pipeline/run-log.jsonl, but nothing calls it yet (no agent frontmatter, no Stop hook, only the wildcard Bash(./.claude/hooks/*.sh) permission). Wire it in by having the orchestrator invoke it at each stage boundary per the pipeline-orchestration skill, or attach it as an agent Stop hook.
 # Appends one line to .pipeline/run-log.jsonl — the pipeline's per-stage telemetry.
 # Zero-LLM, deterministic. The orchestrator calls it at each stage boundary.
 #

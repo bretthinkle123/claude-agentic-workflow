@@ -7,6 +7,8 @@ A **major revision (2026-06-25)** then acted on a research-backed audit and sett
 
 A **scaffold + environment-setup pass (2026-06-25)** then built and wired the pipeline on a concrete machine (Windows 11): all 7 agents, hooks, `settings.json`, and the 13 original skills were authored; a 14th planning skill, **`containerization-conventions`** (on-demand), was added with a packaging-decision rubric, and the **deployment agent gained a feature-branch step** (it branches off the default branch before its commit so the PR has a head branch — with `git checkout`/`git symbolic-ref` added to the allow-list). Setup-specific additions: **`semgrep-scan.sh`** runs Semgrep through Docker (no native Windows build; `jq`/`osv-scanner` are native), **`log-run.sh`** appends the per-stage `run-log.jsonl` telemetry, **`templates/CLAUDE.md`** is a copy-per-project seed, and the **12 global skills are now version-controlled** in `global-skills/` (installed to `~/.claude/skills/` via `scripts/install-global-skills.sh` — repo is source of truth). See *Environment setup notes* (under *settings.json*) for the full record and the Linux/WSL alternative.
 
+An **audit + hardening pass (2026-06-26)** then ran a full file-by-file consistency check (verdict: ready for a trial run) and applied: `Skill` added to the planning/implementation/security `tools:` lists (on-demand skills are invoked through the Skill tool); the working-tree change-set hash centralized into a shared **`compute-change-hash.sh`** hook that documentation (via the new **`write-review-manifest.sh`**), testing, and `deployment-gate.sh` all call, so the currency recompute matches byte-for-byte; explicit `jq`-presence guards added to `deployment-gate.sh` (fail-closed) and `record-clean.sh` (fail-open, non-silent); the `.env` deny widened to `Read(**/.env)`; and `[UNIMPLEMENTED]` banners placed on `log-run.sh`, `post-deploy-check.sh`, the *Pipeline observability & metrics* section, and `pipeline-refinement-loops.md`. The hook set is now nine; `terraform` 1.15.7 and `checkov` 3.3.2 were also installed locally.
+
 <a id="table-of-contents"></a>
 ## Table of contents
 
@@ -421,6 +423,8 @@ Documentation produces a real artifact coupled to the *final* state of the code,
 
 <a id="pipeline-observability-and-metrics"></a>
 ## Pipeline observability & metrics
+
+> **[UNIMPLEMENTED]** — the `run-log.jsonl` telemetry described here is specified but not live: `log-run.sh` exists yet nothing in any agent, hook, or settings.json calls it, so the log is never written and the metrics below cannot be derived. Activate it by wiring `log-run.sh` into the orchestrator's per-stage flow (pipeline-orchestration skill) or an agent Stop hook. The opt-in LLM-judge plan eval at the end of this section is likewise not in v1.
 
 The deterministic gates verify each *change* (does it build, scan clean, pass tests). They do **not** tell you whether the *pipeline itself* is working well over time — whether plans land first-try, where tokens go, or whether debug loops are creeping up. A lightweight run log closes that gap at zero model cost, and gives you the objective signals the multi-agent literature treats as essential: token use alone explains roughly **80% of agent performance variance**, and Anthropic's own multi-agent system leaned on per-run metrics plus LLM-judge evals to improve. Without this you're flying blind on the very question you care about — *is this thing actually helping?*
 
@@ -1006,11 +1010,13 @@ your-project/
 │   ├── hooks/
 │   │   ├── smoke-check.sh
 │   │   ├── infra-validate.sh          # terraform fmt/validate/plan for infra changes; no-ops without infra/
-│   │   ├── post-deploy-check.sh
+│   │   ├── post-deploy-check.sh        # [UNIMPLEMENTED] CI-only health probe; the pipeline never invokes it
 │   │   ├── record-clean.sh            # resets debug retry counters when both gates pass
 │   │   ├── deployment-gate.sh
 │   │   ├── semgrep-scan.sh            # Semgrep-via-Docker wrapper (Windows; no native build) — see Environment setup notes
-│   │   └── log-run.sh                 # appends one line/stage to run-log.jsonl (orchestrator telemetry helper)
+│   │   ├── compute-change-hash.sh     # shared change-set hash; documentation + deployment-gate call it (single source of truth)
+│   │   ├── write-review-manifest.sh   # documentation's final action: writes review-manifest.json (reviewed_change_hash)
+│   │   └── log-run.sh                 # [UNIMPLEMENTED] appends a line/stage to run-log.jsonl; nothing calls it yet
 │   ├── skills/                        # project-scoped templates ONLY (test-conventions, semgrep-ruleset-guide — fill <PLACEHOLDERS> per project); the global skills live in ~/.claude/skills/, not here
 │   └── settings.json                  # permissions + auto-approve (hook wiring lives in agent frontmatter; see settings.json section)
 ├── templates/
@@ -1148,7 +1154,7 @@ else
 fi
 ```
 
-**`.claude/hooks/post-deploy-check.sh`** — mirrors the smoke check, but against the deployed instance:
+**`.claude/hooks/post-deploy-check.sh`** — **[UNIMPLEMENTED]** in the pipeline (a CI-only hook; the deployment agent stops at the PR, so the pipeline never invokes it). When wired into CI after merge, it mirrors the smoke check against the deployed instance:
 
 ```bash
 #!/bin/bash
@@ -1177,6 +1183,14 @@ STATE=".pipeline/state.json"
 TEST_RESULTS=".pipeline/test-results.json"
 SECURITY_STATUS=".pipeline/security-status.json"
 
+# jq reads the gate status below; if it is missing, surface that (exit 1, non-silent)
+# rather than no-op'ing as if the gates weren't clean. Exit 1 (not 2) so a missing
+# tool reports without blocking the testing agent's stop.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "[record-clean] jq not found on PATH — cannot evaluate gate status; counters not reset." >&2
+  exit 1
+fi
+
 if [ ! -f "$TEST_RESULTS" ] || [ "$(jq -r '.status' "$TEST_RESULTS")" != "pass" ]; then
   exit 0
 fi
@@ -1201,6 +1215,12 @@ SECURITY_STATUS=".pipeline/security-status.json"
 PR_DESCRIPTION=".pipeline/pr-description.md"
 REVIEW_MANIFEST=".pipeline/review-manifest.json"
 
+# Fail closed if jq is unavailable — every status check below depends on it.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Blocked: jq not found on PATH — cannot verify gate status." >&2
+  exit 2
+fi
+
 if [ ! -f "$TEST_RESULTS" ] || [ "$(jq -r '.status' "$TEST_RESULTS")" != "pass" ]; then
   echo "Blocked: tests are not passing. See $TEST_RESULTS." >&2
   exit 2
@@ -1224,10 +1244,11 @@ fi
 # finalized in review-manifest.json (README/architecture writes included).
 if [ -n "$(git status --porcelain)" ]; then
   RECORDED=$(jq -r '.reviewed_change_hash' "$REVIEW_MANIFEST" 2>/dev/null)
-  # Identical change-set hash command to the one documentation records (see the
-  # diff-scoping-conventions skill); on an empty repo (no HEAD) both sides hash
-  # the untracked tree the same way, so they still match.
-  CURRENT=$( { git diff HEAD; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}')
+  # Shared change-set hash helper: documentation's write-review-manifest.sh records
+  # reviewed_change_hash via this same script, so the two match byte-for-byte (see
+  # the diff-scoping-conventions skill). On an empty repo (no HEAD) both sides hash
+  # the untracked tree identically, so they still match.
+  CURRENT=$(./.claude/hooks/compute-change-hash.sh)
   if [ -z "$RECORDED" ] || [ "$RECORDED" = "null" ] || [ "$RECORDED" != "$CURRENT" ]; then
     echo "Blocked: working tree does not match the reviewed state in $REVIEW_MANIFEST (or no hash recorded); re-run documentation after any change, then re-review." >&2
     exit 2
@@ -1237,7 +1258,7 @@ fi
 exit 0
 ```
 
-**`.claude/hooks/log-run.sh`** — deterministic, zero-LLM telemetry helper (added during setup). Not a gate — the orchestrator calls it explicitly at each stage boundary to append one JSON line to `.pipeline/run-log.jsonl`, the metrics source described in *Pipeline observability & metrics*. Wired into the `pipeline-orchestration` skill. `duration_s`/`tokens` from the run-log schema are omitted in v1 (not deterministically available from a shell); the fields that drive the key metrics — stage, status, retries — are captured.
+**`.claude/hooks/log-run.sh`** — **[UNIMPLEMENTED]** (nothing in any agent/hook/settings calls it yet; `run-log.jsonl` is never written). Deterministic, zero-LLM telemetry helper (added during setup). Not a gate — the orchestrator calls it explicitly at each stage boundary to append one JSON line to `.pipeline/run-log.jsonl`, the metrics source described in *Pipeline observability & metrics*. Wired into the `pipeline-orchestration` skill. `duration_s`/`tokens` from the run-log schema are omitted in v1 (not deterministically available from a shell); the fields that drive the key metrics — stage, status, retries — are captured.
 
 ```bash
 #!/bin/bash
@@ -1273,6 +1294,25 @@ MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
   -v "${HOST_DIR}:/src" -w /src "$IMAGE" semgrep "$@"
 ```
 
+**`.claude/hooks/compute-change-hash.sh`** — single source of truth for the working-tree change-set hash (SHA-256 over the tracked diff + untracked file contents). Both `write-review-manifest.sh` (documentation) and `deployment-gate.sh` (the currency recompute) call it, so the two hashes agree byte-for-byte. No `set -e`: on a greenfield repo `git diff HEAD` exits non-zero (no HEAD) and must be tolerated — the hash then covers just the untracked tree.
+
+```bash
+#!/bin/bash
+# Prints the working-tree change-set hash to stdout (see diff-scoping-conventions).
+{ git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}'
+```
+
+**`.claude/hooks/write-review-manifest.sh`** — documentation's final action: writes `.pipeline/review-manifest.json` (the `reviewed_change_hash` currency anchor + a timestamp) via the shared `compute-change-hash.sh`. Replaces the old inline hash+echo so documentation runs through the `Bash(./.claude/hooks/*.sh)` allow-list — no per-binary permission prompts.
+
+```bash
+#!/bin/bash
+set -euo pipefail
+mkdir -p .pipeline
+HASH=$(./.claude/hooks/compute-change-hash.sh)
+printf '{"reviewed_change_hash":"%s","ran_at":"%s"}\n' "$HASH" "$(date -u +%FT%TZ)" > .pipeline/review-manifest.json
+echo "[write-review-manifest] reviewed_change_hash=$HASH"
+```
+
 <a id="subagent-files"></a>
 ## Subagent files
 
@@ -1282,7 +1322,7 @@ MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
 ---
 name: planning
 description: Defines scope and approach for a feature or change. Use at the start of any new feature work, before implementation begins.
-tools: Read, Grep, Glob, WebSearch, Write, mcp__aws-knowledge, mcp__terraform
+tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform
 model: opus
 effort: high
 maxTurns: 20
@@ -1434,7 +1474,7 @@ When invoked:
 ---
 name: implementation
 description: Writes code against an approved plan in .pipeline/plan.md. Use after the planning agent's output has been reviewed and approved.
-tools: Read, Write, Edit, Bash, mcp__context7, mcp__aws-knowledge, mcp__terraform
+tools: Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform
 model: sonnet
 effort: medium
 maxTurns: 25
@@ -1557,7 +1597,7 @@ When invoked:
 ---
 name: security
 description: Runs SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE scanning (OSV Scanner). Use after a successful smoke check, before testing. Does not modify application code — writes only its own report.
-tools: Read, Bash, Grep, Write
+tools: Read, Bash, Grep, Write, Skill
 model: haiku
 effort: low
 maxTurns: 10
@@ -1694,8 +1734,9 @@ When invoked:
 6. Run the full test suite with coverage enabled using the project's configured
    runner (Jest, pytest, go test -cover, etc.) with its coverage flag.
 7. Write structured results to .pipeline/test-results.json. Include
-   `tested_change_hash` — a SHA-256 over the current change set (see the
-   `diff-scoping-conventions` skill for the exact command) — as the record of
+   `tested_change_hash` — a SHA-256 over the current change set, computed with the
+   shared `./.claude/hooks/compute-change-hash.sh` helper (see
+   `diff-scoping-conventions`) — as the record of
    exactly what you tested. (Note: the deployment gate's *currency* check anchors
    to documentation's later `reviewed_change_hash`, not this one, because
    documentation writes README/architecture files after you run; `tested_change_hash`
@@ -1774,13 +1815,14 @@ When invoked:
    exact bytes the human will review and the deployment agent will commit. You
    are the final stage to touch the working tree, so this hash (not testing's
    earlier `tested_change_hash`) is what the deployment gate checks for currency.
-   Compute it with the same change-set command the diff-scoping-conventions skill
-   defines and write it to .pipeline/review-manifest.json:
+   Run the helper hook — it computes the change-set hash with the shared
+   `compute-change-hash.sh` (identical to the deployment gate's recompute, so the
+   two match byte-for-byte) and writes `.pipeline/review-manifest.json`:
    ```
-   HASH=$( { git diff HEAD; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}')
-   echo "{\"reviewed_change_hash\":\"$HASH\",\"ran_at\":\"$(date -u +%FT%TZ)\"}" > .pipeline/review-manifest.json
+   ./.claude/hooks/write-review-manifest.sh
    ```
-   (`.pipeline/` is gitignored, so writing this file does not change the hash.)
+   (`.pipeline/` is gitignored, so writing this file does not change the hash. The
+   script is covered by the `Bash(./.claude/hooks/*.sh)` allow-list — no prompts.)
 8. Report what was updated and stop.
 ```
 
@@ -2216,7 +2258,7 @@ Subagents do not inherit the parent's permissions and will otherwise prompt on e
       "Bash(go test:*)"
     ],
     "deny": [
-      "Read(./.env)",
+      "Read(**/.env)",
       "Read(**/*.tfstate)",
       "Read(**/*.tfvars)"
     ]
@@ -2716,7 +2758,7 @@ After the 2026-06-25 reduction, **`planning` preloads 1** skill (`stride-threat-
 
 **`diff-scoping-conventions`** — (global) — → security, testing
 - **description:** "Shared working-tree change-set logic so security and testing scope to the same files, plus the change-hash both record."
-- **SKILL.md sections:** the change set = tracked changes (`git diff HEAD --name-only`) UNION untracked files (`git ls-files --others --exclude-standard`); the no-HEAD case (empty repo → full scan, first run only); why untracked files MUST be included (new modules/tests are untracked until the deploy commit, and `git diff HEAD` alone misses them); the `scope` / `since_commit` fields both agents record; the change-set hash command — `{ git diff HEAD; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum` — which testing records as `tested_change_hash` (what it tested) and **documentation** records as `reviewed_change_hash` over the final post-documentation tree (the deploy gate's currency anchor — documentation writes READMEs/architecture after testing, so its hash, not testing's, is what the commit must match); the rule that every agent computes the set with this identical command. **NOTE:** there is no `last_clean_commit` pointer — every commit is already a clean baseline because the deployment agent is the only thing that commits (see *Running the pipeline*).
+- **SKILL.md sections:** the change set = tracked changes (`git diff HEAD --name-only`) UNION untracked files (`git ls-files --others --exclude-standard`); the no-HEAD case (empty repo → full scan, first run only); why untracked files MUST be included (new modules/tests are untracked until the deploy commit, and `git diff HEAD` alone misses them); the `scope` / `since_commit` fields both agents record; the change-set hash, centralized in the shared `compute-change-hash.sh` hook — `{ git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum` — which testing records as `tested_change_hash` (what it tested) and **documentation** records as `reviewed_change_hash` (via `write-review-manifest.sh`) over the final post-documentation tree (the deploy gate's currency anchor — documentation writes READMEs/architecture after testing, so its hash, not testing's, is what the commit must match); the rule that every caller runs the shared hook rather than re-typing the command. **NOTE:** there is no `last_clean_commit` pointer — every commit is already a clean baseline because the deployment agent is the only thing that commits (see *Running the pipeline*).
 - **Sibling files:** none.
 - **Source:** `security.md` + `testing.md` (de-duplicate the inline copies) + *Interlock file schemas* `state.json`.
 - **Budget:** ~55 lines.

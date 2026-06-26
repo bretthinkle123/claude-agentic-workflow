@@ -53,8 +53,9 @@ When invoked:
 6. Run the full test suite with coverage enabled using the project's configured
    runner (Jest, pytest, go test -cover, etc.) with its coverage flag.
 7. Write structured results to .pipeline/test-results.json. Include
-   `tested_change_hash` — a SHA-256 over the current change set (see the
-   `diff-scoping-conventions` skill for the exact command) — as the record of
+   `tested_change_hash` — a SHA-256 over the current change set, computed with the
+   shared `./.claude/hooks/compute-change-hash.sh` helper (see
+   `diff-scoping-conventions`) — as the record of
    exactly what you tested. (Note: the deployment gate's *currency* check anchors
    to documentation's later `reviewed_change_hash`, not this one, because
    documentation writes README/architecture files after you run; `tested_change_hash`

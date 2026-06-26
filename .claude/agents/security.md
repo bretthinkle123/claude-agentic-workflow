@@ -1,7 +1,7 @@
 ---
 name: security
 description: Runs SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE scanning (OSV Scanner). Use after a successful smoke check, before testing. Does not modify application code — writes only its own report.
-tools: Read, Bash, Grep, Write
+tools: Read, Bash, Grep, Write, Skill
 model: haiku
 effort: low
 maxTurns: 12

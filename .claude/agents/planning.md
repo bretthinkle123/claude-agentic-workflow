@@ -1,7 +1,7 @@
 ---
 name: planning
 description: Defines scope and approach for a feature or change. Use at the start of any new feature work, before implementation begins.
-tools: Read, Grep, Glob, WebSearch, Write, mcp__aws-knowledge, mcp__terraform
+tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform
 model: opus
 effort: high
 maxTurns: 20

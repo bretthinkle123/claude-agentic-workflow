@@ -1,4 +1,5 @@
 #!/bin/bash
+# [UNIMPLEMENTED] — the pipeline itself never invokes this; the deployment agent stops at the PR and there is no live instance to probe. It is a CI hook: wire it into a GitHub Actions post-deploy step that runs after the PR merges (see docs/pipeline-deployment-targets.md).
 # Confirms the deployed instance is healthy. Failure surfaces for manual
 # rollback decision — never auto-loops into debugging against production.
 #

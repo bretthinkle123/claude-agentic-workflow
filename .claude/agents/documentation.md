@@ -50,11 +50,13 @@ When invoked:
    exact bytes the human will review and the deployment agent will commit. You
    are the final stage to touch the working tree, so this hash (not testing's
    earlier `tested_change_hash`) is what the deployment gate checks for currency.
-   Compute it with the same change-set command the diff-scoping-conventions skill
-   defines and write it to .pipeline/review-manifest.json:
+   Run the helper hook — it computes the change-set hash with the shared
+   `compute-change-hash.sh` (identical to the deployment gate's recompute, so the
+   two match byte-for-byte) and writes `.pipeline/review-manifest.json`:
    ```
-   HASH=$( { git diff HEAD; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}')
-   echo "{\"reviewed_change_hash\":\"$HASH\",\"ran_at\":\"$(date -u +%FT%TZ)\"}" > .pipeline/review-manifest.json
+   ./.claude/hooks/write-review-manifest.sh
    ```
-   (`.pipeline/` is gitignored, so writing this file does not change the hash.)
+   (`.pipeline/` is gitignored, so writing this file does not change the hash. The
+   script is covered by the `Bash(./.claude/hooks/*.sh)` allow-list, so it runs
+   without per-binary permission prompts.)
 8. Report what was updated and stop.

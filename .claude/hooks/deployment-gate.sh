@@ -6,6 +6,14 @@ SECURITY_STATUS=".pipeline/security-status.json"
 PR_DESCRIPTION=".pipeline/pr-description.md"
 REVIEW_MANIFEST=".pipeline/review-manifest.json"
 
+# Fail closed if jq is unavailable — every status check below depends on it.
+# (Without this a missing jq still blocks, but with a misleading "tests not
+# passing" reason; this makes the block reason accurate.)
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Blocked: jq not found on PATH — cannot verify gate status. Install jq and restart the session." >&2
+  exit 2
+fi
+
 if [ ! -f "$TEST_RESULTS" ] || [ "$(jq -r '.status' "$TEST_RESULTS")" != "pass" ]; then
   echo "Blocked: tests are not passing. See $TEST_RESULTS." >&2
   exit 2
@@ -29,10 +37,11 @@ fi
 # finalized in review-manifest.json (README/architecture writes included).
 if [ -n "$(git status --porcelain)" ]; then
   RECORDED=$(jq -r '.reviewed_change_hash' "$REVIEW_MANIFEST" 2>/dev/null)
-  # Identical change-set hash command to the one documentation records (see the
-  # diff-scoping-conventions skill); on an empty repo (no HEAD) both sides hash
-  # the untracked tree the same way, so they still match.
-  CURRENT=$( { git diff HEAD; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}')
+  # Shared change-set hash helper: documentation's write-review-manifest.sh records
+  # reviewed_change_hash via this same script, so the two match byte-for-byte (see
+  # the diff-scoping-conventions skill). On an empty repo (no HEAD) both sides hash
+  # the untracked tree identically, so they still match.
+  CURRENT=$(./.claude/hooks/compute-change-hash.sh)
   if [ -z "$RECORDED" ] || [ "$RECORDED" = "null" ] || [ "$RECORDED" != "$CURRENT" ]; then
     echo "Blocked: working tree does not match the reviewed state in $REVIEW_MANIFEST (or no hash recorded); re-run documentation after any change, then re-review." >&2
     exit 2

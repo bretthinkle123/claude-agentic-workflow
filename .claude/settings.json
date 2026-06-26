@@ -33,7 +33,7 @@
       "Bash(go test:*)"
     ],
     "deny": [
-      "Read(./.env)",
+      "Read(**/.env)",
       "Read(**/*.tfstate)",
       "Read(**/*.tfvars)"
     ]

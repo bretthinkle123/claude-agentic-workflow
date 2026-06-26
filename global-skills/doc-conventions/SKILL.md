@@ -60,11 +60,16 @@ highlights. The deployment gate checks this file exists. See
 
 After every README / `system_architecture.md` / source edit is written, record
 the currency anchor (this must be your final action, so it captures the exact
-bytes the human reviews and deployment commits):
+bytes the human reviews and deployment commits). Run the helper hook, which uses
+the shared `compute-change-hash.sh` (the same hash the deployment gate recomputes,
+so they match byte-for-byte) and writes the manifest:
 
 ```bash
-HASH=$( { git diff HEAD; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}')
-echo "{\"reviewed_change_hash\":\"$HASH\",\"ran_at\":\"$(date -u +%FT%TZ)\"}" > .pipeline/review-manifest.json
+./.claude/hooks/write-review-manifest.sh
+# writes {"reviewed_change_hash":"<sha256>","ran_at":"<UTC ISO-8601>"} to
+# .pipeline/review-manifest.json
 ```
 
-`.pipeline/` is gitignored, so writing this file doesn't change the hash.
+`.pipeline/` is gitignored, so writing this file doesn't change the hash. The
+script is covered by the `Bash(./.claude/hooks/*.sh)` allow-list, so it runs
+without per-binary permission prompts.
