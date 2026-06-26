@@ -64,7 +64,43 @@ When invoked:
      rather than parameterised queries. Flag as critical.
    Record migration findings in the same `critical_count` / `warning_count`
    totals as other findings.
-6. Write findings to .pipeline/security-report.md with YAML frontmatter (the
+6. **Manual security checks** — three invariants that scanners miss or under-report.
+   Fold all findings into the same `critical_count` / `warning_count` totals.
+
+   **a. Secrets / API key exposure** — grep the change set for string literals
+   assigned to variables named `key`, `token`, `secret`, `password`, `api_key`,
+   `apikey`, or `credentials` (case-insensitive):
+   ```
+   grep -rniE "(api_key|apikey|token|secret|password|credentials)\s*=\s*['\"][^'\"]{8,}" <change-set files>
+   ```
+   Also verify:
+   - `.env` is listed in `.gitignore` and no `.env` file appears in the tracked
+     change set (`git ls-files .env` should return nothing)
+   - `CLAUDE.md`, `PROJECT.md`, and any config files (`.yaml`, `.toml`, `.json`,
+     `*.cfg`) in the change set contain no embedded secrets
+   Flag any finding as **critical**.
+
+   **b. Row-level security** — for every ORM model or database table touched in
+   the diff, grep for queries and verify each one includes a user-scoping predicate
+   (`user_id=`, `owner_id=`, `WHERE user_id`, etc.):
+   - Route handlers that return a resource by ID: is there an ownership assertion
+     before the return (not just a PK lookup)?
+   - Any ORM `.all()` / `.filter()` or raw `SELECT` that could return rows
+     belonging to a different user without a scoping predicate
+   Flag any query on user-owned data that lacks a scoping predicate as **critical**.
+
+   **c. Input / output sanitization** — across the change set:
+   - HTTP inputs (path params, query params, request bodies, file uploads): verify
+     they pass through a schema validation layer (Pydantic `BaseModel`, Zod,
+     marshmallow) before reaching business logic or DB queries — bare
+     `request.args['x']` used directly is a finding
+   - Database interactions: verify parameterized queries or ORM bindings — grep for
+     f-strings or `%`-formatted SQL (`f"SELECT.*{`, `"SELECT.*" % `)
+   - HTML output: verify template engine autoescape is enabled; flag any `Markup()`,
+     `dangerouslySetInnerHTML`, or raw string injection into HTML
+   Flag any bypass of validation or unparameterized query as **critical**.
+
+7. Write findings to .pipeline/security-report.md with YAML frontmatter (the
    human-readable detail you will read directly):
    - `status`: set to "issues-found" if `critical_count > 0`; otherwise "clean".
      Warnings are reported in the body but do NOT make the report non-clean and
@@ -73,17 +109,17 @@ When invoked:
      working-tree diff was measured against, or `null` on a full first scan)
    - `critical_count`, `warning_count`
    - `semgrep_findings`, `osv_findings`, plus `checkov_findings` when infra was scanned (counts per tool)
-7. ALSO write a machine-readable `.pipeline/security-status.json` so the gate
+8. ALSO write a machine-readable `.pipeline/security-status.json` so the gate
    hooks parse status with `jq` (already a required tool) instead of grepping
    the markdown — the hooks NEVER parse the `.md`:
    ```json
    { "status": "clean", "critical_count": 0, "warning_count": 1,
      "ran_at": "<ISO timestamp>", "scope": "diff", "since_commit": "<hash|null>" }
    ```
-8. **Self-audit before writing reports.** Before writing any output file, verify:
+9. **Self-audit before writing reports.** Before writing any output file, verify:
    - Every file in the diff-scoped change set appears in the scan results (none silently skipped).
    - Every critical finding includes a specific file path and line number — no vague "potential issue" entries.
    - `security-status.json` counts (`critical_count`, `warning_count`) exactly match the totals in `security-report.md` — no off-by-one between the two files.
    - `status` in both files is "issues-found" if and only if `critical_count > 0`.
    If any check fails, re-scan or correct the output before proceeding.
-9. Report a one-line summary (tools used, scope, finding counts) and stop.
+10. Report a one-line summary (tools used, scope, finding counts) and stop.

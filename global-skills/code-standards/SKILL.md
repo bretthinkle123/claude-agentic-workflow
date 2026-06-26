@@ -44,3 +44,38 @@ access** — through centralized facade modules, never scattered inline calls.
 - Worked facade examples live in the on-demand `auth-patterns` (the `auth/`
   guard facade) and `logging-conventions` (the single configured logger) skills —
   invoke them when the change touches those layers.
+
+## Security invariants
+
+Apply on every file you touch.
+
+### Secrets and API keys
+- Never hardcode API keys, tokens, passwords, or any credential in source code,
+  config files, or migration files — not even as a placeholder default.
+- Read all secrets from environment variables or a secrets manager at runtime.
+- Route all config/secret access through the centralized config facade; never call
+  `os.environ` or `process.env` inline across the codebase.
+- Verify `.env` is in `.gitignore` before creating any `.env` file.
+
+### Row-level security
+- Every query that reads or mutates user-owned data must include a user-scoping
+  predicate (e.g. `filter(user_id=current_user_id)`, `WHERE user_id = $1`).
+- Never return a resource without verifying the caller owns or is authorized to
+  access it — enforce the ownership check in the route handler or service layer,
+  not assumed from the URL alone.
+- When using an ORM, scope every queryset by the authenticated user's ID before
+  applying any other filter; never start from an unscoped `Model.objects.all()` or
+  `db.query(Model)` on user-owned data.
+
+### Input validation and output encoding
+- Validate all inputs at system boundaries: HTTP path params, query params, request
+  bodies, file uploads, CLI arguments, and any value crossing a trust boundary.
+  Use the framework's schema validation (Pydantic `BaseModel`, Zod, marshmallow) —
+  not ad-hoc `if` / `isinstance` checks.
+- Use parameterized queries or ORM bindings for every database interaction. Never
+  interpolate user-supplied values into SQL strings.
+- Encode outputs for their destination: HTML via the template engine's autoescape
+  (Jinja2 `autoescape=True`, React JSX); JSON via `json.dumps` / `res.json()`.
+  Never pass `str(user_value)` directly into a response template or raw HTML.
+- Sanitize before logging: strip or redact PII and never log raw request bodies that
+  may contain passwords or tokens (see `logging-conventions`).
