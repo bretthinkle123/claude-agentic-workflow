@@ -4,7 +4,7 @@ description: Runs SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE 
 tools: Read, Bash, Grep, Write
 model: haiku
 effort: low
-maxTurns: 10
+maxTurns: 12
 # No MCP servers by design: security's work is deterministic — it runs
 # Semgrep/OSV/Checkov (shell) and reports the findings; it does not research
 # provider docs. SAST stays a shell hook, never MCP. (aws-knowledge+terraform were

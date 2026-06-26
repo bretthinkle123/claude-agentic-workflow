@@ -1,6 +1,6 @@
 ---
 name: code-standards
-description: Naming, function size, comment/docstring rules, the five SOLID principles with smell tests, and how to structure facade modules — the implementation agent's one coding-standards reference.
+description: Naming, function size, comment/docstring rules, SOLID, facade modules, and security invariants (no hardcoded secrets, row-level security, input validation/output encoding) — the implementation agent's one coding-standards reference.
 ---
 
 # Code standards
@@ -46,8 +46,6 @@ access** — through centralized facade modules, never scattered inline calls.
   invoke them when the change touches those layers.
 
 ## Security invariants
-
-Apply on every file you touch.
 
 ### Secrets and API keys
 - Never hardcode API keys, tokens, passwords, or any credential in source code,
