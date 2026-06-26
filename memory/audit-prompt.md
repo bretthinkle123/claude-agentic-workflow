@@ -20,13 +20,13 @@ Read these files in order before forming any opinions:
 - `memory/brett-profile.md` — preferences and working style
 
 **Main spec (read in full):**
-- `agentic-pipeline-plan.md` — the authoritative design doc (~2600 lines, three parts:
+- `docs/agentic-pipeline-plan.md` — the authoritative design doc (~2600 lines, three parts:
   orientation guide, main document, implementation appendix)
 
 **Companion files (skim for cross-reference checks):**
-- `pipeline-alternatives.md` — non-default scaffolds (Cognito, GCP, JS backend, Go/Java)
-- `pipeline-deployment-targets.md` — CI/CD patterns (GitHub Actions, ECS, Lambda, etc.)
-- `pipeline-mcp-config.md` — per-agent MCP mapping + token-vs-performance verdict table
+- `docs/pipeline-alternatives.md` — non-default scaffolds (Cognito, GCP, JS backend, Go/Java)
+- `docs/pipeline-deployment-targets.md` — CI/CD patterns (GitHub Actions, ECS, Lambda, etc.)
+- `docs/pipeline-mcp-config.md` — per-agent MCP mapping + token-vs-performance verdict table
 
 Do not begin the audit until you have read all six files.
 
@@ -51,7 +51,7 @@ A reusable Claude Code multi-agent SDLC pipeline:
 - The deployment agent makes the pipeline's only commit.
 
 It is in the DESIGN phase. Nothing has been built yet. The goal of this audit is to
-determine whether `agentic-pipeline-plan.md` and the repo are fully ready to start
+determine whether `docs/agentic-pipeline-plan.md` and the repo are fully ready to start
 creating the actual files.
 
 ---

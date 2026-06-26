@@ -8,7 +8,7 @@ description: Firebase-default auth facade, OAuth 2.0 provider setup, the two Duo
 Invoke this when a feature involves user identity or protected resources. Default
 provider is **Firebase Auth** (cloud-agnostic — Google-hosted, no GCP infra, runs
 on AWS). **Amazon Cognito** is the AWS-single-vendor alternative; its scaffold
-lives in `pipeline-alternatives.md`, not here. Buildable default code is in
+lives in `docs/pipeline-alternatives.md`, not here. Buildable default code is in
 `scaffold/` (Python backend + JS frontend).
 
 ## The facade rule

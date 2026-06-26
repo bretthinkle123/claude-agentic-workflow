@@ -41,4 +41,4 @@ The pipeline never auto-rolls-back production. A post-deploy failure (detected i
 CI) surfaces a **manual** rollback decision — investigate first, because a
 rollback against a forward-only migration can lose data. The concrete rollback
 commands (ECS task-definition revert, Lambda alias, Alembic downgrade, git
-revert) live in `pipeline-deployment-targets.md` — pull them when wiring CI.
+revert) live in `docs/pipeline-deployment-targets.md` — pull them when wiring CI.

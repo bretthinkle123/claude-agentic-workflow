@@ -56,4 +56,4 @@ implications. Authoring the Dockerfile / Kubernetes manifests in implementation 
 **image scanning** (e.g. Trivy) in security are a known, deferred gap — there is no
 designated home or scanner for those artifacts yet. Until then, planning surfaces the
 decision at the human checkpoint and CI handles delivery (see
-`pipeline-deployment-targets.md`).
+`docs/pipeline-deployment-targets.md`).

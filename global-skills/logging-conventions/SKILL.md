@@ -7,7 +7,7 @@ description: Standard structured-log field set, PII redaction rules, log-level s
 
 Invoke this when a feature produces observable events (errors, user actions,
 state changes). Default logger is **structlog (Python)**; the Pino/JS variant and
-GCP backend live in `pipeline-alternatives.md`. Buildable default code is in
+GCP backend live in `docs/pipeline-alternatives.md`. Buildable default code is in
 `scaffold/` (`logger.py` + request `middleware.py`).
 
 ## The logger-facade rule

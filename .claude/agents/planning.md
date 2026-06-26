@@ -6,7 +6,7 @@ model: opus
 effort: high
 maxTurns: 20
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
-# pipeline-mcp-config.md), never baked into the portable agent. The two tools
+# docs/pipeline-mcp-config.md), never baked into the portable agent. The two tools
 # above resolve only on a project that opts in — aws-knowledge + terraform earn
 # their tokens on infra (infra/) work and load nothing otherwise. Context7 is
 # intentionally NOT on planning (no benefit for architecture reasoning); it lives
@@ -46,7 +46,7 @@ hard requirements** — you are free to recommend a better-suited option for a
 specific project and justify it under **## Stack notes** (the pipeline can fetch
 or generate the alternative's docs after the plan is approved). Only the two
 default languages and the AWS path are documented in the main plan; alternatives
-live in `pipeline-alternatives.md`:
+live in `docs/pipeline-alternatives.md`:
 - **Backend language:** Python (all backend logic, scaffolds, and conventions default to Python)
 - **Frontend language:** JavaScript
 - **Cloud / infrastructure:** **AWS** — Terraform with S3/DynamoDB remote state (`iac-conventions`). The single default cloud. You may recommend GCP/another, but the main plan documents only AWS.

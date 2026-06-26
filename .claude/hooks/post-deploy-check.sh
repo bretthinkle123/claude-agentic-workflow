@@ -4,7 +4,7 @@
 #
 # NOTE: this is a CI hook — run it in CI after the PR is merged and CI deploys,
 # NOT as a pipeline Stop hook (the deployment agent stops at the PR; there is no
-# live instance to probe yet). See pipeline-deployment-targets.md for wiring it
+# live instance to probe yet). See docs/pipeline-deployment-targets.md for wiring it
 # into a GitHub Actions workflow.
 
 DEPLOY_URL="${DEPLOY_HEALTH_URL:?Set DEPLOY_HEALTH_URL}"

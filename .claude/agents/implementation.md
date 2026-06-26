@@ -6,7 +6,7 @@ model: sonnet
 effort: medium
 maxTurns: 25
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
-# pipeline-mcp-config.md), not baked into the portable agent. context7 gives
+# docs/pipeline-mcp-config.md), not baked into the portable agent. context7 gives
 # current, version-specific library APIs (the main per-feature token win — avoids
 # wrong-API write/fail/rewrite cycles); aws-knowledge + terraform help only on
 # infra projects. All three load nothing unless the project defines them.

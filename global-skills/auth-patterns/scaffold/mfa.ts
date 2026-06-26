@@ -2,7 +2,7 @@ import { TotpMultiFactorGenerator, getMultiFactorResolver, getAuth } from 'fireb
 
 // Path A — Firebase TOTP MFA (recommended). Duo Mobile acts as the authenticator
 // app (TOTP is RFC 6238). Path B (Duo Universal Prompt) is a backend integration;
-// see the auth-patterns SKILL.md and pipeline-alternatives.md.
+// see the auth-patterns SKILL.md and docs/pipeline-alternatives.md.
 
 /** Generate TOTP secret and return QR code URI for Duo Mobile enrollment. */
 export async function enrollTotp(user) {

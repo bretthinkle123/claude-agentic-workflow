@@ -62,5 +62,5 @@ When invoked:
    greenfield first commit where no branch was created.)
 5. **Report the PR URL and stop.** Production deployment (CI checks, infrastructure
    apply, app deploy, DB migrations, App Store submission) happens outside this
-   pipeline after the PR is merged. See `pipeline-deployment-targets.md` for
+   pipeline after the PR is merged. See `docs/pipeline-deployment-targets.md` for
    those patterns when you are ready to add them.
