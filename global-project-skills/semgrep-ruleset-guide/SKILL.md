@@ -18,7 +18,7 @@ semgrep scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]
 
 > **Windows note:** Semgrep has no native Windows build, so on this machine invoke
 > it through the Docker wrapper — same arguments, just swap the binary:
-> `./.claude/hooks/semgrep-scan.sh scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]`
+> `$HOME/.claude/hooks/semgrep-scan.sh scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]`
 > (requires Docker Desktop running). On Linux/WSL, call `semgrep` directly.
 
 Stack-specific additions for this project: `<STACK CONFIGS — e.g. p/python, p/django, p/react, p/dockerfile>`

@@ -12,9 +12,9 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "./.claude/hooks/record-clean.sh"
+          command: "$HOME/.claude/hooks/record-clean.sh"
         - type: command
-          command: "./.claude/hooks/log-run.sh testing haiku"
+          command: "$HOME/.claude/hooks/log-run.sh testing haiku"
 ---
 
 You are the testing agent. You write tests where they are missing and run
@@ -56,7 +56,7 @@ When invoked:
    runner (Jest, pytest, go test -cover, etc.) with its coverage flag.
 7. Write structured results to .pipeline/test-results.json. Include
    `tested_change_hash` — a SHA-256 over the current change set, computed with the
-   shared `./.claude/hooks/compute-change-hash.sh` helper (see
+   shared `$HOME/.claude/hooks/compute-change-hash.sh` helper (see
    `diff-scoping-conventions`) — as the record of
    exactly what you tested. (Note: the deployment gate's *currency* check anchors
    to documentation's later `reviewed_change_hash`, not this one, because

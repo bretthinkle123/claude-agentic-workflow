@@ -1,5 +1,13 @@
 #!/bin/bash
 # Blocks deployment unless interlock files show a clean, CURRENT, documented state.
+#
+# Installed globally at ~/.claude/hooks/ and wired as the deployment agent's Bash
+# PreToolUse gate. Deliberately has NO ".pipeline/state.json" no-op guard (unlike
+# the ambient Stop hooks): if it ever fires outside a bootstrapped pipeline project
+# the interlock files below are absent, so every check fails CLOSED (blocks) —
+# exactly the safe behavior. Resolve sibling hooks relative to THIS script (not the
+# CWD) so the global install location still finds compute-change-hash.sh.
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 TEST_RESULTS=".pipeline/test-results.json"
 SECURITY_STATUS=".pipeline/security-status.json"
@@ -41,7 +49,7 @@ if [ -n "$(git status --porcelain)" ]; then
   # reviewed_change_hash via this same script, so the two match byte-for-byte (see
   # the diff-scoping-conventions skill). On an empty repo (no HEAD) both sides hash
   # the untracked tree identically, so they still match.
-  CURRENT=$(./.claude/hooks/compute-change-hash.sh)
+  CURRENT=$("$HOOK_DIR/compute-change-hash.sh")
   if [ -z "$RECORDED" ] || [ "$RECORDED" = "null" ] || [ "$RECORDED" != "$CURRENT" ]; then
     echo "Blocked: working tree does not match the reviewed state in $REVIEW_MANIFEST (or no hash recorded); re-run documentation after any change, then re-review." >&2
     exit 2

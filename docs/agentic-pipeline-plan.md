@@ -11,6 +11,8 @@ An **audit + hardening pass (2026-06-26)** then ran a full file-by-file consiste
 
 A **telemetry-activation pass (2026-06-26, later)** then took the run log live before the first test project: **`log-run.sh` was wired as a `Stop` hook on all seven agents** (it no longer needs an orchestrator call) and its signature changed to `log-run.sh <stage> <model> [status] [retries]` — `feature` auto-derives from the git branch and `status`/`retries` auto-derive from each stage's `.pipeline/*` artifact, with `model` and `files_changed` added to every line and coverage/finding-count extras added for testing/security. To give the implementation stage a *real* status instead of a default `pass`, **`smoke-check.sh` now writes `.pipeline/smoke-status.json`** on every exit path and `log-run.sh` reads it. Two greenfield-safety bugs in `log-run.sh` were fixed (a `pipefail` abort and a corrupted `feature` value when no commit exists yet). The **testing agent's `maxTurns` was reduced 15 → 10** (Haiku; forces earlier escalation to debugging rather than thrashing). Known limit: a `Stop` hook does not fire on a `maxTurns` cap-out, so a capped stage is absent from the log (a missing line is itself the cap-out signal).
 
+A **portable-install migration (2026-06-26, latest)** then moved the whole pipeline from per-project copies to a **publish-once / bootstrap-per-project** model, so a new repo no longer copies `.claude/` file-by-file. **Source of truth is now the repo's `global-agents/`, `global-hooks/`, `global-skills/`, `global-project-skills/`, and `templates/` directories**, published to the user level (`~/.claude/agents`, `~/.claude/hooks`, `~/.claude/skills`, `~/.claude/pipeline-templates`) by **`scripts/install-global.sh`** (which supersedes the old `install-global-skills.sh`, adds a manifest-backed collision guard so it never silently overwrites another user's same-named files, and a `--force` override). A new **`scripts/bootstrap-project.sh`** (run from inside any repo, also installed to `~/.claude/pipeline-templates/`) writes only the per-project files: `.claude/settings.json` (the broad command allow-list stays **project-scoped**, never elevated to global settings), `.pipeline/state.json`, the two project skills, `CLAUDE.md`/`PROJECT.md`, and `.gitignore` entries — idempotent and never committing. Consequently **all hook paths became `$HOME/.claude/hooks/…`** (frontmatter, agent bodies, skills, and the `Bash($HOME/.claude/hooks/*.sh)` allow-list), and cross-hook calls resolve self-relative via `HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`. Global-hook safety rests on three facts: hooks are wired in **agent frontmatter** so they fire only when a pipeline agent is invoked (no always-on session hook); every ambient hook opens with `[ -f .pipeline/state.json ] || exit 0` (instant no-op outside a bootstrapped project); and `deployment-gate.sh` keeps **no** guard so it fails closed where interlock files are absent. `smoke-check.sh` also gained an optional `.pipeline/smoke.env` source for per-project start/health/build commands, and **refuses to source it if git tracks it** (blocks a hostile cloned repo from shipping a committed `smoke.env` to run code on the next pipeline user). **Below, the historical `.claude/agents/*.md` and `.claude/hooks/*.sh` paths describe the original in-repo design and remain conceptually accurate; the live runtime location is now `~/.claude/`, published from the `global-*/` source dirs.**
+
 <a id="table-of-contents"></a>
 ## Table of contents
 
@@ -2328,14 +2330,20 @@ a future setup (or a move to Linux/WSL) knows what was assumed.
   project root (the same template shown under *CLAUDE.md template*), so every agent has
   stack + "what done means" context and the smoke check has a start/health target.
 
-**Global skills — versioned in repo, installed to `~/.claude/skills/`:**
-- The 12 global skills live in **`global-skills/`** in this repo (source of truth) and
-  are installed to `~/.claude/skills/` by running **`scripts/install-global-skills.sh`**.
-  On a new machine: clone this repo, run the script once, restart Claude Code. To update
-  a skill: edit it under `global-skills/<name>/SKILL.md`, re-run the script, restart.
-  The script is idempotent (safe to re-run); it never deletes skills removed from the
-  repo (manual cleanup — avoids accidental removals on shared machines). Dry-run available:
-  `./scripts/install-global-skills.sh dry-run`.
+**Global runtime — versioned in repo, installed to `~/.claude/` (see the portable-install migration above):**
+- The whole pipeline is published from this repo's source dirs — `global-agents/`,
+  `global-hooks/`, `global-skills/` (12 skills), `global-project-skills/` (2 templates),
+  and `templates/` — to `~/.claude/{agents,hooks,skills,pipeline-templates}` by running
+  **`scripts/install-global.sh`**. On a new machine: clone this repo, run the script once,
+  restart Claude Code. To update anything: edit it under its `global-*/` (or `templates/`)
+  source dir, re-run the script, restart. The script is idempotent and has a manifest-backed
+  collision guard — it aborts (rather than silently overwrite) if a destination file you did
+  not install via this script already exists with different content; pass `--force` to
+  override. It never deletes files removed from the repo (manual cleanup — avoids accidental
+  removals on shared machines). Dry-run available: `./scripts/install-global.sh dry-run`.
+- Per project, run **`bash ~/.claude/pipeline-templates/bootstrap-project.sh`** from the repo
+  root to write the small per-project files (`.claude/settings.json`, `.pipeline/state.json`,
+  the 2 project skills, `CLAUDE.md`/`PROJECT.md`, `.gitignore`).
 
 **Prerequisite tools on this machine:** `git`, `gh`, `npx` (present); `jq`,
 `osv-scanner` (winget, native); `semgrep` (via Docker Desktop); `terraform` not
@@ -2672,7 +2680,7 @@ This is the build spec for every skill the pipeline uses — what each `SKILL.md
 - **Keep the core lean.** Preloaded skills cost context on every run of their agent; on-demand skills cost context only when invoked. Either way, hit the per-skill line budgets below and push bulky material — full rule tables, long code, per-language variants — into **sibling files** read on demand (via Read), never inline. This progressive-disclosure split plus the on-demand reclassification are the main token levers.
 - **Single source of truth.** Where the content already exists in this plan (auth, logging, IaC, diff-scoping, escalation, deployment), the skill is an *extract* — lift the wording so the two stay in sync, and delete any copy duplicated inline in an agent prompt. Don't fork.
 - **Global vs project.** Skills tagged **(global)** are stack-agnostic and live once in `~/.claude/skills/`. Skills tagged **(project)** ship as templates with `<PLACEHOLDERS>` (coverage thresholds, rule sets, runner commands) that each project overrides with a local `.claude/skills/<name>/` copy.
-- **Where each skill lives — concrete placement.** Of the 14 skills, **12 are global** (`stride-threat-model-template`, `code-standards`, `diff-scoping-conventions`, `doc-conventions`, `debugging-escalation-protocol`, `deployment-checklist-and-rollback`, and the 6 on-demand ones). These are **version-controlled in `global-skills/`** in this repo (source of truth) and installed to `~/.claude/skills/` via `scripts/install-global-skills.sh` — see *Environment setup notes* for the workflow. The **2 project-scoped templates** (`test-conventions`, `semgrep-ruleset-guide`) are committed to each project under `.claude/skills/<name>/SKILL.md` with their `<PLACEHOLDERS>` filled in. Concretely: this repo's `.claude/skills/` directory contains only those 2 project templates; the 12 global skills are in `global-skills/` and installed separately.
+- **Where each skill lives — concrete placement.** Of the 14 skills, **12 are global** (`stride-threat-model-template`, `code-standards`, `diff-scoping-conventions`, `doc-conventions`, `debugging-escalation-protocol`, `deployment-checklist-and-rollback`, and the 6 on-demand ones). These are **version-controlled in `global-skills/`** in this repo (source of truth) and installed to `~/.claude/skills/` via `scripts/install-global.sh` — see *Environment setup notes* and the portable-install migration for the workflow. The **2 project-scoped templates** (`test-conventions`, `semgrep-ruleset-guide`) live in **`global-project-skills/`** in this repo; `install-global.sh` stages them to `~/.claude/pipeline-templates/project-skills/`, and `bootstrap-project.sh` copies them into each project's `.claude/skills/<name>/SKILL.md` where the planning/security agents fill their `<PLACEHOLDERS>`. (Earlier revisions kept these 2 templates directly under this repo's `.claude/skills/`; that directory no longer exists after the migration.)
 
 <a id="per-agent-preload-weight-token-efficiency-note"></a>
 ### Per-agent preload weight (token-efficiency note)

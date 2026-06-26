@@ -6,6 +6,10 @@ STATE=".pipeline/state.json"
 TEST_RESULTS=".pipeline/test-results.json"
 SECURITY_STATUS=".pipeline/security-status.json"
 
+# Pipeline-project guard: installed globally; no-op (and no jq warning) in any repo
+# that is not a bootstrapped pipeline project — there are no retry counters to reset.
+[ -f "$STATE" ] || exit 0
+
 # jq reads the gate status below. If it is missing, surface that (non-zero,
 # non-silent) instead of no-op'ing as if the gates weren't clean — a silent skip
 # would leave the retry counters un-reset on a genuinely clean pass. Exit 1, not 2,

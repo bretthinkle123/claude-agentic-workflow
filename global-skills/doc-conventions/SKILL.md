@@ -65,11 +65,11 @@ the shared `compute-change-hash.sh` (the same hash the deployment gate recompute
 so they match byte-for-byte) and writes the manifest:
 
 ```bash
-./.claude/hooks/write-review-manifest.sh
+$HOME/.claude/hooks/write-review-manifest.sh
 # writes {"reviewed_change_hash":"<sha256>","ran_at":"<UTC ISO-8601>"} to
 # .pipeline/review-manifest.json
 ```
 
 `.pipeline/` is gitignored, so writing this file doesn't change the hash. The
-script is covered by the `Bash(./.claude/hooks/*.sh)` allow-list, so it runs
+script is covered by the `Bash($HOME/.claude/hooks/*.sh)` allow-list, so it runs
 without per-binary permission prompts.

@@ -11,7 +11,7 @@ Each subdirectory is a skill (`<name>/SKILL.md` plus optional sibling files). Ag
 Run the install script from the repo root:
 
 ```bash
-./scripts/install-global-skills.sh
+./scripts/install-global.sh
 ```
 
 Then **restart Claude Code** (or start a new session) so the updated files are picked up.
@@ -19,7 +19,7 @@ Then **restart Claude Code** (or start a new session) so the updated files are p
 To preview what would change without writing anything:
 
 ```bash
-./scripts/install-global-skills.sh dry-run
+./scripts/install-global.sh dry-run
 ```
 
 The script is idempotent — safe to re-run at any time. New skills are added, existing ones are overwritten. Skills deleted from this directory are **not** removed from `~/.claude/skills/` automatically (intentional — avoids accidents on shared machines; delete manually if needed).
@@ -27,13 +27,13 @@ The script is idempotent — safe to re-run at any time. New skills are added, e
 ## Updating a skill
 
 1. Edit `global-skills/<name>/SKILL.md` (or its sibling files) in this repo.
-2. Run `./scripts/install-global-skills.sh`.
+2. Run `./scripts/install-global.sh`.
 3. Restart Claude Code.
 
 ## Adding a new skill
 
 1. Create `global-skills/<name>/SKILL.md` with `name:` and `description:` frontmatter.
-2. Run `./scripts/install-global-skills.sh`.
+2. Run `./scripts/install-global.sh`.
 3. To **preload** it (loaded into an agent at startup), add `<name>` to that agent's `skills:` frontmatter in `.claude/agents/<agent>.md`.
 4. To keep it **on-demand** (agent invokes it via the Skill tool when relevant), leave it off the frontmatter list and make sure the `description:` line is specific enough for the model to know when to invoke it.
 5. Restart Claude Code.
@@ -43,7 +43,7 @@ The script is idempotent — safe to re-run at any time. New skills are added, e
 ```bash
 git clone <this-repo>
 cd claude-agentic-workflow
-./scripts/install-global-skills.sh
+./scripts/install-global.sh
 ```
 
 Then restart Claude Code.

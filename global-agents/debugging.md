@@ -9,7 +9,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "./.claude/hooks/log-run.sh debugging sonnet"
+          command: "$HOME/.claude/hooks/log-run.sh debugging sonnet"
 skills:
   - debugging-escalation-protocol
 ---

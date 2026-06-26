@@ -40,7 +40,7 @@ Every agent that scopes a change computes the set with this identical logic.
 ## The change-set hash
 
 The hash is a SHA-256 over the diff plus the contents of every untracked file. It
-is implemented **once**, in the shared hook `./.claude/hooks/compute-change-hash.sh`,
+is implemented **once**, in the shared hook `$HOME/.claude/hooks/compute-change-hash.sh`,
 so every caller agrees byte-for-byte:
 
 ```bash
@@ -52,7 +52,7 @@ Three callers use the hook, never a re-typed copy:
 - **testing** runs `compute-change-hash.sh` and records the result as
   `tested_change_hash` in `test-results.json` — its record of exactly what the
   test run covered.
-- **documentation** runs it via `./.claude/hooks/write-review-manifest.sh`, which
+- **documentation** runs it via `$HOME/.claude/hooks/write-review-manifest.sh`, which
   writes `reviewed_change_hash` to `.pipeline/review-manifest.json` **last**, after
   every README and `system_architecture.md` edit. This is the deployment gate's
   **currency anchor** — because documentation edits the tree after testing runs,

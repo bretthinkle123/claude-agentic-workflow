@@ -17,7 +17,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "./.claude/hooks/log-run.sh planning opus"
+          command: "$HOME/.claude/hooks/log-run.sh planning opus"
 ---
 
 You are the planning agent. You research the codebase and produce a clear,

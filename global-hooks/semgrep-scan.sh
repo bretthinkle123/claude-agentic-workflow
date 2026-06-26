@@ -2,7 +2,7 @@
 # Semgrep via Docker. Semgrep has no native Windows build, so the security agent
 # calls this drop-in wrapper instead of bare `semgrep`. Pass the SAME arguments you
 # would pass to the `semgrep` CLI, e.g.:
-#   ./.claude/hooks/semgrep-scan.sh scan --config=auto --config=p/secrets --config=p/owasp-top-ten .
+#   $HOME/.claude/hooks/semgrep-scan.sh scan --config=auto --config=p/secrets --config=p/owasp-top-ten .
 #
 # The current working directory (repo root) is mounted at /src and used as the
 # container workdir, so file/scope arguments are relative to the repo as usual.

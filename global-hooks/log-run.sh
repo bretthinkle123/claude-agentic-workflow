@@ -24,6 +24,11 @@
 
 set -euo pipefail
 
+# Pipeline-project guard: installed globally and wired as a Stop hook on every agent.
+# No-op in any repo that is not a bootstrapped pipeline project (no .pipeline/state.json)
+# so it never appends a run-log line in an unrelated repo.
+[ -f .pipeline/state.json ] || exit 0
+
 STAGE="${1:?stage required}"
 MODEL="${2:?model required}"
 STATUS="${3:-auto}"

@@ -38,7 +38,7 @@ appended to `.pipeline/run-log.jsonl` automatically when each agent finishes —
 orchestrator does **not** call it. The hook signature is:
 
 ```
-.claude/hooks/log-run.sh <stage> <model> [status] [retries] [notes]
+$HOME/.claude/hooks/log-run.sh <stage> <model> [status] [retries] [notes]
 #   status: auto-derived from the stage's artifact when omitted
 #           implementation→smoke-status.json, security→security-status.json,
 #           testing→test-results.json, debugging→state.json (retry cap);

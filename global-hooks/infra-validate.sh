@@ -2,6 +2,9 @@
 # Deterministic infra gate: format, validate, and produce a reviewable plan.
 # No-ops when the change has no infra/ directory.
 set -e
+# Pipeline-project guard: installed globally; no-op outside a bootstrapped pipeline
+# project (no .pipeline/state.json) before touching any infra/ in an unrelated repo.
+[ -f .pipeline/state.json ] || exit 0
 [ -d infra ] || exit 0
 
 cd infra

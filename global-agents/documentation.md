@@ -11,7 +11,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "./.claude/hooks/log-run.sh documentation haiku"
+          command: "$HOME/.claude/hooks/log-run.sh documentation haiku"
 ---
 
 You are the documentation agent. You keep documentation current across every
@@ -59,9 +59,9 @@ When invoked:
    `compute-change-hash.sh` (identical to the deployment gate's recompute, so the
    two match byte-for-byte) and writes `.pipeline/review-manifest.json`:
    ```
-   ./.claude/hooks/write-review-manifest.sh
+   $HOME/.claude/hooks/write-review-manifest.sh
    ```
    (`.pipeline/` is gitignored, so writing this file does not change the hash. The
-   script is covered by the `Bash(./.claude/hooks/*.sh)` allow-list, so it runs
+   script is covered by the `Bash($HOME/.claude/hooks/*.sh)` allow-list, so it runs
    without per-binary permission prompts.)
 8. Report what was updated and stop.

@@ -3,6 +3,29 @@
 # zero LLM cost. Fill START_CMD / HEALTH_URL from CLAUDE.md's Start: line, or
 # export the SMOKE_* env vars.
 
+# Pipeline-project guard: this hook is installed globally (~/.claude/hooks/) and
+# fires when the implementation agent stops. No-op in any repo that has not been
+# bootstrapped as a pipeline project (no .pipeline/state.json), so it never runs
+# build/import checks or writes .pipeline/ files in unrelated repos.
+[ -f .pipeline/state.json ] || exit 0
+
+# Per-project smoke wiring: bootstrap-project.sh writes the project's start/health/
+# build commands here (the hook is global, so it can't be edited per project).
+# Optional — without it the Python defaults below apply.
+#
+# SECURITY: this file is `source`d, so it runs arbitrary shell. bootstrap-project.sh
+# gitignores .pipeline/, keeping smoke.env a LOCAL, untracked file. We refuse to
+# source it if git tracks it — that only happens when a cloned project deliberately
+# committed one, i.e. an attempt to run code on whoever next runs the pipeline here.
+# shellcheck disable=SC1091
+if [ -f .pipeline/smoke.env ]; then
+  if git ls-files --error-unmatch .pipeline/smoke.env >/dev/null 2>&1; then
+    echo "[smoke-check] Refusing to source .pipeline/smoke.env: it is tracked by git (expected local/untracked). Ignoring it." >&2
+  else
+    . .pipeline/smoke.env
+  fi
+fi
+
 START_CMD="${SMOKE_START_CMD:-python -m uvicorn src.main:app --host 0.0.0.0 --port 8000}"
 HEALTH_URL="${SMOKE_HEALTH_URL:-http://localhost:8000/health}"
 STARTUP_WAIT="${SMOKE_STARTUP_WAIT:-5}"

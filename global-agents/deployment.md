@@ -9,7 +9,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "./.claude/hooks/deployment-gate.sh"
+          command: "$HOME/.claude/hooks/deployment-gate.sh"
 model: sonnet
 effort: low
 maxTurns: 8
@@ -17,7 +17,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "./.claude/hooks/log-run.sh deployment sonnet"
+          command: "$HOME/.claude/hooks/log-run.sh deployment sonnet"
 ---
 
 You are the deployment agent. Your job is to commit the reviewed change and

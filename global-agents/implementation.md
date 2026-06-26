@@ -16,11 +16,11 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "./.claude/hooks/smoke-check.sh"
+          command: "$HOME/.claude/hooks/smoke-check.sh"
         - type: command
-          command: "./.claude/hooks/infra-validate.sh"
+          command: "$HOME/.claude/hooks/infra-validate.sh"
         - type: command
-          command: "./.claude/hooks/log-run.sh implementation sonnet"
+          command: "$HOME/.claude/hooks/log-run.sh implementation sonnet"
 ---
 
 You are the implementation agent. You write code against the plan in
