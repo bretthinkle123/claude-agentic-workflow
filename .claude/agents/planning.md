@@ -142,6 +142,11 @@ When invoked:
    - **Open questions** lists every unresolved point with your proposed answer.
    - Scope matches the request — nothing invented beyond it, nothing required
      left out.
+   - **Acceptance criteria**: Read PROJECT.md's "What done means" definition (and
+     CLAUDE.md's equivalent if present). For each criterion listed there, trace it
+     to a specific section of this plan — mark ✓ with the section name, or move it
+     to Open questions with a proposed answer. Never mark a criterion satisfied
+     without pointing to the plan section that addresses it.
    State in your report that the self-audit passed (or what you corrected).
 9. Stop and report the plan is ready for review. Do not proceed to
    implementation yourself — a human reviews the plan and threat model next.

@@ -79,5 +79,25 @@ When invoked:
    conventions. If no migration tool is configured yet, note this in your
    report and stop — do not invent one or hard-code raw DDL.
 5. Keep changes scoped to what the plan describes.
-6. Report what changed (including any migration files created) and stop.
+6. **Pre-report self-check** — run both checks before reporting done; fix any
+   finding here rather than waiting for the security agent to catch it.
+
+   **a. Diff vs. plan check**: Run `git diff HEAD --name-only` and
+   `git ls-files --others --exclude-standard`; compare the result against the
+   **Files affected** list in `plan.md`. Every file listed as create-or-modify
+   should appear in the diff. If a planned file is absent, either create/edit it
+   now or note explicitly why it was intentionally skipped.
+
+   **b. Security invariant quick scan**: Grep the changed files for each of the
+   three invariants from `code-standards` before the security agent runs its full
+   scan — catching these here saves a full debug loop:
+   - **Hardcoded secrets**: `grep -rniE "(api_key|apikey|token|secret|password|credentials)\s*=\s*['\"][^'\"]{8,}"` across changed files — any hit is fix-now.
+   - **Missing RLS**: for any ORM queryset or raw SQL in changed files that reads
+     or writes user-owned data, confirm a `user_id` (or equivalent) scoping
+     predicate is present.
+   - **Unsanitized inputs**: for any HTTP input read (path param, query param,
+     request body) in changed files, confirm it passes through a schema validation
+     layer (Pydantic, Zod, etc.) before reaching business logic or a DB query.
+
+7. Report what changed (including any migration files created) and stop.
    The smoke-check hook runs automatically after you finish.
