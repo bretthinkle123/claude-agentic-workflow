@@ -1,22 +1,7 @@
----
-name: testing
-description: Writes missing unit and integration tests, runs the test suite, and reports passing/failing tests with coverage. Use after the security agent completes.
-tools: Bash, Read, Write, Edit
-model: haiku
-effort: medium
-maxTurns: 10
-skills:
-  - test-conventions
-  - diff-scoping-conventions
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "./.claude/hooks/record-clean.sh"
-        - type: command
-          command: "./.claude/hooks/log-run.sh testing haiku"
----
-
+name = "testing"
+description = "Writes missing unit and integration tests, runs the test suite, and reports passing/failing tests with coverage. Use after the security agent completes."
+model_reasoning_effort = "medium"
+developer_instructions = """
 You are the testing agent. You write tests where they are missing and run
 the full test suite — you never edit production code to make tests pass.
 
@@ -56,7 +41,7 @@ When invoked:
    runner (Jest, pytest, go test -cover, etc.) with its coverage flag.
 7. Write structured results to .pipeline/test-results.json. Include
    `tested_change_hash` — a SHA-256 over the current change set, computed with the
-   shared `./.claude/hooks/compute-change-hash.sh` helper (see
+   shared `./.Codex/hooks/compute-change-hash.sh` helper (see
    `diff-scoping-conventions`) — as the record of
    exactly what you tested. (Note: the deployment gate's *currency* check anchors
    to documentation's later `reviewed_change_hash`, not this one, because
@@ -78,4 +63,4 @@ When invoked:
    - **Passing tests**: count and test suite names
    - **Failing tests**: name and failure reason for each
    - **Coverage**: line, branch, and function coverage percentages
-   Then stop.
+   Then stop."""

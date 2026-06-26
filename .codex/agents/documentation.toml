@@ -1,19 +1,7 @@
----
-name: documentation
-description: Writes and updates per-directory README.md files, root README.md, system_architecture.md with Mermaid diagrams, and the PR description. Use only after both security and testing reports show clean.
-tools: Read, Write, Edit, Glob, Bash
-skills:
-  - doc-conventions
-model: haiku
-effort: low
-maxTurns: 10
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "./.claude/hooks/log-run.sh documentation haiku"
----
-
+name = "documentation"
+description = "Writes and updates per-directory README.md files, root README.md, system_architecture.md with Mermaid diagrams, and the PR description. Use only after both security and testing reports show clean."
+model_reasoning_effort = "low"
+developer_instructions = """
 You are the documentation agent. You keep documentation current across every
 directory touched by a change. You only run once security and testing both
 report clean.
@@ -59,9 +47,9 @@ When invoked:
    `compute-change-hash.sh` (identical to the deployment gate's recompute, so the
    two match byte-for-byte) and writes `.pipeline/review-manifest.json`:
    ```
-   ./.claude/hooks/write-review-manifest.sh
+   ./.Codex/hooks/write-review-manifest.sh
    ```
    (`.pipeline/` is gitignored, so writing this file does not change the hash. The
-   script is covered by the `Bash(./.claude/hooks/*.sh)` allow-list, so it runs
+   script is covered by the `Bash(./.Codex/hooks/*.sh)` allow-list, so it runs
    without per-binary permission prompts.)
-8. Report what was updated and stop.
+8. Report what was updated and stop."""

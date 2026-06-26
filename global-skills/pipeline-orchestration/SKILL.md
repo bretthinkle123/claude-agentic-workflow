@@ -31,20 +31,30 @@ string and those files — never assume it can see the conversation.
      -> deployment-gate.sh (PreToolUse) blocks the commit unless all four gates pass
 ```
 
-## Telemetry — log every stage boundary
+## Telemetry — logged automatically on every stage
 
-After each stage returns, append one line to `.pipeline/run-log.jsonl` with the
-deterministic helper (zero-LLM):
+`log-run.sh` is wired as a **`Stop` hook on all seven agents**, so one line is
+appended to `.pipeline/run-log.jsonl` automatically when each agent finishes — the
+orchestrator does **not** call it. The hook signature is:
 
 ```
-.claude/hooks/log-run.sh <feature> <stage> <status> [retries] [notes]
-#   status: pass|fail|clean|issues-found|blocked|escalated
+.claude/hooks/log-run.sh <stage> <model> [status] [retries] [notes]
+#   status: auto-derived from the stage's artifact when omitted
+#           implementation→smoke-status.json, security→security-status.json,
+#           testing→test-results.json, debugging→state.json (retry cap);
+#           other stages default to "pass" (= ran to completion)
 ```
 
-This is the only telemetry the pipeline keeps. From it you derive token cost per
-feature, first-pass gate rate (features reaching documentation with `retries==0`),
-and debug-retry/escalation rate. Skipping it = flying blind on whether the pipeline
-is improving. Log on every stage, including failures and escalations.
+`feature` is auto-derived from the git branch; `model`, `files_changed`, and (for
+testing/security) coverage and finding counts are captured too. From this log you
+derive cost-proxy per stage (model + files_changed), first-pass gate rate (features
+reaching documentation with `retries==0`), and debug-retry/escalation rate.
+
+**Caveat:** a `Stop` hook does **not** fire if an agent hits its `maxTurns` cap —
+the session ends first — so a capped-out stage is silently absent from the log.
+A missing stage line is itself a signal (suspect a cap-out). `duration_s` and
+`tokens` are not available to shell hooks; use timestamp deltas between lines as a
+duration proxy.
 
 ## Bootstrap (once per project)
 
@@ -64,7 +74,8 @@ feature.
 | `pr-description.md` | documentation | deployment, gate |
 | `review-manifest.json` | documentation | deployment-gate.sh (currency anchor) |
 | `state.json` | bootstrap / security / debugging | debugging, record-clean.sh |
-| `run-log.jsonl` | orchestrator (per stage) | you (metrics) |
+| `smoke-status.json` | smoke-check.sh | log-run.sh (implementation status) |
+| `run-log.jsonl` | each agent's `log-run.sh` Stop hook | you (metrics) |
 
 ## Gate semantics
 

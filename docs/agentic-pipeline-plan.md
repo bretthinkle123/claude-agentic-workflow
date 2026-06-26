@@ -9,6 +9,8 @@ A **scaffold + environment-setup pass (2026-06-25)** then built and wired the pi
 
 An **audit + hardening pass (2026-06-26)** then ran a full file-by-file consistency check (verdict: ready for a trial run) and applied: `Skill` added to the planning/implementation/security `tools:` lists (on-demand skills are invoked through the Skill tool); the working-tree change-set hash centralized into a shared **`compute-change-hash.sh`** hook that documentation (via the new **`write-review-manifest.sh`**), testing, and `deployment-gate.sh` all call, so the currency recompute matches byte-for-byte; explicit `jq`-presence guards added to `deployment-gate.sh` (fail-closed) and `record-clean.sh` (fail-open, non-silent); the `.env` deny widened to `Read(**/.env)`; and `[UNIMPLEMENTED]` banners placed on `log-run.sh`, `post-deploy-check.sh`, the *Pipeline observability & metrics* section, and `pipeline-refinement-loops.md`. The hook set is now nine; `terraform` 1.15.7 and `checkov` 3.3.2 were also installed locally.
 
+A **telemetry-activation pass (2026-06-26, later)** then took the run log live before the first test project: **`log-run.sh` was wired as a `Stop` hook on all seven agents** (it no longer needs an orchestrator call) and its signature changed to `log-run.sh <stage> <model> [status] [retries]` — `feature` auto-derives from the git branch and `status`/`retries` auto-derive from each stage's `.pipeline/*` artifact, with `model` and `files_changed` added to every line and coverage/finding-count extras added for testing/security. To give the implementation stage a *real* status instead of a default `pass`, **`smoke-check.sh` now writes `.pipeline/smoke-status.json`** on every exit path and `log-run.sh` reads it. Two greenfield-safety bugs in `log-run.sh` were fixed (a `pipefail` abort and a corrupted `feature` value when no commit exists yet). The **testing agent's `maxTurns` was reduced 15 → 10** (Haiku; forces earlier escalation to debugging rather than thrashing). Known limit: a `Stop` hook does not fire on a `maxTurns` cap-out, so a capped stage is absent from the log (a missing line is itself the cap-out signal).
+
 <a id="table-of-contents"></a>
 ## Table of contents
 
@@ -366,7 +368,7 @@ Security and testing default to **serial**, not parallel — see the Token / per
 | — | **smoke check** | Confirms the app actually builds/runs | n/a — a hook, not an LLM agent | — | **No model (deterministic hook).** Always fires, zero token cost |
 | 3 | **debugging** | Root-cause + fix, invoked twice (see below) | Read, Edit, Bash, Grep | — | **Model: `sonnet`, effort: `high`, maxTurns: 15.** Same agent definition, two trigger points. Capped retry count per loop |
 | 4 | **security** | SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE scanning (OSV Scanner); also scans migration files for unsafe operations | Read, Bash, Grep, Write | **default serial** with testing; parallel is opt-in per run | **Model: `haiku`, effort: `low`, maxTurns: 10.** Does not modify application/source code — writes only its own report to `.pipeline/security-report.md`. Diff-scoped after the first pass |
-| 5 | **testing** | Writes missing unit and integration tests, runs the suite, reports passing/failing tests and coverage | Bash, Read, Write, Edit | **default serial** with security; parallel is opt-in per run | **Model: `haiku`, effort: `medium`, maxTurns: 15.** Writes tests where missing; never edits production code. Diff-scoped after the first pass |
+| 5 | **testing** | Writes missing unit and integration tests, runs the suite, reports passing/failing tests and coverage | Bash, Read, Write, Edit | **default serial** with security; parallel is opt-in per run | **Model: `haiku`, effort: `medium`, maxTurns: 10.** Writes tests where missing; never edits production code. Diff-scoped after the first pass |
 | 6 | **documentation** | Writes per-directory README.md files, root README.md, system_architecture.md with Mermaid diagrams, and the PR description | Read, Write, Edit, Glob, Bash | — | **Model: `haiku`, effort: `low`, maxTurns: 10.** Only runs after both gates are clean. Updates only directories touched by the change |
 | 7 | **deployment** | Ships to production | Bash (scoped cloud/CI MCP is opt-in per project) | — | **Model: `sonnet`, effort: `low`, maxTurns: 8.** Hard gate, highest-stakes permissions |
 | — | **post-deploy check** | Confirms the deployed instance is actually healthy | n/a — a hook, not an LLM agent | — | Mirrors the smoke check; failure triggers a manual rollback decision, not an automated loop into debugging against production |
@@ -396,7 +398,7 @@ Documentation produces a real artifact coupled to the *final* state of the code,
 - **Parallelism saves wall-clock time, not tokens, and isn't the default here.** Token cost is prioritized over speed for this framework, so security and testing run serially by default; parallel is an opt-in choice for a specific run, not the standing design.
 - **Diff-scoping is the highest-leverage fix.** Security and testing should scan only what changed since the last clean pass after the first run in a session, not the whole repository on every debug loop — this is where token cost compounds fastest if left unscoped.
 - **Documentation is incremental.** It diffs against existing per-directory README files and `system_architecture.md`, updating only the directories and diagrams actually affected by the change — not a full rewrite every run.
-- **Every agent has a `maxTurns` cap** — a runaway agent (stuck tool loop, repeated WebSearch in planning, etc.) surfaces to you instead of silently draining the weekly budget. Per-agent values: planning 20, implementation 25, debugging 15, security 10, testing 15, documentation 10, deployment 8. Debugging also has a separate fixed retry count per role (sanity / remediation) so it caps at both the per-invocation turn level and the per-feature loop level.
+- **Every agent has a `maxTurns` cap** — a runaway agent (stuck tool loop, repeated WebSearch in planning, etc.) surfaces to you instead of silently draining the weekly budget. Per-agent values: planning 20, implementation 25, debugging 15, security 10, testing 10, documentation 10, deployment 8. Debugging also has a separate fixed retry count per role (sanity / remediation) so it caps at both the per-invocation turn level and the per-feature loop level.
 - **The smoke check and post-deploy check are hooks, not agent calls.** Both run at zero LLM cost and are what decide — deterministically — whether an agent (debugging, or you) needs to get involved at all.
 - **MCP servers are scoped per-agent and per-project**, not baked into the portable plugin defaults. The default plugin ships with Semgrep and OSV Scanner (both open-source CLI tools) for security scanning; heavier or cloud-native tooling is opt-in per project.
 - **Skills are loaded per-agent**: a small set is *preloaded* via the `skills` frontmatter (e.g. the merged `doc-conventions` into `documentation`), while conditional knowledge (auth, logging, infra, storage) is *on-demand* — invoked only when a feature needs it, so it costs context only then. See *Pipeline observability & metrics* and the *Skill authoring plan*.
@@ -424,26 +426,26 @@ Documentation produces a real artifact coupled to the *final* state of the code,
 <a id="pipeline-observability-and-metrics"></a>
 ## Pipeline observability & metrics
 
-> **[UNIMPLEMENTED]** — the `run-log.jsonl` telemetry described here is specified but not live: `log-run.sh` exists yet nothing in any agent, hook, or settings.json calls it, so the log is never written and the metrics below cannot be derived. Activate it by wiring `log-run.sh` into the orchestrator's per-stage flow (pipeline-orchestration skill) or an agent Stop hook. The opt-in LLM-judge plan eval at the end of this section is likewise not in v1.
+> **Status (2026-06-26): LIVE.** `log-run.sh` is wired as a `Stop` hook on all seven agents, so `run-log.jsonl` is written automatically as each stage finishes — no orchestrator action needed. The opt-in LLM-judge plan eval at the end of this section is still not in v1.
 
 The deterministic gates verify each *change* (does it build, scan clean, pass tests). They do **not** tell you whether the *pipeline itself* is working well over time — whether plans land first-try, where tokens go, or whether debug loops are creeping up. A lightweight run log closes that gap at zero model cost, and gives you the objective signals the multi-agent literature treats as essential: token use alone explains roughly **80% of agent performance variance**, and Anthropic's own multi-agent system leaned on per-run metrics plus LLM-judge evals to improve. Without this you're flying blind on the very question you care about — *is this thing actually helping?*
 
-**`.pipeline/run-log.jsonl`** — append-only, one JSON line per stage, written deterministically at each stage boundary (by the orchestrator / `pipeline-orchestration` skill, or appended from an agent's Stop hook). Never overwritten; it accumulates across features so you can chart trends.
+**`.pipeline/run-log.jsonl`** — append-only, one JSON line per stage, written automatically by each agent's `log-run.sh` `Stop` hook. Never overwritten; it accumulates across features so you can chart trends.
 
 ```json
-{"ts":"2026-06-25T14:30:00Z","feature":"file-upload","stage":"security","status":"clean","retries":0,"duration_s":48,"tokens":12030,"notes":"diff scope, 1 warning"}
+{"ts":"2026-06-26T14:30:00Z","feature":"file-upload","stage":"security","status":"clean","model":"haiku","retries":0,"files_changed":6,"notes":"","critical_findings":0,"warning_findings":1}
 ```
 
-Fields: `ts`, `feature` (a slug for the change), `stage` (planning / implementation / debugging / security / testing / documentation / deployment), `status` (pass | fail | clean | issues-found | blocked | escalated), `retries` (debug count for the stage), `duration_s`, `tokens` (if available from the run result), `notes`.
+Fields always present: `ts`, `feature` (the git branch), `stage` (planning / implementation / debugging / security / testing / documentation / deployment), `status` (auto-derived from the stage's artifact; defaults to `pass` for stages with no outcome artifact), `model` (opus | sonnet | haiku — the cost proxy), `retries` (cumulative debug count), `files_changed` (working-tree scope), `notes`. Stage-specific extras: testing adds `coverage` and `tests.{total,passed,failed}`; security adds `critical_findings` and `warning_findings`. **Not captured** (not exposed to shell hooks): `duration_s` and `tokens` — use timestamp deltas between lines as a duration proxy, and `model` + `files_changed` as the cost proxy. **A `maxTurns` cap-out skips the `Stop` hook**, so a missing stage line means suspect a cap-out, not a clean run.
 
 **Objective metrics to track** — derive these from `run-log.jsonl` (a small script, or just read it). These are standard for agentic systems, not bespoke:
 
 | Metric | How to read it | Why it matters |
 |---|---|---|
-| **Token cost per feature** (and per stage) | sum `tokens` grouped by `feature` / `stage` | The primary cost+quality lever — ~80% of agent performance variance |
+| **Cost proxy per feature** (and per stage) | group by `feature` / `stage`, weight by `model` (opus≫sonnet≫haiku) and `files_changed` | Token counts aren't available to shell hooks; model tier + scope is the standing proxy — the primary cost+quality lever |
 | **First-pass gate rate** | % of features reaching documentation with `retries == 0` across smoke/security/testing | Measures plan + implementation quality; a drop signals scope too big or a degrading stage |
 | **Debug-retry & escalation rate** | mean `retries`; count of `status == escalated` | Rising retries/escalations = a stage struggling or plans too ambitious |
-| **Wall-clock per stage** | `duration_s` by stage | Spot a hung stage or a `maxTurns` cap-out |
+| **Wall-clock per stage** | timestamp delta between consecutive `run-log.jsonl` lines | Spot a hung stage; a *missing* stage line flags a `maxTurns` cap-out (its Stop hook never fired) |
 | **Coverage trend** | `coverage.lines` from `test-results.json` over time | Regression guard |
 | **Post-deploy success rate** | % of PRs whose CI post-deploy check passed first try (tracked in CI, not in `run-log.jsonl`) | The production-truth metric — add when CI is wired up |
 
@@ -1016,7 +1018,7 @@ your-project/
 │   │   ├── semgrep-scan.sh            # Semgrep-via-Docker wrapper (Windows; no native build) — see Environment setup notes
 │   │   ├── compute-change-hash.sh     # shared change-set hash; documentation + deployment-gate call it (single source of truth)
 │   │   ├── write-review-manifest.sh   # documentation's final action: writes review-manifest.json (reviewed_change_hash)
-│   │   └── log-run.sh                 # [UNIMPLEMENTED] appends a line/stage to run-log.jsonl; nothing calls it yet
+│   │   └── log-run.sh                 # Stop hook on all 7 agents; appends one line/stage to run-log.jsonl
 │   ├── skills/                        # project-scoped templates ONLY (test-conventions, semgrep-ruleset-guide — fill <PLACEHOLDERS> per project); the global skills live in ~/.claude/skills/, not here
 │   └── settings.json                  # permissions + auto-approve (hook wiring lives in agent frontmatter; see settings.json section)
 ├── templates/
@@ -1026,6 +1028,7 @@ your-project/
     ├── plan-approved                  # human-checkpoint marker; implementation refuses to start without it (see Human checkpoint protocol)
     ├── security-report.md             # security's human-readable output (Semgrep + OSV Scanner)
     ├── security-status.json           # security's machine-readable status (status + counts); the gate hooks parse this with jq
+    ├── smoke-status.json               # smoke-check.sh's pass/fail result; log-run.sh reads it for the implementation stage status
     ├── test-results.json              # testing's output (includes coverage + tested_change_hash)
     ├── pr-description.md              # documentation's PR description (deployment gate checks this exists)
     ├── review-manifest.json           # documentation's reviewed_change_hash over the final tree; the deployment gate's currency anchor
@@ -1126,6 +1129,14 @@ START_CMD="${SMOKE_START_CMD:-python -m uvicorn src.main:app --host 0.0.0.0 --po
 HEALTH_URL="${SMOKE_HEALTH_URL:-http://localhost:8000/health}"
 STARTUP_WAIT="${SMOKE_STARTUP_WAIT:-5}"
 
+# Records the smoke result so log-run.sh can attribute a real pass/fail to the
+# implementation stage instead of defaulting to "pass". Written on every exit path.
+write_smoke_status() {
+  mkdir -p .pipeline
+  printf '{"status":"%s","ran_at":"%s"}\n' "$1" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    > .pipeline/smoke-status.json
+}
+
 # Greenfield bootstrap: before the project's first commit there is no stable
 # runtime target yet — implementation scaffolds /health during this first pass,
 # so failing on a /health route that doesn't exist would be dishonest. Detect the
@@ -1135,8 +1146,11 @@ STARTUP_WAIT="${SMOKE_STARTUP_WAIT:-5}"
 # build command with SMOKE_BUILD_CMD if `python -c "import src.main"` isn't right.
 if ! git rev-parse --verify -q HEAD >/dev/null 2>&1; then
   echo "[smoke-check] No commit yet — running build/import check (greenfield bootstrap)."
-  ${SMOKE_BUILD_CMD:-python -c "import src.main"} || exit 2
-  exit 0
+  if ${SMOKE_BUILD_CMD:-python -c "import src.main"}; then
+    write_smoke_status pass; exit 0
+  else
+    write_smoke_status fail; exit 2
+  fi
 fi
 
 echo "[smoke-check] Starting application..."
@@ -1147,10 +1161,10 @@ sleep "$STARTUP_WAIT"
 
 if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
   echo "[smoke-check] PASS — $HEALTH_URL responded 200"
-  exit 0
+  write_smoke_status pass; exit 0
 else
   echo "[smoke-check] FAIL — $HEALTH_URL did not respond" >&2
-  exit 2
+  write_smoke_status fail; exit 2
 fi
 ```
 
@@ -1258,22 +1272,25 @@ fi
 exit 0
 ```
 
-**`.claude/hooks/log-run.sh`** — **[UNIMPLEMENTED]** (nothing in any agent/hook/settings calls it yet; `run-log.jsonl` is never written). Deterministic, zero-LLM telemetry helper (added during setup). Not a gate — the orchestrator calls it explicitly at each stage boundary to append one JSON line to `.pipeline/run-log.jsonl`, the metrics source described in *Pipeline observability & metrics*. Wired into the `pipeline-orchestration` skill. `duration_s`/`tokens` from the run-log schema are omitted in v1 (not deterministically available from a shell); the fields that drive the key metrics — stage, status, retries — are captured.
+**`.claude/hooks/log-run.sh`** — **LIVE (2026-06-26)**, wired as a `Stop` hook on all seven agents, so it fires automatically when each agent finishes and appends one JSON line to `.pipeline/run-log.jsonl` (the metrics source described in *Pipeline observability & metrics*). Not a gate. Deterministic, zero-LLM. Signature `log-run.sh <stage> <model> [status] [retries] [notes]`: `feature` is auto-derived from the git branch, `status` and `retries` auto-derive from the stage's `.pipeline/*` artifact when omitted (implementation→`smoke-status.json`, security→`security-status.json`, testing→`test-results.json`, debugging→`state.json`; other stages default to `pass`), and `files_changed` plus stage-specific extras (testing coverage/counts, security finding counts) are captured. `duration_s`/`tokens` are not available to a shell hook (use timestamp deltas + `model` as proxies). The full script lives in `.claude/hooks/log-run.sh` — the source of truth; the essence is below.
 
 ```bash
 #!/bin/bash
-# Usage: log-run.sh <feature> <stage> <status> [retries] [notes]
+# Usage: log-run.sh <stage> <model> [status] [retries] [notes]
 #   stage : planning|implementation|debugging|security|testing|documentation|deployment
-#   status: pass|fail|clean|issues-found|blocked|escalated
+#   model : opus|sonnet|haiku
+#   status: "auto" (default) derives from the stage's .pipeline artifact
 set -euo pipefail
-FEATURE="${1:?feature slug required}"; STAGE="${2:?stage required}"; STATUS="${3:?status required}"
-RETRIES="${4:-0}"; NOTES="${5:-}"
-mkdir -p .pipeline
+STAGE="${1:?stage required}"; MODEL="${2:?model required}"
+STATUS="${3:-auto}"; RETRIES="${4:-auto}"; NOTES="${5:-}"
+FEATURE=$(git symbolic-ref --short HEAD 2>/dev/null) || FEATURE=""; [ -n "$FEATURE" ] || FEATURE="unknown"
+# ... auto-derive STATUS/RETRIES from artifacts, count files_changed, gather extras ...
 jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg feature "$FEATURE" --arg stage "$STAGE" \
-  --arg status "$STATUS" --argjson retries "$RETRIES" --arg notes "$NOTES" \
-  '{ts:$ts,feature:$feature,stage:$stage,status:$status,retries:$retries,notes:$notes}' \
+  --arg status "$STATUS" --arg model "$MODEL" --argjson retries "$RETRIES" \
+  --argjson files_changed "$FILES_CHANGED" --arg notes "$NOTES" --argjson extras "$EXTRAS" \
+  '{ts:$ts,feature:$feature,stage:$stage,status:$status,model:$model,
+    retries:$retries,files_changed:$files_changed,notes:$notes} + $extras' \
   >> .pipeline/run-log.jsonl
-echo "[log-run] recorded: $FEATURE / $STAGE / $STATUS (retries=$RETRIES)"
 ```
 
 **`.claude/hooks/semgrep-scan.sh`** — Semgrep-via-Docker wrapper (added during setup; see *Environment setup notes*). A drop-in for the `semgrep` CLI on platforms with no native Semgrep build (Windows): pass the same arguments. It mounts the repo at `/src` in the official `semgrep/semgrep` image, handles the Git Bash path-mangling gotcha, and fails clearly if Docker isn't running. On Linux/WSL, call `semgrep` directly and drop this wrapper.
@@ -1685,7 +1702,7 @@ description: Writes missing unit and integration tests, runs the test suite, and
 tools: Bash, Read, Write, Edit
 model: haiku
 effort: medium
-maxTurns: 15
+maxTurns: 10
 skills:
   - test-conventions
   - diff-scoping-conventions
@@ -1694,6 +1711,8 @@ hooks:
     - hooks:
         - type: command
           command: "./.claude/hooks/record-clean.sh"
+        - type: command
+          command: "./.claude/hooks/log-run.sh testing haiku"
 ---
 
 You are the testing agent. You write tests where they are missing and run
@@ -2297,10 +2316,11 @@ a future setup (or a move to Linux/WSL) knows what was assumed.
   keep the native-Windows workflow; both are valid.
 
 **New hooks added during setup (beyond the original five):**
-- **`log-run.sh`** — deterministic, zero-LLM telemetry helper. The orchestrator calls
-  `./.claude/hooks/log-run.sh <feature> <stage> <status> [retries] [notes]` at each
-  stage boundary to append a line to `.pipeline/run-log.jsonl` (the metrics source in
-  *Pipeline observability & metrics*). Wired into the `pipeline-orchestration` skill.
+- **`log-run.sh`** — deterministic, zero-LLM telemetry helper, wired as a `Stop` hook
+  on all seven agents (fires automatically per stage; the orchestrator does not call it).
+  Signature `./.claude/hooks/log-run.sh <stage> <model> [status] [retries] [notes]`;
+  appends a line to `.pipeline/run-log.jsonl` (the metrics source in
+  *Pipeline observability & metrics*).
 - **`semgrep-scan.sh`** — the Semgrep Docker wrapper described above.
 
 **Project templates:**

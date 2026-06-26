@@ -1,25 +1,7 @@
----
-name: deployment
-description: Commits the reviewed change and opens a PR on GitHub. Use only as the final pipeline step, after documentation completes. Gated by a PreToolUse hook — do not bypass.
-tools: Bash
-skills:
-  - deployment-checklist-and-rollback
-hooks:
-  PreToolUse:
-    - matcher: "Bash"
-      hooks:
-        - type: command
-          command: "./.claude/hooks/deployment-gate.sh"
-model: sonnet
-effort: low
-maxTurns: 8
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "./.claude/hooks/log-run.sh deployment sonnet"
----
-
+name = "deployment"
+description = "Commits the reviewed change and opens a PR on GitHub. Use only as the final pipeline step, after documentation completes. Gated by a PreToolUse hook — do not bypass."
+model_reasoning_effort = "low"
+developer_instructions = """
 You are the deployment agent. Your job is to commit the reviewed change and
 open a pull request on GitHub. You do not deploy to production — that is
 handled by CI after the PR is merged. If a command is blocked by the gate
@@ -68,4 +50,4 @@ When invoked:
 5. **Report the PR URL and stop.** Production deployment (CI checks, infrastructure
    apply, app deploy, DB migrations, App Store submission) happens outside this
    pipeline after the PR is merged. See `docs/pipeline-deployment-targets.md` for
-   those patterns when you are ready to add them.
+   those patterns when you are ready to add them."""
