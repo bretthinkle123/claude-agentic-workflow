@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Agent",
+      "Read",
+      "Grep",
+      "Glob",
+      "Write",
+      "Edit",
+      "Bash(./.claude/hooks/*.sh)",
+      "Bash(git diff:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git symbolic-ref:*)",
+      "Bash(git checkout:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(jq:*)",
+      "Bash(sha256sum:*)",
+      "Bash(semgrep:*)",
+      "Bash(docker info:*)",
+      "Bash(docker run:*)",
+      "Bash(osv-scanner:*)",
+      "Bash(checkov:*)",
+      "Bash(terraform fmt:*)",
+      "Bash(terraform validate:*)",
+      "Bash(terraform plan:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(pytest:*)",
+      "Bash(go test:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(**/*.tfstate)",
+      "Read(**/*.tfvars)"
+    ]
+  }
+}

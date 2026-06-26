@@ -1,0 +1,60 @@
+---
+name: iac-conventions
+description: Terraform infra/ facade layout, AWS provider + S3/DynamoDB remote state, GitHub OIDC role assumption, tagging/naming, and the IaC security baseline. Invoke only when the change provisions cloud resources (an infra/ directory).
+---
+
+# IaC conventions
+
+Invoke this only when the plan provisions cloud resources (the change includes an
+`infra/` directory). Default IaC tool is **Terraform**, default cloud **AWS**.
+The full per-resource checklist Checkov enforces is in `baseline.md` (sibling).
+
+## `infra/` module structure (facade discipline)
+
+One root module composes small, single-purpose child modules; nothing reaches
+around the root.
+
+```
+infra/
+├── main.tf        ← root: providers, backend, module composition
+├── variables.tf   ← typed inputs (region, environment, sizing)
+├── outputs.tf     ← exported values (endpoints, ARNs) other stages consume
+├── backend.tf     ← S3 remote state + DynamoDB lock
+└── modules/       ← network / compute / data
+```
+
+## Remote state
+
+- **S3 bucket** for state, **DynamoDB table** for locking.
+- State is **encrypted** (SSE on the bucket) and **never committed**.
+- Gitignore `*.tfstate` and any secret-bearing `*.tfvars`. Secrets come from AWS
+  Secrets Manager / SSM Parameter Store, never committed `.tfvars`.
+
+## Credentials — OIDC, no long-lived keys
+
+The deployment role is assumed via **GitHub OIDC** (or local AWS SSO for dev) —
+short-lived credentials only. Required env: `AWS_REGION`, `AWS_ROLE_ARN`,
+`TF_STATE_BUCKET`, `TF_LOCK_TABLE`. The deploy role is **least-privilege**, scoped
+to exactly the services the stack manages — the highest-stakes credential in the
+pipeline.
+
+## Tagging / naming
+
+Tag every resource with at least `environment`, `service`, and `managed-by=terraform`.
+Name resources `<service>-<environment>-<resource>` so they're greppable in the
+console and in CloudTrail.
+
+## Where it threads through the stages
+
+- **planning** names provider + services, declares Terraform under `infra/`, adds
+  cloud entries to the STRIDE model.
+- **implementation** writes Terraform; never runs `apply`.
+- **smoke check** runs `infra-validate.sh` (`fmt -check`, `validate`, `plan` →
+  `.pipeline/infra-plan.txt`).
+- **security** runs Checkov over `infra/` (see `baseline.md`); findings fold into
+  the same counts.
+- **deployment** commits + opens the PR. `terraform apply` runs in **CI after
+  merge**, not in this pipeline.
+
+The human checkpoint reads `.pipeline/infra-plan.txt` before any resource is
+created/destroyed/replaced — the cheapest point to catch a destructive change.

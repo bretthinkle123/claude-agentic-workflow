@@ -1,0 +1,51 @@
+---
+name: semgrep-ruleset-guide
+description: Which Semgrep configs apply to this project's stack, the severity to critical/warning mapping, and how findings roll into security-report.md counts.
+---
+
+# Semgrep ruleset guide (project template)
+
+> **Project-scoped template.** Fill the `<STACK CONFIGS>` placeholders for this
+> project, then commit. The pipeline's security agent preloads this file.
+
+## Configs to run
+
+Defaults (always):
+
+```
+semgrep scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]
+```
+
+> **Windows note:** Semgrep has no native Windows build, so on this machine invoke
+> it through the Docker wrapper — same arguments, just swap the binary:
+> `./.claude/hooks/semgrep-scan.sh scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]`
+> (requires Docker Desktop running). On Linux/WSL, call `semgrep` directly.
+
+Stack-specific additions for this project: `<STACK CONFIGS — e.g. p/python, p/django, p/react, p/dockerfile>`
+
+Scope is the diff-scoped change set (see `diff-scoping-conventions`), or `.` on a
+full first scan.
+
+## Severity → critical / warning mapping
+
+- Semgrep `ERROR` severity → **critical** (`critical_count`).
+- Semgrep `WARNING` / `INFO` → **warning** (`warning_count`).
+- Project override (raise/lower specific rules): `<list any rule-id reclassifications>`
+
+## Clean vs issues-found rule
+
+`status: issues-found` **iff** `critical_count > 0`. Warnings are reported in the
+body but are advisory — they do **not** block the pipeline or trigger
+remediation. Only critical findings do.
+
+## Other tools fold into the same counts
+
+- **OSV Scanner** (`osv-scanner scan --format json .`) — dependency CVEs.
+- **Checkov** (`checkov -d infra --quiet --compact`) — only when the change
+  includes `infra/`.
+- **Migration scans** — no-downgrade, destructive ops without a safety net, and
+  injectable SQL are each **critical**.
+
+Roll every tool's findings into the single `critical_count` / `warning_count`
+totals in `security-report.md`, and mirror them exactly in
+`security-status.json` (the gate parses the JSON, never the markdown).

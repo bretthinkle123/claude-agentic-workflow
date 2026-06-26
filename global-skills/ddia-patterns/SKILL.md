@@ -1,0 +1,73 @@
+---
+name: ddia-patterns
+description: Condensed decision guide from Designing Data-Intensive Applications — storage-model, replication, partitioning, and consistency trade-offs to weigh when a plan adds or changes storage or messaging.
+---
+
+# DDIA patterns
+
+Invoke this when a plan **adds or changes storage or messaging** — not for
+app-only CRUD against an existing schema. A pure decision checklist (Kleppmann,
+*Designing Data-Intensive Applications*). Prefer proven, boring data models;
+justify any exotic choice.
+
+## Storage model — pick when
+
+- **Relational (SQL)** — default. Structured data with relationships, joins, and
+  transactional integrity. Start here unless a clear reason not to.
+- **Document** — self-contained, tree-shaped aggregates read/written whole; few
+  cross-document joins; schema flexibility matters.
+- **Key-value** — simple lookups by key, high throughput, no rich queries (cache,
+  session store, feature flags).
+- **Graph** — many-to-many relationships are the primary access pattern
+  (social, permissions graphs, recommendations).
+
+## Replication — trade-offs
+
+- **Single-leader** — default. Simple, consistent writes; reads can scale on
+  followers (watch replication lag → stale reads).
+- **Multi-leader** — multi-region writes; introduces write conflicts you must
+  resolve. Only with a real multi-region need.
+- **Leaderless (quorum)** — high availability, tunable consistency (R + W > N);
+  more operational complexity.
+
+## Partitioning (sharding)
+
+- **Key-range** — efficient range scans; risks hot spots on sequential keys.
+- **Hash** — even distribution; loses range-scan efficiency.
+- Plan **rebalancing** up front (consistent hashing / fixed partition count);
+  avoid schemes that move all data when a node is added.
+
+## Consistency models
+
+- **Strong** vs **eventual** — name which one each read path needs.
+- **Read-after-write** — a user must see their own writes (route their reads to
+  the leader, or read-your-writes session consistency).
+- **Quorum** — `R + W > N` for leaderless strong-ish reads.
+
+## Row-level security (RLS)
+
+For any relational store that holds **multi-tenant or user-scoped data**, RLS is
+required — not optional. It enforces access control inside the database so a bug
+in application code cannot leak another user's rows.
+
+- **PostgreSQL (default):** enable RLS on every table that holds per-user or
+  per-tenant data (`ALTER TABLE … ENABLE ROW LEVEL SECURITY`), then attach a
+  policy that filters by the session variable the app sets on connection
+  (`SET app.current_user_id = ?`). Application roles must not bypass RLS
+  (`BYPASSRLS` is superuser-only).
+- **DynamoDB / document stores:** no native RLS — enforce tenant isolation via
+  partition key design (prefix every key with `tenantId#`) and IAM condition
+  keys (`dynamodb:LeadingKeys`).
+- **Single-tenant apps:** RLS is still advisable for defence-in-depth against
+  privilege-escalation bugs; note the decision explicitly if skipped.
+
+Flag the RLS strategy in `plan.md` at the human checkpoint.
+
+## Operability checklist (answer for any new store)
+
+- **Proven?** Is this a mature, well-understood technology for this access pattern?
+- **Observable?** Can you see latency, errors, replication lag, partition skew?
+- **Recoverable?** Backups, point-in-time restore, and a tested restore path?
+- **Access-controlled?** Is RLS or an equivalent tenant-isolation mechanism in place?
+
+Flag any "no" at the human checkpoint as an accepted risk or a blocker.

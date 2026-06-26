@@ -1,0 +1,70 @@
+---
+name: doc-conventions
+description: Directory/root README structure, what belongs in system_architecture.md, the allowed Mermaid diagram types, and the incremental-update plus PR-description rules — the documentation agent's one reference.
+---
+
+# Documentation conventions
+
+You keep docs current across every directory a change touches, then write the PR
+description and record the reviewed-state hash. Templates are siblings:
+`readme-template.md`, `pr-description-template.md`, `diagram-examples.md`.
+
+## Incremental-update rule (the core discipline)
+
+**Diff, don't rewrite.** Update only the directories and diagrams the change
+actually affects. For an existing file, change only the sections that moved;
+never regenerate a whole README or the whole architecture file from scratch.
+
+## Per-directory README.md
+
+Every directory touched by the change must have a README covering: the
+directory's **purpose**, the **modules** it contains, and how they **relate**.
+Create if missing; otherwise update only affected sections. See
+`readme-template.md`.
+
+## Root README.md
+
+Project overview, setup, how to run locally, how to deploy, how to contribute.
+Update **only** if one of those steps changed.
+
+## system_architecture.md
+
+End-to-end narrative plus at least one Mermaid diagram tracing the full
+request/data flow. Update when the change affects **data flow, service
+boundaries, API contracts, or external integrations**. Regenerate only the
+affected diagrams.
+
+What belongs here vs a directory README: `system_architecture.md` is
+**cross-cutting** (how components fit together); a directory README is **local**
+(what this folder does).
+
+## Diagram types (Mermaid)
+
+| Purpose | Diagram |
+|---|---|
+| Request / data flow | `flowchart` (TD for hierarchy, LR for pipelines) |
+| Auth handshakes, sequenced calls | `sequenceDiagram` |
+| Data models / schema relationships | `erDiagram` |
+
+Name nodes for what they are (`API`, `AuthProvider`, `OrdersDB`), not `A`/`B`.
+See `diagram-examples.md`.
+
+## PR description
+
+Write `.pipeline/pr-description.md`: summary of the change, link to the plan and
+threat model in `.pipeline/plan.md`, notable decisions, and test/coverage
+highlights. The deployment gate checks this file exists. See
+`pr-description-template.md`.
+
+## Record the reviewed-state hash — LAST
+
+After every README / `system_architecture.md` / source edit is written, record
+the currency anchor (this must be your final action, so it captures the exact
+bytes the human reviews and deployment commits):
+
+```bash
+HASH=$( { git diff HEAD; git ls-files --others --exclude-standard | sort | xargs -r cat; } | sha256sum | awk '{print $1}')
+echo "{\"reviewed_change_hash\":\"$HASH\",\"ran_at\":\"$(date -u +%FT%TZ)\"}" > .pipeline/review-manifest.json
+```
+
+`.pipeline/` is gitignored, so writing this file doesn't change the hash.

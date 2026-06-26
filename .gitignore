@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Agentic pipeline — ephemeral interlock state (never commit)
+.pipeline/
+
+# Terraform state and secret-bearing vars
+*.tfstate
+*.tfstate.*
+*.tfvars
