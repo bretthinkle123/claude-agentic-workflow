@@ -10,14 +10,13 @@ hooks:
       hooks:
         - type: command
           command: "$HOME/.claude/hooks/deployment-gate.sh"
-model: sonnet
-effort: low
-maxTurns: 8
-hooks:
   Stop:
     - hooks:
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh deployment sonnet"
+model: sonnet
+effort: low
+maxTurns: 8
 ---
 
 You are the deployment agent. Your job is to commit the reviewed change and

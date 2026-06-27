@@ -16,7 +16,8 @@ string and those files — never assume it can see the conversation.
 
 ```
 1. Agent(planning, "Plan <feature>. Write .pipeline/plan.md incl. STRIDE threat model.")
-     -> review plan.md, then: touch .pipeline/plan-approved        # human checkpoint
+1b. Agent(plan-audit, "Audit .pipeline/plan.md. Write .pipeline/plan-audit.md.")  # automatic, before the human
+     -> review plan.md + plan-audit.md, then: touch .pipeline/plan-approved       # human checkpoint
 2. Agent(implementation, "Implement .pipeline/plan.md.")
      -> smoke-check.sh (+ infra-validate.sh) fire on Stop
      -> if smoke fails: Agent(debugging, "<error>") up to max_retries, then re-smoke
@@ -33,7 +34,7 @@ string and those files — never assume it can see the conversation.
 
 ## Telemetry — logged automatically on every stage
 
-`log-run.sh` is wired as a **`Stop` hook on all seven agents**, so one line is
+`log-run.sh` is wired as a **`Stop` hook on all eight agents**, so one line is
 appended to `.pipeline/run-log.jsonl` automatically when each agent finishes — the
 orchestrator does **not** call it. The hook signature is:
 
@@ -58,16 +59,17 @@ duration proxy.
 
 ## Bootstrap (once per project)
 
-`mkdir -p .pipeline`, initialize `state.json`
-(`{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}`), add
-`.pipeline/` to `.gitignore`, and remove a stale `plan-approved` before a new
-feature.
+Run `bash ~/.claude/pipeline-templates/bootstrap-project.sh` from inside the
+target repo root (flags `--start`, `--health`, `--test`, `--build` are optional
+and pre-wire the smoke check). Before each new feature, remove any stale
+`.pipeline/plan-approved` marker.
 
 ## Interlock-file contract
 
 | File | Writer | Readers |
 |---|---|---|
-| `plan.md` | planning | human, implementation, testing, documentation |
+| `plan.md` | planning | plan-audit, human, implementation, testing, documentation |
+| `plan-audit.md` | plan-audit | human (advisory — read at the checkpoint; non-gating) |
 | `plan-approved` | human | implementation (refuses to start without it) |
 | `security-report.md` / `security-status.json` | security | documentation (md), gate hooks (json) |
 | `test-results.json` | testing | record-clean.sh, deployment-gate.sh, documentation |
@@ -79,6 +81,10 @@ feature.
 
 ## Gate semantics
 
+- **Planning → plan-audit → human checkpoint:** `plan-audit` runs automatically
+  after planning and writes `plan-audit.md` (ambiguity, dependency-reality, and
+  version-policy flags). It is **advisory, not a gate** — it never blocks; the
+  human reads it alongside `plan.md` before approving.
 - **Planning → implementation:** `plan-approved` marker (human).
 - **Smoke / infra:** deterministic hooks; exit 2 routes to sanity debugging.
 - **Security → testing:** serial by default (token cost over wall-clock).

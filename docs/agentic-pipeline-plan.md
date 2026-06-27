@@ -184,7 +184,7 @@ Each block is one primitive: *what it is*, *what it's responsible for in this pi
 📖 **Docs —** [Create custom subagents](https://code.claude.com/docs/en/sub-agents) · [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview).
 ⚠️ **Gotcha —** include `Agent` in the orchestrator's allowed tools, or every stage invocation prompts.
 
-**2. Subagents (filesystem agents).** A `.claude/agents/<name>.md` file: YAML frontmatter (`name`, `description`, `tools`, `model`, `effort`, `skills`, `mcpServers`, `hooks`, `maxTurns`, …) plus a system-prompt body. Responsible for: one stage's behavior, tool scope, and model. This pipeline defines seven (planning, implementation, debugging, security, testing, documentation, deployment).
+**2. Subagents (filesystem agents).** A `.claude/agents/<name>.md` file: YAML frontmatter (`name`, `description`, `tools`, `model`, `effort`, `skills`, `mcpServers`, `hooks`, `maxTurns`, …) plus a system-prompt body. Responsible for: one stage's behavior, tool scope, and model. This pipeline defines eight (planning, plan-audit, implementation, debugging, security, testing, documentation, deployment).
 📖 **Docs —** [Create custom subagents](https://code.claude.com/docs/en/sub-agents) · [Subagents in the SDK](https://code.claude.com/docs/en/agent-sdk/subagents).
 
 **3. Fresh context & the interlock-file handoff.** A subagent inherits none of the parent's history, so stage N writes a `.pipeline/*` artifact and stage N+1 reads it. Responsible for: all cross-stage state — `plan.md`, `security-report.md`, `test-results.json`, `state.json`, `pr-description.md`.
@@ -215,7 +215,7 @@ Each block is one primitive: *what it is*, *what it's responsible for in this pi
 **10. Plugins (packaging).** A bundle of `agents/`, `hooks/`, `skills/`, and `commands/` for reuse across projects — the eventual goal. But plugin subagents **ignore** the `hooks`, `mcpServers`, and `permissionMode` frontmatter fields, so those move to `settings.json` / `.mcp.json` when packaging.
 📖 **Docs —** [Create plugins](https://code.claude.com/docs/en/plugins) · [Plugins reference](https://code.claude.com/docs/en/plugins-reference).
 
-🧠 **Recap —** seven agents, scoped by tools/permissions, tuned by model/effort, taught by skills, extended by MCP, gated by hooks, and one day shipped as a plugin.
+🧠 **Recap —** eight agents, scoped by tools/permissions, tuned by model/effort, taught by skills, extended by MCP, gated by hooks, and one day shipped as a plugin.
 
 <a id="walk-the-pipeline-end-to-end"></a>
 ## Walk the pipeline end-to-end
@@ -400,7 +400,7 @@ Documentation produces a real artifact coupled to the *final* state of the code,
 - **Parallelism saves wall-clock time, not tokens, and isn't the default here.** Token cost is prioritized over speed for this framework, so security and testing run serially by default; parallel is an opt-in choice for a specific run, not the standing design.
 - **Diff-scoping is the highest-leverage fix.** Security and testing should scan only what changed since the last clean pass after the first run in a session, not the whole repository on every debug loop — this is where token cost compounds fastest if left unscoped.
 - **Documentation is incremental.** It diffs against existing per-directory README files and `system_architecture.md`, updating only the directories and diagrams actually affected by the change — not a full rewrite every run.
-- **Every agent has a `maxTurns` cap** — a runaway agent (stuck tool loop, repeated WebSearch in planning, etc.) surfaces to you instead of silently draining the weekly budget. Per-agent values: planning 20, implementation 25, debugging 15, security 10, testing 10, documentation 10, deployment 8. Debugging also has a separate fixed retry count per role (sanity / remediation) so it caps at both the per-invocation turn level and the per-feature loop level.
+- **Every agent has a `maxTurns` cap** — a runaway agent (stuck tool loop, repeated WebSearch in planning, etc.) surfaces to you instead of silently draining the weekly budget. Per-agent values: planning 20, plan-audit 15, implementation 25, debugging 15, security 10, testing 10, documentation 10, deployment 8. Debugging also has a separate fixed retry count per role (sanity / remediation) so it caps at both the per-invocation turn level and the per-feature loop level.
 - **The smoke check and post-deploy check are hooks, not agent calls.** Both run at zero LLM cost and are what decide — deterministically — whether an agent (debugging, or you) needs to get involved at all.
 - **MCP servers are scoped per-agent and per-project**, not baked into the portable plugin defaults. The default plugin ships with Semgrep and OSV Scanner (both open-source CLI tools) for security scanning; heavier or cloud-native tooling is opt-in per project.
 - **Skills are loaded per-agent**: a small set is *preloaded* via the `skills` frontmatter (e.g. the merged `doc-conventions` into `documentation`), while conditional knowledge (auth, logging, infra, storage) is *on-demand* — invoked only when a feature needs it, so it costs context only then. See *Pipeline observability & metrics* and the *Skill authoring plan*.
@@ -428,7 +428,7 @@ Documentation produces a real artifact coupled to the *final* state of the code,
 <a id="pipeline-observability-and-metrics"></a>
 ## Pipeline observability & metrics
 
-> **Status (2026-06-26): LIVE.** `log-run.sh` is wired as a `Stop` hook on all seven agents, so `run-log.jsonl` is written automatically as each stage finishes — no orchestrator action needed. The opt-in LLM-judge plan eval at the end of this section is still not in v1.
+> **Status (2026-06-26): LIVE.** `log-run.sh` is wired as a `Stop` hook on all eight agents, so `run-log.jsonl` is written automatically as each stage finishes — no orchestrator action needed. The opt-in LLM-judge plan eval at the end of this section is still not in v1.
 
 The deterministic gates verify each *change* (does it build, scan clean, pass tests). They do **not** tell you whether the *pipeline itself* is working well over time — whether plans land first-try, where tokens go, or whether debug loops are creeping up. A lightweight run log closes that gap at zero model cost, and gives you the objective signals the multi-agent literature treats as essential: token use alone explains roughly **80% of agent performance variance**, and Anthropic's own multi-agent system leaned on per-run metrics plus LLM-judge evals to improve. Without this you're flying blind on the very question you care about — *is this thing actually helping?*
 
@@ -965,7 +965,7 @@ Each skill is a **directory containing a `SKILL.md`** — `~/.claude/skills/<nam
 ## Next steps
 
 1. Pilot the pipeline end-to-end on one real project before generalizing.
-2. Write the seven subagent definition files (`.claude/agents/`) with the tool scopes above, plus `.claude/settings.json` (see *settings.json (permissions and auto-approve)*); run `mkdir -p .pipeline` and confirm prerequisites are installed (see *Prerequisites and environment*).
+2. Write the eight subagent definition files (`.claude/agents/`) with the tool scopes above, plus `.claude/settings.json` (see *settings.json (permissions and auto-approve)*); run `mkdir -p .pipeline` and confirm prerequisites are installed (see *Prerequisites and environment*).
 3. Implement the smoke-check hook and the deployment interlock hook (`deployment-gate.sh`). `post-deploy-check.sh` is a CI hook — wire it later when setting up GitHub Actions (see `pipeline-deployment-targets.md`).
 4. Implement diff-scoping for security/testing and incremental output for documentation.
 5. Set `maxTurns` and retry caps on the debugging agent.
@@ -1020,7 +1020,7 @@ your-project/
 │   │   ├── semgrep-scan.sh            # Semgrep-via-Docker wrapper (Windows; no native build) — see Environment setup notes
 │   │   ├── compute-change-hash.sh     # shared change-set hash; documentation + deployment-gate call it (single source of truth)
 │   │   ├── write-review-manifest.sh   # documentation's final action: writes review-manifest.json (reviewed_change_hash)
-│   │   └── log-run.sh                 # Stop hook on all 7 agents; appends one line/stage to run-log.jsonl
+│   │   └── log-run.sh                 # Stop hook on all 8 agents; appends one line/stage to run-log.jsonl
 │   ├── skills/                        # project-scoped templates ONLY (test-conventions, semgrep-ruleset-guide — fill <PLACEHOLDERS> per project); the global skills live in ~/.claude/skills/, not here
 │   └── settings.json                  # permissions + auto-approve (hook wiring lives in agent frontmatter; see settings.json section)
 ├── templates/
@@ -1274,7 +1274,7 @@ fi
 exit 0
 ```
 
-**`.claude/hooks/log-run.sh`** — **LIVE (2026-06-26)**, wired as a `Stop` hook on all seven agents, so it fires automatically when each agent finishes and appends one JSON line to `.pipeline/run-log.jsonl` (the metrics source described in *Pipeline observability & metrics*). Not a gate. Deterministic, zero-LLM. Signature `log-run.sh <stage> <model> [status] [retries] [notes]`: `feature` is auto-derived from the git branch, `status` and `retries` auto-derive from the stage's `.pipeline/*` artifact when omitted (implementation→`smoke-status.json`, security→`security-status.json`, testing→`test-results.json`, debugging→`state.json`; other stages default to `pass`), and `files_changed` plus stage-specific extras (testing coverage/counts, security finding counts) are captured. `duration_s`/`tokens` are not available to a shell hook (use timestamp deltas + `model` as proxies). The full script lives in `.claude/hooks/log-run.sh` — the source of truth; the essence is below.
+**`.claude/hooks/log-run.sh`** — **LIVE (2026-06-26)**, wired as a `Stop` hook on all eight agents, so it fires automatically when each agent finishes and appends one JSON line to `.pipeline/run-log.jsonl` (the metrics source described in *Pipeline observability & metrics*). Not a gate. Deterministic, zero-LLM. Signature `log-run.sh <stage> <model> [status] [retries] [notes]`: `feature` is auto-derived from the git branch, `status` and `retries` auto-derive from the stage's `.pipeline/*` artifact when omitted (implementation→`smoke-status.json`, security→`security-status.json`, testing→`test-results.json`, debugging→`state.json`; other stages default to `pass`), and `files_changed` plus stage-specific extras (testing coverage/counts, security finding counts) are captured. `duration_s`/`tokens` are not available to a shell hook (use timestamp deltas + `model` as proxies). The full script lives in `.claude/hooks/log-run.sh` — the source of truth; the essence is below.
 
 ```bash
 #!/bin/bash
@@ -2194,7 +2194,7 @@ The full **JavaScript/OTel-Node** bootstrap (`otel.ts` with the X-Ray propagator
 ## Defaults for previously open items
 
 - **Retry caps**: two independent mechanisms. The *attempt* cap is `max_retries: 3` per role (sanity, remediation), tracked in `.pipeline/state.json` and checked by the debugging agent before each fix — it bounds how many times debugging is re-entered. The *per-invocation* ceiling is `maxTurns: 15` in `debugging.md`, which bounds turns within a single debugging run. Both retry counts reset to zero on a clean gate pass (via `record-clean.sh`).
-- **Model assignments**: `opus` for planning, `sonnet` for implementation/debugging/deployment, `haiku` for security/testing/documentation — adjust per-agent if a project's stakes warrant stronger reasoning on the cheaper roles.
+- **Model assignments**: `opus` for planning, `sonnet` for implementation/debugging/deployment, `haiku` for plan-audit/security/testing/documentation — adjust per-agent if a project's stakes warrant stronger reasoning on the cheaper roles.
 - **Effort assignments** (set via the `effort` frontmatter field on each agent): `high` for planning and debugging (open-ended reasoning), `medium` for implementation and testing, `low` for security, documentation, and deployment (mechanical or checklist-driven). This is the second cost lever after model tier — raise an agent's effort only if its output quality is short, lower it if its per-turn spend is higher than the work warrants.
 - **Orchestration mechanism for v1**: conversational — a main thread (you, in interactive Claude Code) invokes each subagent in sequence via the `Agent` tool, with state passing through the `.pipeline/*.md` interlock files (subagents start fresh and don't share conversation; see *Platform alignment*). Formalize later as a **skill** invocable as `/pipeline` (the modern path; legacy `.claude/commands/*.md` is deprecated), or as an Agent SDK / `Workflow` script for fully headless runs.
 - **Security default tooling**: Semgrep (SAST, SCA, and secrets scanning) and OSV Scanner (dependency CVE scanning) — both open-source CLI tools, **no MCP server, by design**: the security agent's work is deterministic (run scanners, report counts), so it carries no `mcp__*` tools at all. Ensure both are installed before running the pipeline. When a change includes `infra/`, the security agent also runs **Checkov** (IaC scanning) — install it too for AWS projects.
@@ -2319,7 +2319,7 @@ a future setup (or a move to Linux/WSL) knows what was assumed.
 
 **New hooks added during setup (beyond the original five):**
 - **`log-run.sh`** — deterministic, zero-LLM telemetry helper, wired as a `Stop` hook
-  on all seven agents (fires automatically per stage; the orchestrator does not call it).
+  on all eight agents (fires automatically per stage; the orchestrator does not call it).
   Signature `./.claude/hooks/log-run.sh <stage> <model> [status] [retries] [notes]`;
   appends a line to `.pipeline/run-log.jsonl` (the metrics source in
   *Pipeline observability & metrics*).
