@@ -20,6 +20,8 @@
       "Bash(git commit:*)",
       "Bash(jq:*)",
       "Bash(sha256sum:*)",
+      "Bash(curl:*)",
+      "Bash(date:*)",
       "Bash(semgrep:*)",
       "Bash(docker info:*)",
       "Bash(docker run:*)",

@@ -153,6 +153,85 @@ for line in ".pipeline/" ".env" ".envrc" "__pycache__/" "*.pyc" ".venv/" "venv/"
 done
 note "[gitignore] $added entr$([ "$added" -eq 1 ] && echo y || echo ies) added"
 
+# --- Claude Code per-project memory ------------------------------------------
+# Encode the absolute project path the same way Claude Code does:
+#   /c/Users/brett/project  →  c--Users-brett-project  (Windows/Git Bash)
+#   /home/brett/project     →  home--brett-project      (Linux/Mac)
+# Rule: strip leading /, replace the first / with --, replace remaining / with -.
+# On Windows the drive letter c and the colon-then-backslash (c:\) together
+# produce the double-dash: c + -- + rest.
+encode_path() { printf '%s' "$1" | sed 's|^/||; s|/|--|; s|/|-|g'; }
+
+ENCODED="$(encode_path "$TARGET")"
+MEMORY_DIR="${HOME}/.claude/projects/${ENCODED}/memory"
+
+if [[ -f "$MEMORY_DIR/MEMORY.md" ]]; then
+  note "[skip] ~/.claude/projects/${ENCODED}/memory/ already exists"
+else
+  mkdir -p "$MEMORY_DIR"
+
+  cat > "$MEMORY_DIR/MEMORY.md" <<'EOF'
+- [Pipeline first-run gotchas](pipeline_first_run.md) — Windows hook setup, plan approval gate, greenfield smoke check, API key, Docker for Semgrep, and deployment scope
+EOF
+
+  cat > "$MEMORY_DIR/pipeline_first_run.md" <<'EOF'
+---
+name: pipeline-first-run
+description: "Critical gotchas for the first pipeline run in a new project — communicate these at session start"
+metadata:
+  type: project
+---
+
+## Windows hook risk
+
+Pipeline gates run as `.sh` scripts via Claude Code hooks. On Windows they require Git
+Bash on PATH. If hooks silently don't fire (no output in `.pipeline/run-log.jsonl` after
+invoking an agent), Git Bash is likely not on the session PATH. Fix: restart Claude Code
+from a terminal that has Git Bash on PATH, or verify `$HOME/.claude/hooks/*.sh` are
+executable (`chmod +x`).
+
+## Plan approval gate
+
+The implementation agent refuses to start unless `.pipeline/plan-approved` exists. After
+the planning agent produces `plan.md` and the human reviews it, create the marker:
+
+```bash
+touch .pipeline/plan-approved
+```
+
+Do NOT create this marker before reviewing the plan — it is the human checkpoint.
+
+## Greenfield smoke check mode
+
+On the very first run there is no HEAD commit yet, so `git diff HEAD` fails. The smoke
+check falls back to a build-check: it runs `SMOKE_BUILD_CMD` (set in
+`.pipeline/smoke.env` by bootstrap) instead of starting the app and probing an HTTP
+endpoint. Ensure `--build` was passed to `bootstrap-project.sh`, or set
+`SMOKE_BUILD_CMD` in `.pipeline/smoke.env` manually before invoking implementation.
+
+## ANTHROPIC_API_KEY requirement
+
+All pipeline agents require `ANTHROPIC_API_KEY` in the environment. If an agent fails to
+start with an auth error, export the key in the terminal before launching Claude Code, or
+add it to the shell profile.
+
+## Docker for Semgrep
+
+The security agent runs Semgrep via Docker (`~/.claude/hooks/semgrep-scan.sh`). Docker
+Desktop must be running before invoking the security stage. If Docker is not running, the
+agent surfaces the error rather than skipping the scan silently.
+
+## Deployment scope
+
+The deployment agent commits the reviewed change, pushes to GitHub, and opens a PR. It
+does NOT run `terraform apply`, database migrations, app deploys, or any post-merge CI
+steps. Those happen outside the pipeline after the PR is merged. See
+`docs/pipeline-deployment-targets.md` for CI/CD patterns to wire up after merge.
+EOF
+
+  note "[new]  ~/.claude/projects/${ENCODED}/memory/ (first-run gotchas pre-loaded)"
+fi
+
 echo ""
 echo "Done. Next:"
 echo "  1. Write PROJECT.md (the first feature) and fill any <placeholders> in CLAUDE.md."

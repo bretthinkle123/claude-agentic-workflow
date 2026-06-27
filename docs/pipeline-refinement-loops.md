@@ -13,6 +13,16 @@ implement is informed rather than speculative.
 **Status: UNIMPLEMENTED** — documented for future consideration after trial runs
 establish whether planning quality is the actual bottleneck.
 
+> **Related but distinct — the `plan-audit` agent is now LIVE.** A separate Haiku
+> agent (`global-agents/plan-audit.md`) runs in the same slot (after planning,
+> before the human checkpoint) and is wired into the live pipeline. It is
+> **advisory, not a scoring/revision loop**: it flags ambiguous wording,
+> hallucinated/slopsquatted dependencies, and version-policy violations into
+> `.pipeline/plan-audit.md` for the human, but it never scores the plan, never
+> feeds back to planning, and never blocks. The loop below is the heavier
+> *score → re-plan* variant and remains unimplemented; build it only if trial
+> runs show the human is repeatedly sending plans back on the same rubric items.
+
 ### What it does
 
 After the planning agent (Opus) writes `.pipeline/plan.md`, a lightweight Haiku

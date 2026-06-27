@@ -16,7 +16,7 @@ Brett is building a reusable Claude Code multi-agent SDLC pipeline. All authorit
 - `docs/pipeline-mcp-config.md` — per-agent MCP server mapping + §7 token-vs-performance verdict table. Documentation-only.
 
 **Architecture (settled — do not relitigate):**
-- 7 subagents: planning, implementation, debugging, security, testing, documentation, deployment.
+- 8 subagents: planning, plan-audit, implementation, debugging, security, testing, documentation, deployment. (`plan-audit` added 2026-06-27 — Haiku/effort medium, runs automatically after planning and before the human checkpoint; advisory-only, non-gating. Writes `.pipeline/plan-audit.md` flagging: ambiguous plan wording that could mislead downstream agents; hallucinated/slopsquatted deps verified against npm/PyPI registries via curl; version-policy violations (cooldown 14–30d minor / 30–90d major / 0–7d CVE, max n-1 obsolescence, exact-pin determinism, minimal-footprint fit). Version policy is inlined in the agent body, not a skill. Distinct from the still-UNIMPLEMENTED scoring/revision "Planning quality loop" in `docs/pipeline-refinement-loops.md`.)
 - File-based handoff via `.pipeline/*` artifacts (subagents start blank; state passes through files only).
 - Deterministic shell-hook gates: `smoke-check.sh` (implementation Stop), `record-clean.sh` (testing Stop), `deployment-gate.sh` (deployment PreToolUse).
 - Human checkpoint: `.pipeline/plan-approved` marker; implementation refuses to start without it.
