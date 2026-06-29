@@ -336,8 +336,10 @@ gives it enough headroom to do both without the cost of stronger models.
 | Stop hooks (in order) | `record-clean.sh`, `log-run.sh testing haiku` |
 
 **Responsibility:** Write missing unit and integration tests for the change set, then run the
-full suite with coverage. Writes `test-results.json` including `tested_change_hash` (SHA-256 of the
-change set it tested). Never edits production code to make tests pass.
+full suite with coverage. Follows the plan's `test_strategy` shape (`pyramid` default, or
+`integration-heavy`) as a tier-priority bias. Writes `test-results.json` including
+`tested_change_hash` (SHA-256 of the change set it tested), the realized `tests_by_type` counts,
+and merged `combined` coverage (the only gated figure). Never edits production code to make tests pass.
 
 **When it stops:** `record-clean.sh` fires first. It reads both gate artifacts — if
 `security-status.json` is `clean` AND `test-results.json` is `pass`, it resets the
@@ -558,7 +560,7 @@ commit; until then, all changes live in the working tree.
 | `plan-approved` | human (`touch`) | implementation agent (refuses to start without it) | The human checkpoint gate marker |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
 | `security-status.json` | security agent | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,...}` |
-| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + coverage |
+| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `coverage` (gated `combined` + best-effort per-suite `unit`/`integration`) |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |
@@ -696,8 +698,10 @@ flowchart LR
 }
 ```
 
-Testing lines also include `coverage` and `tests.{total,passed,failed}`. Security lines include
-`critical_findings` and `warning_findings`.
+Testing lines also include `coverage` (the merged `combined` figure),
+`tests.{total,passed,failed}`, `tests_by_type`, and `test_strategy`. Security lines include
+`critical_findings` and `warning_findings`. The `notes` field carries a short, auto-derived
+per-stage summary (smoke result, finding counts, test pass/fail, or debug-retry tally).
 
 **Derived metrics to watch:**
 
@@ -708,7 +712,7 @@ Testing lines also include `coverage` and `tests.{total,passed,failed}`. Securit
 | Debug-retry rate | mean `retries` across features | Rising = plans too ambitious or stage struggling |
 | Wall-clock per stage | timestamp delta between consecutive lines | Spot a hung stage |
 | Missing stage line | no entry for a stage | Suspect a `maxTurns` cap-out |
-| Coverage trend | `coverage.lines` over time | Regression guard |
+| Coverage trend | `coverage.combined.lines` over time | Regression guard |
 
 A missing stage line in the log means the agent's Stop hook never fired — the most likely cause is
 that the agent hit its `maxTurns` cap. `duration_s` and `tokens` are not available to shell hooks;

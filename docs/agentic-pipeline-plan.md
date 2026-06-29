@@ -448,7 +448,8 @@ Fields always present: `ts`, `feature` (the git branch), `stage` (planning / imp
 | **First-pass gate rate** | % of features reaching documentation with `retries == 0` across smoke/security/testing | Measures plan + implementation quality; a drop signals scope too big or a degrading stage |
 | **Debug-retry & escalation rate** | mean `retries`; count of `status == escalated` | Rising retries/escalations = a stage struggling or plans too ambitious |
 | **Wall-clock per stage** | timestamp delta between consecutive `run-log.jsonl` lines | Spot a hung stage; a *missing* stage line flags a `maxTurns` cap-out (its Stop hook never fired) |
-| **Coverage trend** | `coverage.lines` from `test-results.json` over time | Regression guard |
+| **Coverage trend** | `coverage.combined.lines` from `test-results.json` over time | Regression guard |
+| **Test-pyramid shape** | `tests_by_type` (unit/integration/e2e counts) and the `combined − unit` coverage gap vs. the planned `test_strategy` | Catches drift toward an inverted pyramid; flags when realized shape diverges from plan |
 | **Post-deploy success rate** | % of PRs whose CI post-deploy check passed first try (tracked in CI, not in `run-log.jsonl`) | The production-truth metric — add when CI is wired up |
 
 **Opt-in (later): an LLM-judge eval of plan quality.** Once the pipeline is piloted, a small evaluator (cheap model — Haiku) can score each `plan.md` against a fixed rubric — completeness across the affected layers, every non-trivial decision carries a *what/why/how*, threat model present and scoped, open questions surfaced — and append the score to the run log. This is how Anthropic's multi-agent system measured and improved output quality; it is deliberately **not** in v1 (keep it simple first), but the schema already has a place for it (a `plan_score` field).
@@ -1051,13 +1052,24 @@ your-project/
   "scope": "diff",
   "since_commit": "a1b2c3d",
   "tested_change_hash": "9f2b…",
+  "test_strategy": "pyramid",
   "total": 42,
   "passed": 42,
   "failed": 0,
   "failures": [],
-  "coverage": { "lines": 82, "branches": 74, "functions": 88 }
+  "tests_by_type": { "unit": 31, "integration": 9, "e2e": 2 },
+  "coverage": {
+    "combined":    { "lines": 82, "branches": 74, "functions": 88 },
+    "unit":        { "lines": 71, "branches": 65 },
+    "integration": { "lines": 48, "branches": 40 }
+  }
 }
 ```
+
+`coverage.combined` is the merged, gated figure; the per-suite `unit`/`integration`
+blocks are best-effort diagnostics (a large `combined − unit` gap flags an inverted
+pyramid). `test_strategy` echoes the planned pyramid shape (planning declares it
+in `plan.md`, default `pyramid`); `tests_by_type` is what was actually written.
 
 **`.pipeline/security-report.md`** — kept as markdown (human-readable, since you'll read it directly), but starts with a small YAML frontmatter block so hooks can parse status without an LLM call:
 
@@ -1451,6 +1463,9 @@ When invoked:
      rest of the system, and what tradeoffs were accepted.
    - **Files affected** — list of files to create or modify with a one-line
      reason for each.
+   - **Test strategy** — the test-pyramid shape testing follows. Default
+     `pyramid`; choose `integration-heavy` only for orchestration/glue-heavy
+     features with little local logic, with a one-line rationale.
    - **Open questions** — anything unresolved; planning proposes an answer and
      flags it for confirmation at the checkpoint.
    The plan must be self-explanatory to someone reading it cold. Every decision
@@ -1476,6 +1491,8 @@ When invoked:
      and a mitigation per credible threat.
    - **Files affected** is concrete (paths + one-line reason each) and matches
      the per-layer sections.
+   - **Test strategy** is declared (`pyramid`, or `integration-heavy` with a
+     one-line rationale).
    - **Stack notes** records every default you kept or changed, with rationale,
      and any default you're recommending against (e.g. non-AWS cloud, Cognito
      over Firebase) is flagged explicitly for the checkpoint.
@@ -1769,15 +1786,27 @@ When invoked:
      "scope": "diff|full",
      "since_commit": "<hash or null>",
      "tested_change_hash": "<sha256 of the tracked diff + untracked file contents>",
+     "test_strategy": "pyramid|integration-heavy",
      "total": 0, "passed": 0, "failed": 0,
      "failures": [{ "name": "", "reason": "" }],
-     "coverage": { "lines": 0, "branches": 0, "functions": 0 }
+     "tests_by_type": { "unit": 0, "integration": 0, "e2e": 0 },
+     "coverage": {
+       "combined":    { "lines": 0, "branches": 0, "functions": 0 },
+       "unit":        { "lines": 0, "branches": 0 },
+       "integration": { "lines": 0, "branches": 0 }
+     }
    }
    ```
+   `coverage.combined` is required and is the figure the gate reads; per-suite
+   `unit`/`integration` are best-effort diagnostics. `test_strategy` echoes the
+   plan's shape and `tests_by_type` records the realized pyramid.
 8. Report a summary listing:
    - **Passing tests**: count and test suite names
    - **Failing tests**: name and failure reason for each
-   - **Coverage**: line, branch, and function coverage percentages
+   - **Coverage**: combined line, branch, and function percentages (plus per-suite
+     unit and integration when produced)
+   - **Shape**: the `test_strategy` followed and the realized unit/integration/e2e
+     counts; flag any divergence from the planned shape
    Then stop.
 ```
 
@@ -2757,7 +2786,7 @@ After the 2026-06-25 reduction, **`planning` preloads 1** skill (`stride-threat-
 
 **`test-conventions`** — (project) — → testing
 - **description:** "Project test layout, mocking strategy, unit-vs-integration boundary, runner/coverage commands, and coverage thresholds."
-- **SKILL.md sections:** file locations/naming; unit vs integration definitions + when each; mocking strategy; the runner + coverage flag (`<PLACEHOLDER>`); coverage thresholds (`<lines ≥ N>`); pointer to the `test-results.json` shape.
+- **SKILL.md sections:** file locations/naming; unit vs integration definitions + when each; the test-pyramid shape (`pyramid` default / `integration-heavy`, read from the plan's `test_strategy`); mocking strategy; the runner + coverage flag (`<PLACEHOLDER>`), including how combined vs. per-suite coverage is merged; coverage thresholds (`<lines ≥ N>`, gate on combined); pointer to the `test-results.json` shape.
 - **Sibling files:** none.
 - **Source:** `testing.md` body + project conventions (mostly project-authored).
 - **Budget:** ~70 lines; ships as a template with `<PLACEHOLDERS>`.

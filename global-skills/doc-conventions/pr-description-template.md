@@ -18,8 +18,11 @@ One paragraph: what changed and why. Link the plan: see `.pipeline/plan.md`
 
 ## Testing
 
-- Suites run, pass/fail summary, and coverage (lines / branches / functions)
-  from `.pipeline/test-results.json`.
+- Suites run and pass/fail summary from `.pipeline/test-results.json`.
+- Combined coverage (lines / branches / functions); note per-suite unit vs.
+  integration when recorded.
+- Test-pyramid shape: the `test_strategy` followed and the realized
+  `tests_by_type` (unit / integration / e2e) counts.
 
 ## Security
 

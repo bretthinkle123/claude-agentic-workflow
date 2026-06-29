@@ -40,6 +40,10 @@ When invoked:
      job with no trigger.
    - Internal contradictions — two sections that prescribe incompatible things.
    - Unresolved markers left in the body — TODO, TBD, ???, <placeholder>.
+   - Test strategy missing or unjustified — the plan declares no Test strategy, or
+     declares `integration-heavy` without a one-line rationale tying it to
+     orchestration/glue-heavy code with little local logic. Flag it so the testing
+     agent isn't left to guess the pyramid shape (default `pyramid`).
    For each finding give: the location, the quoted text, the downstream risk
    (which agent would misread it and how), and a one-line clarifying question the
    human can resolve at the checkpoint. An empty ambiguity list is a valid result.

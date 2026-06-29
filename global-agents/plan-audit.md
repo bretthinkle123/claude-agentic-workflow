@@ -54,6 +54,10 @@ When invoked:
      async).
    - **Unresolved markers** left in the body — `TODO`, `TBD`, `???`, `<placeholder>`,
      bracketed fill-ins that survived planning's self-audit.
+   - **Test strategy missing or unjustified** — the plan declares no **Test
+     strategy**, or declares `integration-heavy` without a one-line rationale
+     tying it to orchestration/glue-heavy code with little local logic. Flag it so
+     the testing agent isn't left to guess the pyramid shape (default `pyramid`).
    For each finding give: the location, the quoted text, the **downstream risk**
    (which agent would misread it and how), and a **one-line clarifying question**
    the human can resolve at the checkpoint. Do not invent ambiguity where the plan

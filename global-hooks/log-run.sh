@@ -7,7 +7,10 @@
 #   model   : opus|sonnet|haiku
 #   status  : pass|fail|clean|issues-found|blocked|escalated  (default: auto-derive)
 #   retries : integer  (default: auto-read from state.json)
-#   notes   : free-text (default: empty)
+#   notes   : free-text (default: auto-derive a short summary from the stage's
+#             artifact). The Stop-hook wiring only ever passes <stage> <model>,
+#             so an explicit note is rare — auto-derivation keeps the field
+#             populated instead of writing "notes":"" on every line.
 #
 # feature    — derived from the current git branch name
 # status     — "auto" reads the relevant .pipeline artifact for the stage:
@@ -97,7 +100,12 @@ EXTRAS='{}'
 case "$STAGE" in
   testing)
     if [ -f .pipeline/test-results.json ]; then
-      EXTRAS=$(jq -c '{coverage:.coverage,tests:{total:(.total // 0),passed:(.passed // 0),failed:(.failed // 0)}}' \
+      # coverage.combined is the merged figure; fall back to the old flat
+      # coverage object so pre-schema result files still log cleanly.
+      EXTRAS=$(jq -c '{coverage:(.coverage.combined // .coverage),
+        tests:{total:(.total // 0),passed:(.passed // 0),failed:(.failed // 0)},
+        tests_by_type:(.tests_by_type // {}),
+        test_strategy:(.test_strategy // "pyramid")}' \
         .pipeline/test-results.json 2>/dev/null || echo '{}')
     fi
     ;;
@@ -108,6 +116,40 @@ case "$STAGE" in
     fi
     ;;
 esac
+
+# Notes: a short human-readable summary of the stage outcome. The Stop-hook
+# wiring only passes <stage> <model>, so $5 is virtually always empty — derive a
+# note from the same artifact that feeds status/extras (zero-LLM, deterministic).
+# An explicit note (when one is ever passed) wins. Stages with no machine-readable
+# outcome artifact (planning, plan-audit, documentation, deployment) keep "".
+if [ -z "$NOTES" ]; then
+  case "$STAGE" in
+    implementation)
+      [ -f .pipeline/smoke-status.json ] && \
+        NOTES="smoke $(jq -r '.status // "unknown"' .pipeline/smoke-status.json 2>/dev/null || echo unknown)"
+      ;;
+    security)
+      [ -f .pipeline/security-status.json ] && \
+        NOTES=$(jq -r '"\(.fixed_count // 0) fixed, \(.critical_count // 0) critical / \(.warning_count // 0) warning remaining"' \
+          .pipeline/security-status.json 2>/dev/null || echo "")
+      ;;
+    testing)
+      [ -f .pipeline/test-results.json ] && \
+        NOTES=$(jq -r '
+          ([.failures[]? | .name] | map(select(. != null and . != ""))) as $names
+          | if (.failed // 0) > 0
+            then "\(.failed) failed"
+                 + (if ($names | length) > 0 then ": " + ($names | join(", ")) else "" end)
+            else "\(.passed // 0)/\(.total // 0) passed" end' \
+          .pipeline/test-results.json 2>/dev/null || echo "")
+      ;;
+    debugging)
+      [ -f .pipeline/state.json ] && \
+        NOTES=$(jq -r '"retries sanity=\(.debug_retry_count.sanity // 0) remediation=\(.debug_retry_count.remediation // 0) (cap \(.max_retries // 3))"' \
+          .pipeline/state.json 2>/dev/null || echo "")
+      ;;
+  esac
+fi
 
 mkdir -p .pipeline
 jq -nc \
