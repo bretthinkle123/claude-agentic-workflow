@@ -55,10 +55,11 @@ When invoked:
    *(For a smoke/build break, the equivalent is a clean re-run of the smoke check; there is
    no flaky-test set to re-sample.)*
 7. **Remove temporary debug probes** — any print/log/breakpoint/scratch code added
-   while diagnosing — before finishing. Leave only the fix and the regression test.
+   while diagnosing — before finishing. Leave only the fix and any regression test.
 8. **Write the hypothesis log** to `.pipeline/debug-notes.md`: root cause, the
-   evidence that confirmed it, what you tried (including dead ends), and the fix +
-   regression test that closed it. **Append** a new dated entry per invocation
+   evidence that confirmed it, what you tried (including dead ends), and the fix
+   plus how it was proven (the regression test, or the clean smoke re-pass for a
+   sanity-role break) that closed it. **Append** a new dated entry per invocation
    rather than overwriting — the trail helps the human and a later cap-out.
 9. Increment the relevant retry count (`sanity` or `remediation`) in
    .pipeline/state.json.
