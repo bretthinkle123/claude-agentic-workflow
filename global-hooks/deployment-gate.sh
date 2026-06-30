@@ -27,6 +27,19 @@ if [ ! -f "$TEST_RESULTS" ] || [ "$(jq -r '.status' "$TEST_RESULTS")" != "pass" 
   exit 2
 fi
 
+# Acceptance-criteria coverage must be COMPLETE (PR C). Every criterion testing
+# recorded from acceptance.md must be covered. This is the SAME condition the
+# orchestrator's run-to-condition loop exits on, so loop-exit ≡ deploy gate and the
+# two cannot drift. An absent/empty criteria_covered (a feature with no acceptance
+# criteria, or a pre-PR-C result file) means total 0 == covered 0 → complete, so
+# this no-ops for those — never blocks a legitimately criteria-less change.
+CRIT_TOTAL=$(jq -r '(.criteria_covered.total // 0)' "$TEST_RESULTS")
+CRIT_COVERED=$(jq -r '(.criteria_covered.covered // 0)' "$TEST_RESULTS")
+if [ "$CRIT_COVERED" -lt "$CRIT_TOTAL" ]; then
+  echo "Blocked: acceptance criteria not fully covered ($CRIT_COVERED/$CRIT_TOTAL). See $TEST_RESULTS .criteria_covered." >&2
+  exit 2
+fi
+
 if [ ! -f "$SECURITY_STATUS" ] || [ "$(jq -r '.status' "$SECURITY_STATUS")" != "clean" ]; then
   echo "Blocked: security status is not clean. See .pipeline/security-report.md." >&2
   exit 2
