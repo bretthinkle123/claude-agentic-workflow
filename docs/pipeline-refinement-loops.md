@@ -1,6 +1,9 @@
 # Pipeline refinement loops
 
-> **[UNIMPLEMENTED]** — every loop documented here is a candidate design; none is wired into the live agents, hooks, or settings.json. Each becomes active only by following its own "Implementation notes" section.
+> **Status mixed.** The **planning quality loop** is now **IMPLEMENTED** as a lighter,
+> plan-audit-sourced variant (completeness check → at most one Opus revision on material
+> flags) — see that section. The remaining loops here are still candidate designs; each
+> becomes active only by following its own "Implementation notes" section.
 
 Documents planned or candidate loop patterns for the agentic pipeline. Each
 entry records the design, token cost, and trigger conditions so the decision to
@@ -8,20 +11,27 @@ implement is informed rather than speculative.
 
 ---
 
-## Planning quality loop (Haiku evaluator → Opus revision)
+## Planning quality loop (plan-audit completeness → one Opus revision)
 
-**Status: UNIMPLEMENTED** — documented for future consideration after trial runs
-establish whether planning quality is the actual bottleneck.
+**Status: IMPLEMENTED (lighter variant).** Rather than a separate Haiku scoring
+evaluator, the loop is sourced from the existing **`plan-audit`** agent (Sonnet).
+plan-audit runs its **completeness check**, classifies each flag **material vs.
+advisory**, and writes `revision_recommended` into `.pipeline/plan-audit.md`'s
+frontmatter. When `revision_recommended: true`, the orchestrator re-invokes
+**planning (Opus) exactly once** to address the material flags before the human
+checkpoint — capped at one pass, no recursion. This is wired today in
+`global-agents/plan-audit.md` (completeness + classification), `global-agents/planning.md`
+(revision pass), and `global-skills/pipeline-orchestration/SKILL.md` (conditional
+re-invoke). The heavier *numeric-score → re-plan* design below is retained as the
+record of the original concept and the trigger for promoting to a scored loop.
 
-> **Related but distinct — the `plan-audit` agent is now LIVE.** A separate Haiku
-> agent (`global-agents/plan-audit.md`) runs in the same slot (after planning,
-> before the human checkpoint) and is wired into the live pipeline. It is
-> **advisory, not a scoring/revision loop**: it flags ambiguous wording,
-> hallucinated/slopsquatted dependencies, and version-policy violations into
-> `.pipeline/plan-audit.md` for the human, but it never scores the plan, never
-> feeds back to planning, and never blocks. The loop below is the heavier
-> *score → re-plan* variant and remains unimplemented; build it only if trial
-> runs show the human is repeatedly sending plans back on the same rubric items.
+> **Why the lighter variant shipped now.** The original gating condition was
+> telemetry ("implement once `run-log` shows the human repeatedly sending plans
+> back"). Because plan-audit and telemetry were already wired, the bounded variant
+> (one Sonnet completeness pass + at most one Opus revision) was cheap enough to
+> ship ahead of that signal, trading a small bounded cost for earlier oversight.
+> The retroactive telemetry trigger below still governs promotion to the full
+> numeric-score loop.
 
 ### What it does
 

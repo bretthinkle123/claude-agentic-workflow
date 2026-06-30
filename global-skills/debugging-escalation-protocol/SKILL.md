@@ -21,6 +21,29 @@ approach. There are two roles, one debugging agent definition.
 A bare warning never triggers remediation — only `critical_count > 0` or a
 failing test does.
 
+## Fixing discipline (every remediation)
+
+A fix is not done when the error stops — it is done when it is **proven** done.
+Follow this order on every invocation:
+
+1. **Reproduce first** — observe the exact failure (run the failing test / smoke /
+   finding, capture error + stack) before editing. Never fix an unobserved failure.
+   For a regression, localize with `git bisect` / a diff of the suspect range.
+2. **Minimal fix** — patch the root cause, localized; never redesign the approach.
+3. **Regression test** — author a test that **fails before / passes after**,
+   following the plan's `test_strategy` shape. This is what guards the bug.
+4. **Flaky discrimination** — re-run the failing test **5–10×**; declare fixed only
+   on an all-pass streak. Intermittent passing means the flakiness is the bug.
+5. **Remove debug probes** — strip scratch prints/logs/breakpoints before finishing.
+6. **Hypothesis log** — append a dated entry to `.pipeline/debug-notes.md` (root
+   cause, evidence, what was tried, the closing fix + test).
+
+**Ownership split (vs. the testing agent).** Debugging proves the fix with a single
+failing→passing reproduction; **testing owns full suite validation** on the
+post-remediation re-run (already in the debug loop — remediation re-runs both
+security and testing). Don't re-author the suite; author the one regression test
+that locks in *this* fix.
+
 ## Retry caps (two independent mechanisms)
 
 1. **Attempt cap** — `max_retries: 3` per role, tracked in `.pipeline/state.json`.

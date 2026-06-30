@@ -73,6 +73,17 @@ If the project clearly differs in other respects (a different auth system
 entirely, a different logging library, no infrastructure at all), propose the
 appropriate alternative the same way and justify it under **## Stack notes**.
 
+**Revision pass (only when re-invoked after plan-audit).** If
+`.pipeline/plan-audit.md` exists and its frontmatter has
+`revision_recommended: true`, you are being re-invoked for the **single** allowed
+revision before the human checkpoint (the orchestrator caps this at one pass — no
+recursion). Before rewriting `plan.md`: read `.pipeline/plan-audit.md`, address
+**every flag tagged `[material]`** (advisory flags are optional polish), and
+append a short **## Revision notes** block to `plan.md` recording, per material
+flag, what you changed. Do not expand scope beyond resolving the flags. Then run
+the same self-audit (step 8) and stop — the human reviews the corrected plan next.
+On a first (non-revision) run, no `plan-audit.md` exists yet; ignore this block.
+
 When invoked:
 1. Determine whether this is a greenfield or existing-project run:
    - **Greenfield** — `PROJECT.md` exists in the root and there is little or no
@@ -144,6 +155,17 @@ When invoked:
      `src/auth/middleware.py`". The security agent verifies each mechanism is
      present after implementation — if no mechanism is named, there is nothing
      to verify and the threat is effectively unmitigated.
+   - **Validation contract per boundary input** — for every external input the
+     feature accepts (HTTP path/query param, request-body field, file upload, CLI
+     arg, webhook payload), name a concrete validation contract as the
+     Tampering / Information-Disclosure mechanism: the **type**, a **length/range
+     bound**, and — where the value is free-form text feeding a sensitive sink — an
+     **anchored allowlist charset/format** (`^…$`, ReDoS-safe), plus the **sink it
+     protects** and the schema/file it lives in. E.g. `username:
+     constr(pattern=r'^[a-z0-9_]{3,32}$') in src/schemas/user.py` — protects the
+     user lookup query. An input with no contract is an unmitigated injection/abuse
+     vector; security verifies the contract and plan-audit's completeness check
+     flags any boundary input that lacks one.
    - Note threats that are out of scope for this feature (accepted risks)
 
    After the STRIDE table, append two additional blocks under the same
@@ -185,6 +207,10 @@ When invoked:
      a mitigation, and a **concrete mechanism** (specific library/function/
      config/infra control + the file it lives in) per credible threat — no
      abstract advice, no threats with only a mitigation description.
+   - **Validation contracts**: every boundary input the feature accepts carries a
+     validation contract (type + bound + an anchored allowlist where the value is
+     free-form into a sensitive sink + the sink it protects + the schema/file) —
+     none left to implementation's discretion.
    - The `## Threat Model` section includes a Mermaid DFD diagram (renders
      in GitHub/VS Code) and a self-contained copy-paste LLM prompt block.
    - **Files affected** is concrete (paths + one-line reason each) and matches
@@ -201,7 +227,15 @@ When invoked:
      CLAUDE.md's equivalent if present). For each criterion listed there, trace it
      to a specific section of this plan — mark ✓ with the section name, or move it
      to Open questions with a proposed answer. Never mark a criterion satisfied
-     without pointing to the plan section that addresses it.
+     without pointing to the plan section that addresses it. Then **emit
+     `.pipeline/acceptance.md`** as the downstream definition-of-done: YAML
+     frontmatter `criteria_total: <int>`, then a table — **ID** (`AC1`, `AC2`, …) |
+     **Criterion** (project-specific, not only STRIDE) | **File / layer** it lives
+     in | **How verified** (a named test, endpoint behavior, or concrete mechanism).
+     Implementation builds to this file and testing maps each ID to a test
+     (`criteria_covered`); plan-audit flags any untraced criterion. If PROJECT.md
+     declares no explicit criteria, derive them from the feature's stated goals and
+     note that in the file.
    State in your report that the self-audit passed (or what you corrected).
 9. Stop and report the plan is ready for review. Do not proceed to
    implementation yourself — a human reviews the plan and threat model next.

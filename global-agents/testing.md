@@ -52,7 +52,11 @@ When invoked:
    Compute the change set the same way the security agent does (see the
    `diff-scoping-conventions` skill): tracked changes plus untracked files,
    against the last commit. Note the **Test strategy** shape (default `pyramid`)
-   and follow it as your tier-priority bias.
+   and follow it as your tier-priority bias. Also read **`.pipeline/acceptance.md`**
+   if present — you will map each criterion (`AC1`, `AC2`, …) to a test and record
+   the result as `criteria_covered` (step 7). Criteria coverage is a *separate*
+   axis from line coverage: a criterion is "covered" only when a named test asserts
+   its behavior, not merely because its lines are executed.
 2. For each changed module, check whether unit tests exist. Write missing unit
    tests covering the happy path, key error cases, and edge cases.
 3. For each changed API endpoint or service boundary, check whether an
@@ -63,6 +67,14 @@ When invoked:
 5. If the change includes infrastructure-as-code (an `infra/` directory), run
    policy checks against the plan (e.g. `conftest`/OPA) and any Terratest
    assertions; record their pass/fail in the same results file.
+5b. **Acceptance-criteria coverage** — for each criterion in
+   `.pipeline/acceptance.md`, ensure a test asserts its behavior (write the missing
+   test in the tier the strategy favors). A criterion verified by an
+   endpoint-behavior or mechanism check counts when a test exercises it. Record the
+   per-criterion result as `criteria_covered` (step 7). Do not edit production code
+   to make a criterion pass — if a criterion cannot be satisfied by the current
+   implementation, leave it `uncovered` with a reason; the orchestrator routes that
+   to debugging like any other gap. (Skip this step if no `acceptance.md` exists.)
 6. Run the full test suite with coverage enabled using the project's configured
    runner (Jest, pytest, go test -cover, etc.) with its coverage flag. The
    **combined** figure is the merge of every suite — a line covered by *any* test
@@ -94,6 +106,10 @@ When invoked:
      "total": 0, "passed": 0, "failed": 0,
      "failures": [{ "name": "", "reason": "" }],
      "tests_by_type": { "unit": 0, "integration": 0, "e2e": 0 },
+     "criteria_covered": {
+       "total": 0, "covered": 0,
+       "by_id": [{ "id": "AC1", "covered": true, "test": "", "reason": "" }]
+     },
      "coverage": {
        "combined":    { "lines": 0, "branches": 0, "functions": 0 },
        "unit":        { "lines": 0, "branches": 0 },
@@ -105,6 +121,12 @@ When invoked:
    `unit`/`integration` blocks are best-effort diagnostics — fill the fields you
    can produce and omit (or null) the rest. `tests_by_type` is the realized
    pyramid shape; `test_strategy` echoes the shape you followed from the plan.
+   **`criteria_covered`** records acceptance-criteria coverage from `acceptance.md`
+   — a *distinct* axis from line `coverage` (a criterion is covered only when a
+   named test asserts it). It is `{total:0,covered:0,by_id:[]}` when no
+   `acceptance.md` exists. PR C's deploy gate will require
+   `criteria_covered.covered == criteria_covered.total`; until then it is a
+   reported diagnostic.
 8. Report a summary listing:
    - **Passing tests**: count and test suite names
    - **Failing tests**: name and failure reason for each
@@ -112,4 +134,6 @@ When invoked:
      unit and integration when produced)
    - **Shape**: the `test_strategy` followed and the realized unit/integration/e2e
      counts; flag any divergence from the planned shape
+   - **Acceptance criteria**: `criteria_covered.covered / total`, and name any
+     criterion left `uncovered` with its reason (omit if no `acceptance.md`)
    Then stop.
