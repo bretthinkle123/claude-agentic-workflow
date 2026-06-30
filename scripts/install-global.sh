@@ -10,6 +10,7 @@
 #   templates/          -> ~/.claude/pipeline-templates/  (CLAUDE.md, settings, state seed, mcp.json)
 #   global-project-skills/ -> ~/.claude/pipeline-templates/project-skills/  (2 per-project skill templates)
 #   scripts/bootstrap-project.sh -> ~/.claude/pipeline-templates/bootstrap-project.sh
+#   scripts/run-log-digest.sh    -> ~/.claude/pipeline-templates/run-log-digest.sh  (operator digest)
 #
 # Per-project setup is then a single command run from inside any repo:
 #   bash ~/.claude/pipeline-templates/bootstrap-project.sh
@@ -73,6 +74,11 @@ COLLISIONS="$(
      ! owned "pipeline-templates/bootstrap-project.sh"; then
     echo "  ${TEMPLATES_DEST#"$HOME"/}/bootstrap-project.sh"
   fi
+  if [[ -f "${TEMPLATES_DEST}/run-log-digest.sh" ]] && \
+     ! cmp -s "${REPO_ROOT}/scripts/run-log-digest.sh" "${TEMPLATES_DEST}/run-log-digest.sh" && \
+     ! owned "pipeline-templates/run-log-digest.sh"; then
+    echo "  ${TEMPLATES_DEST#"$HOME"/}/run-log-digest.sh"
+  fi
 )"
 
 if [[ -n "$COLLISIONS" ]]; then
@@ -113,8 +119,10 @@ publish_tree "${REPO_ROOT}/global-project-skills" "${TEMPLATES_DEST}/project-ski
 
 if [[ "$DRY_RUN" == false ]]; then
   cp "${REPO_ROOT}/scripts/bootstrap-project.sh" "${TEMPLATES_DEST}/bootstrap-project.sh"
-  # Hooks and the bootstrap script must be executable when invoked directly.
-  chmod +x "${CLAUDE_HOME}/hooks/"*.sh "${TEMPLATES_DEST}/bootstrap-project.sh" 2>/dev/null || true
+  cp "${REPO_ROOT}/scripts/run-log-digest.sh"    "${TEMPLATES_DEST}/run-log-digest.sh"
+  # Hooks and the operator scripts must be executable when invoked directly.
+  chmod +x "${CLAUDE_HOME}/hooks/"*.sh "${TEMPLATES_DEST}/bootstrap-project.sh" \
+    "${TEMPLATES_DEST}/run-log-digest.sh" 2>/dev/null || true
 
   # Record everything we just installed (CLAUDE_HOME-relative) so the next run's
   # collision guard recognizes these as ours and never false-flags a re-publish.
@@ -138,4 +146,5 @@ if [[ "$DRY_RUN" == false ]]; then
   echo "Restart Claude Code (or start a new session) so it picks up the changes."
 else
   echo "  [bootstrap] ${REPO_ROOT}/scripts/bootstrap-project.sh -> ${TEMPLATES_DEST}/bootstrap-project.sh"
+  echo "  [digest]    ${REPO_ROOT}/scripts/run-log-digest.sh -> ${TEMPLATES_DEST}/run-log-digest.sh"
 fi

@@ -22,18 +22,33 @@ string and those files — never assume it can see the conversation.
      if true: Agent(planning, "Revise .pipeline/plan.md: address every [material] flag in
               .pipeline/plan-audit.md, append ## Revision notes.")   # ONE pass only, no recursion
      -> review plan.md + plan-audit.md, then: touch .pipeline/plan-approved       # human checkpoint
-2. Agent(implementation, "Implement .pipeline/plan.md.")
+2. Agent(implementation, "Implement .pipeline/plan.md.")     # SINGLE-SHOT — runs exactly once
      -> smoke-check.sh (+ infra-validate.sh) fire on Stop
      -> if smoke fails: Agent(debugging, "<error>") up to max_retries, then re-smoke
-3. Agent(security,  "Scan per diff-scoping-conventions. Write security-report.md + security-status.json.")
-4. Agent(testing,   "Add missing tests, run suite. Write test-results.json (incl. tested_change_hash).")
-     -> record-clean.sh fires on Stop (resets retry counters iff both gates clean)
-     -> if security issues-found OR any test fails:
-          Agent(debugging, "<finding>") up to max_retries, then re-run BOTH security + testing
-5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only when both gates clean
+     -> bash ~/.claude/hooks/loop-guard.sh reset      # arm the circuit-breaker for THIS feature
+
+3-4. RUN-TO-CONDITION LOOP — security ⇄ debugging ⇄ testing, DETERMINISTIC exit only:
+     repeat:
+       bash ~/.claude/hooks/loop-guard.sh             # tick; exit 2 => CAP HIT: STOP + escalate to human
+       Agent(security, "Scan per diff-scoping-conventions. Write security-report.md + security-status.json.")
+       if jq -r .status security-status.json == "issues-found":
+            Agent(debugging, "<finding>");  continue   # re-tick, re-scan from security
+       Agent(testing,  "Add missing tests, run suite. Write test-results.json (criteria_covered + tested_change_hash).")
+            -> record-clean.sh fires on Stop (resets the per-cycle debug counters iff both gates clean)
+       if jq -r .status test-results.json == "fail":
+            Agent(debugging, "<finding>");  continue
+     until GREEN (jq on the status files — NEVER LLM-judged):
+       jq -e '.status=="clean"' security-status.json   AND
+       jq -e '.status=="pass" and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))' test-results.json
+     # These 3 are EXACTLY the gate's test/security/criteria checks, so the loop never exits
+     # green on anything deployment-gate.sh would reject. The gate's other two checks
+     # (pr-description, currency) come from documentation AFTER the loop — not the loop's job.
+     # planning / plan-audit / implementation / documentation / deployment NEVER run inside this loop.
+
+5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
      -> REVIEW POINT: read code, tests, docs, pr-description before deploying
 6. Agent(deployment, "Commit the reviewed change and open a PR on GitHub.")
-     -> deployment-gate.sh (PreToolUse) blocks the commit unless all four gates pass
+     -> deployment-gate.sh (PreToolUse) blocks the commit unless all five gates pass
 ```
 
 ## Telemetry — logged automatically on every stage
@@ -63,12 +78,19 @@ A missing stage line is itself a signal (suspect a cap-out). `duration_s` and
 `tokens` are not available to shell hooks; use timestamp deltas between lines as a
 duration proxy.
 
+**Digest:** run `bash ~/.claude/pipeline-templates/run-log-digest.sh` for a
+zero-LLM summary of `run-log.jsonl` — per-stage model/status/retries, the
+`coverage.combined` trend, `tests_by_type` / `test_strategy`, and an
+**inverted-pyramid flag** (a `pyramid`-strategy feature whose unit count is below
+integration+e2e). Read-only; never part of a gate.
+
 ## Bootstrap (once per project)
 
 Run `bash ~/.claude/pipeline-templates/bootstrap-project.sh` from inside the
 target repo root (flags `--start`, `--health`, `--test`, `--build` are optional
 and pre-wire the smoke check). Before each new feature, remove any stale
-`.pipeline/plan-approved` marker.
+`.pipeline/plan-approved` marker **and run `bash ~/.claude/hooks/loop-guard.sh
+reset`** so the circuit-breaker starts the next feature with a fresh budget.
 
 ## Interlock-file contract
 
@@ -81,6 +103,7 @@ and pre-wire the smoke check). Before each new feature, remove any stale
 | `debug-notes.md` | debugging | human (root-cause + evidence trail; advisory) |
 | `security-report.md` / `security-status.json` | security | documentation (md), gate hooks (json) |
 | `test-results.json` | testing | record-clean.sh, deployment-gate.sh, documentation |
+| `loop-state.json` | loop-guard.sh (`reset`/`tick`) | loop-guard.sh (feature-level cycle/wall-clock budget; independent of `record-clean.sh`) |
 | `pr-description.md` | documentation | deployment, gate |
 | `review-manifest.json` | documentation | deployment-gate.sh (currency anchor) |
 | `state.json` | bootstrap / security / debugging | debugging, record-clean.sh |
@@ -100,15 +123,33 @@ and pre-wire the smoke check). Before each new feature, remove any stale
   regardless of the revision.
 - **Planning → implementation:** `plan-approved` marker (human).
 - **Smoke / infra:** deterministic hooks; exit 2 routes to sanity debugging.
-- **Security → testing:** serial by default (token cost over wall-clock).
-- **Both clean → documentation:** don't invoke docs until `security-status.json`
-  is `clean` and `test-results.json` is `pass`.
+- **Run-to-condition loop (security ⇄ debugging ⇄ testing):** after implementation
+  (single-shot) passes smoke, drive this loop until the **GREEN** condition holds —
+  `security-status.json.status == clean` AND `test-results.json.status == pass` AND
+  `criteria_covered.covered >= .total`. **The exit is deterministic `jq` on the
+  status files — never an LLM judgement.** These three are **exactly the gate's
+  test/security/criteria checks**, so the loop can never exit green on something
+  `deployment-gate.sh` would reject; the gate's remaining two checks (pr-description,
+  currency) are produced by documentation *after* the loop, so they can't drift from it.
+- **Circuit-breaker (`loop-guard.sh`):** `reset` once at feature start, then `tick`
+  at the top of every cycle. It bounds the **whole feature** by cycle count and
+  wall-clock in `.pipeline/loop-state.json` — **independent of the per-cycle
+  `debug_retry_count` that `record-clean.sh` resets**, so a transiently-clean cycle
+  can't refill the budget. A tick returning **exit 2 is a CAP HIT: stop the loop and
+  escalate to a human** — documentation/deployment do not run, and the orchestrator
+  must not auto-clear it.
+- **GREEN → documentation:** only invoke docs once the loop has exited GREEN.
 - **Documentation → deployment:** the `PreToolUse` gate enforces tests pass,
-  security clean, `pr-description.md` exists, and currency vs `reviewed_change_hash`.
+  security clean, **acceptance criteria fully covered**, `pr-description.md` exists,
+  and currency vs `reviewed_change_hash`.
 
 ## Debug-loop routing
 
 Sanity (smoke fail) and remediation (security critical or test fail) are the same
 agent, different counters. **Remediation always re-runs both gates**, never just
-the one that failed. Cap at `max_retries`; on cap-out or an unpatchable finding,
-debugging escalates to planning (a flagged human stop, not auto re-entry).
+the one that failed. Two independent stops bound it: `max_retries` per role
+(`debug_retry_count`, reset on a clean pass) and the feature-level **`loop-guard.sh`
+circuit-breaker** (cycles / wall-clock, never reset mid-feature). On a `max_retries`
+cap-out or an unpatchable finding, debugging escalates to planning; on a
+`loop-guard` cap-out the orchestrator stops the loop and escalates to a human. Both
+are flagged human stops, never automated re-entry.

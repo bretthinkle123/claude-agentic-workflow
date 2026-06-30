@@ -68,26 +68,31 @@ flowchart TD
     P -->|writes| PLAN[.pipeline/plan.md\n+ STRIDE threat model]
     PLAN --> PA[plan-audit agent\nsonnet · effort medium · maxTurns 15]
     PA -->|writes advisory| PAUDIT[.pipeline/plan-audit.md\nambiguity · dep-reality · version-policy flags]
-    PAUDIT --> HC{Human checkpoint\nread plan.md + plan-audit.md\ntouch plan-approved}
+    PAUDIT --> REV{revision_recommended?\nany material flag}
+    REV -->|yes| PREV[planning — ONE revision\naddress material flags\nappend Revision notes]
+    PREV --> HC
+    REV -->|no| HC{Human checkpoint\nread plan.md + plan-audit.md\ntouch plan-approved}
     HC -->|rejected| P
-    HC -->|approved| I[implementation agent\nsonnet · effort high · maxTurns 25]
+    HC -->|approved| I[implementation agent — SINGLE-SHOT\nsonnet · effort high · maxTurns 25]
     I -->|Stop hook fires| SC{smoke-check.sh\n+ infra-validate.sh}
     SC -->|exit 2 = FAIL| DB1[debugging agent — sanity role\nopus · effort xhigh · maxTurns 15]
     DB1 -->|fix applied\nretry count++| SC
     DB1 -->|cap hit| HC
-    SC -->|exit 0 = PASS| SEC[security agent\nsonnet · effort high · maxTurns 20]
+    SC -->|exit 0 = PASS\nloop-guard.sh reset| LG{{loop-guard.sh tick\ncycle / wall-clock cap}}
+    LG -->|cap hit| HC
+    LG -->|ok| SEC[security agent\nsonnet · effort high · maxTurns 20]
     SEC -->|writes| SECREP[security-report.md\nsecurity-status.json]
     SECREP --> TEST[testing agent\nsonnet · effort medium · maxTurns 10]
-    TEST -->|writes| TRES[test-results.json]
-    TRES --> BOTH{Both clean?\nsecurity-status=clean\ntest-results=pass}
-    BOTH -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 15]
-    DB2 -->|fix applied\nretry count++| SEC
+    TEST -->|writes| TRES[test-results.json\n+ criteria_covered]
+    TRES --> GREEN{GREEN? deterministic jq\nsecurity=clean · tests=pass\ncriteria_covered complete}
+    GREEN -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 15]
+    DB2 -->|fix applied\nretry count++| LG
     DB2 -->|cap hit or unpatchable| HC
-    BOTH -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 10]
+    GREEN -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 10]
     DOC -->|writes| DOCS[README updates\npr-description.md\nreview-manifest.json]
     DOCS --> SOFTCK{Human pre-deploy review\nsoft checkpoint\nread code + docs}
     SOFTCK --> DEP[deployment agent\nhaiku · maxTurns 8]
-    DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n4 conditions checked}
+    DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n5 conditions checked}
     GATE -->|blocked| DEP
     GATE -->|passed| COMMIT[git commit\ngit push\ngh pr create]
     COMMIT --> PR([PR on GitHub\npipeline ends here])
@@ -110,11 +115,12 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Nine deterministic gate scripts — zero LLM cost
+├── global-hooks/           Ten deterministic scripts — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
-│   ├── record-clean.sh         resets retry counters when both gates pass; fires on testing Stop
-│   ├── deployment-gate.sh      blocks git commit unless 4 conditions met; PreToolUse on deployment
+│   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
+│   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle (caps the loop)
+│   ├── deployment-gate.sh      blocks git commit unless 5 conditions met; PreToolUse on deployment
 │   ├── write-review-manifest.sh writes reviewed_change_hash anchor; called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
@@ -148,7 +154,8 @@ claude-agentic-workflow/
 │
 ├── scripts/
 │   ├── install-global.sh       Publishes global-agents, global-hooks, global-skills, templates → ~/.claude/
-│   └── bootstrap-project.sh    Per-project bootstrap; also installed to ~/.claude/pipeline-templates/
+│   ├── bootstrap-project.sh    Per-project bootstrap; also installed to ~/.claude/pipeline-templates/
+│   └── run-log-digest.sh       Zero-LLM run-log.jsonl summary + inverted-pyramid flag; → ~/.claude/pipeline-templates/
 │
 ├── docs/
 │   ├── agentic-pipeline-plan.md      Full design doc — orientation guide, rationale, appendix
@@ -411,7 +418,7 @@ committed change. The hash must be recorded *after* those writes, so it captures
 
 **Responsibility:** The pipeline's only commit point. Creates a feature branch if needed, then
 runs `git add -A && git commit`. Before that command executes, `deployment-gate.sh` fires and
-blocks unless all four conditions hold. After a clean commit, runs `git push` (requires human
+blocks unless all five conditions hold. After a clean commit, runs `git push` (requires human
 approval — intentionally not in the allow-list) and `gh pr create`. Stops at the PR.
 
 **Why haiku?** Deployment is mechanical — branch, commit, push, PR. It does not reason; it executes
@@ -439,9 +446,14 @@ and are the pipeline's mechanism for deterministic enforcement. Published to `~/
   for: deployment gate (blocks the git commit Bash call).
 
 **Global safety rule:** every ambient Stop hook (smoke-check, record-clean, infra-validate,
-log-run) opens with `[ -f .pipeline/state.json ] || exit 0` so it no-ops instantly in any repo
-that hasn't been bootstrapped. The deployment gate has no such guard — it fails closed when
-interlock files are absent.
+log-run) — and the orchestrator-invoked `loop-guard.sh` — opens with
+`[ -f .pipeline/state.json ] || exit 0` so it no-ops instantly in any repo that hasn't been
+bootstrapped. The deployment gate has no such guard — it fails closed when interlock files are
+absent.
+
+**Not all deterministic scripts are lifecycle hooks.** `loop-guard.sh` (the loop circuit-breaker)
+is called explicitly by the orchestrator each cycle, and `run-log-digest.sh` is a read-only
+operator tool — both are deterministic shell, but neither fires on a Claude Code lifecycle event.
 
 **maxTurns caveat:** a Stop/SubagentStop hook does not fire if the agent hits its `maxTurns`
 cap. The session ends before the hook runs. A missing `run-log.jsonl` entry for a stage is the
@@ -489,19 +501,49 @@ signal that it capped out.
 4. If both: resets `state.json` `debug_retry_count` to `{sanity: 0, remediation: 0}`.
 5. If either gate is not clean: no-op (counters unchanged, debugging budget preserved).
 
+**Independence note:** record-clean touches **only** `state.json`'s `debug_retry_count`. It does
+**not** touch `loop-state.json` (the circuit-breaker budget) — otherwise a transiently-clean cycle
+would refill the breaker and defeat the feature-level cap.
+
+---
+
+### loop-guard.sh
+
+**Invoked by:** the orchestrator (not an agent lifecycle hook) — `reset` once at feature start,
+then `tick` at the top of every `security ⇄ debugging ⇄ testing` cycle. It is the **circuit-breaker
+that ships with the autonomous loop** (PR C).
+
+**Logic:**
+1. Guard: no-op if `.pipeline/state.json` absent.
+2. Sources optional `.pipeline/loop.env`; caps default to `LOOP_MAX_CYCLES=5`, `LOOP_MAX_WALL_S=3600`.
+3. Fails **closed** (exit 2 = stop) if `jq` is missing — looping blind is the unsafe outcome.
+4. `reset` (re)initializes `.pipeline/loop-state.json` (`cycles:0`, `started_epoch`, caps, `status:"running"`).
+5. `tick` increments `cycles`; if `cycles > max_cycles` **or** elapsed `> max_wall_clock_s`, it marks
+   `status:"capped"` and exits **2** (CAP HIT → stop the loop, escalate to a human, do not auto-clear).
+   Otherwise exits 0 (continue). `status` prints the current budget read-only.
+
+**Why a separate file:** `loop-state.json` is owned solely by loop-guard, so the feature-level budget
+is **independent of** the per-cycle `debug_retry_count` that `record-clean.sh` resets on every clean
+pass. That independence is what lets the breaker bound a thrashing loop the per-cycle counters can't.
+
 ---
 
 ### deployment-gate.sh
 
 **Fires:** as `PreToolUse` before every `Bash` call in the `deployment` agent.
 
-**Logic (all four must pass or the command is blocked with exit 2):**
+**Logic (all must pass or the command is blocked with exit 2):**
 
 1. `jq` is available — fails closed with a clear error if not.
 2. `test-results.json` exists and `status == "pass"`.
-3. `security-status.json` exists and `status == "clean"`.
-4. `pr-description.md` exists.
-5. If the working tree is dirty (change not yet committed): recomputes the change-set hash via
+3. **Acceptance criteria fully covered** — `criteria_covered.covered >= .total` in
+   `test-results.json`. The loop exits on this **same** check (together with test-pass and
+   security-clean), so the loop can't exit green on a criteria state the gate would reject.
+   Absent/empty `criteria_covered` (a criteria-less feature, or a pre-PR-C result file) is
+   `0 >= 0` → passes, so it never blocks a legitimately criteria-less change.
+4. `security-status.json` exists and `status == "clean"`.
+5. `pr-description.md` exists.
+6. If the working tree is dirty (change not yet committed): recomputes the change-set hash via
    `compute-change-hash.sh` and verifies it matches `review-manifest.json`'s
    `reviewed_change_hash`. A mismatch means something changed after documentation ran — block.
    If the tree is already clean (post-commit), the currency check is skipped.
@@ -536,7 +578,8 @@ deployment gate checks.
 
 **Fires:** on every agent's Stop hook (wired in each agent's frontmatter).
 
-**Signature:** `log-run.sh <stage> <model> [status] [retries] [notes]`
+**Signature:** `log-run.sh <stage> [model] [status] [retries] [notes]` — the Stop wiring passes
+only `<stage>`; `model` auto-derives from the agent's frontmatter, the rest from the stage artifact.
 
 **Logic:**
 1. Guard: no-op if `.pipeline/state.json` absent.
@@ -592,6 +635,7 @@ commit; until then, all changes live in the working tree.
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |
+| `loop-state.json` | loop-guard.sh (`reset`/`tick`) | loop-guard.sh | Feature-level breaker budget: `{"cycles":N,"max_cycles":5,"started_epoch":...,"max_wall_clock_s":3600,"status":"running\|capped"}`. Independent of `record-clean.sh` resets |
 | `smoke-status.json` | smoke-check.sh | log-run.sh (implementation status) | `{"status":"pass|fail","ran_at":"..."}` |
 | `smoke.env` | bootstrap-project.sh | smoke-check.sh | Per-project start/health/build commands (gitignored, local only) |
 | `infra-plan.txt` | infra-validate.sh | human review | `terraform plan` output for the human checkpoint |
@@ -664,7 +708,7 @@ sequenceDiagram
     WRM->>disk: .pipeline/review-manifest.json (reviewed_change_hash)
     H->>DEP: Agent(deployment, "Commit and open PR")
     DEP-->>DG: PreToolUse fires before git commit
-    DG->>disk: reads all four interlock files
+    DG->>disk: reads the interlock files (5 gate conditions)
     DEP->>disk: git commit (working tree → git history)
     DEP->>H: PR URL
 ```
@@ -689,11 +733,13 @@ flowchart LR
         RC3 -->|yes| RC4[reset debug_retry_count\nto zero]
     end
 
-    subgraph "deployment-gate.sh (4 checks, all must pass)"
+    subgraph "deployment-gate.sh (5 checks, all must pass)"
         DG1{jq available?} -->|no| DGX[exit 2 blocked]
         DG1 -->|yes| DG2{test-results.json\nstatus=pass?}
         DG2 -->|no| DGX
-        DG2 -->|yes| DG3{security-status.json\nstatus=clean?}
+        DG2 -->|yes| DG2c{criteria_covered\ncovered ≥ total?}
+        DG2c -->|no| DGX
+        DG2c -->|yes| DG3{security-status.json\nstatus=clean?}
         DG3 -->|no| DGX
         DG3 -->|yes| DG4{pr-description.md\nexists?}
         DG4 -->|no| DGX

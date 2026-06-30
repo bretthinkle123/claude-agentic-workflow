@@ -1,6 +1,11 @@
 #!/bin/bash
 # Resets the debug retry counters when, and only when, both gate reports are
 # clean/passing. Safe to fire on every testing-completion event; no-ops otherwise.
+#
+# Scope: this touches ONLY .pipeline/state.json's per-cycle `debug_retry_count`. It
+# deliberately does NOT touch the feature-level circuit-breaker budget in
+# .pipeline/loop-state.json (owned by loop-guard.sh) — if a transiently-clean cycle
+# reset that budget, the breaker could never bound a thrashing loop. Keep them apart.
 
 STATE=".pipeline/state.json"
 TEST_RESULTS=".pipeline/test-results.json"

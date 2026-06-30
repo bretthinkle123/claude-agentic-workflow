@@ -254,7 +254,7 @@ Follow one feature — "add file upload to the API" — through every stage. For
 **Step 6a — Pre-deploy review (you).** After documentation, read the finished result — code, tests, docs, and `pr-description.md` — before invoking deployment. This is a soft checkpoint (not hook-enforced), but it matters because deployment's first action commits *exactly this state*. It's the natural second place (after the planning checkpoint) for a human to look before anything ships.
 🧠 **Recap —** you review the precise bytes that get committed and deployed.
 
-**Step 7 — Deployment.** `Agent(deployment, …)`. Before its commit, the `PreToolUse` hook `deployment-gate.sh` runs and blocks unless all four hold: tests pass, security clean, `pr-description.md` exists, and the working tree still matches documentation's `reviewed_change_hash` (currency). The currency check applies to the commit; once committed, the tree is clean, so the gate lets the follow-up push/PR commands through. Its **first action is to commit** the reviewed change (`git add -A && git commit` — the pipeline's only commit); then it pushes and opens a PR on GitHub (`git push` prompts for human approval; `gh pr create` follows). *Responsible for:* getting the reviewed, gate-verified change into GitHub — nothing beyond that.
+**Step 7 — Deployment.** `Agent(deployment, …)`. Before its commit, the `PreToolUse` hook `deployment-gate.sh` runs and blocks unless all five hold: tests pass, acceptance criteria fully covered (`criteria_covered`), security clean, `pr-description.md` exists, and the working tree still matches documentation's `reviewed_change_hash` (currency). The currency check applies to the commit; once committed, the tree is clean, so the gate lets the follow-up push/PR commands through. Its **first action is to commit** the reviewed change (`git add -A && git commit` — the pipeline's only commit); then it pushes and opens a PR on GitHub (`git push` prompts for human approval; `gh pr create` follows). *Responsible for:* getting the reviewed, gate-verified change into GitHub — nothing beyond that.
 ⚠️ **Gotcha —** `git push` is intentionally left out of the allow-list, so it prompts for human approval even after the gate passes.
 
 **Step 8 — After the PR.** Production deployment (CI checks, infrastructure apply, app deploy, DB migrations, App Store submission) happens outside this pipeline, triggered by CI after the PR is merged. See `pipeline-deployment-targets.md` for those patterns when you are ready to add them.
@@ -2396,19 +2396,30 @@ v1 is driven from an interactive Claude Code session — you are the orchestrato
 1c. if plan-audit.md frontmatter revision_recommended == true:
         Agent(planning,   "Revise .pipeline/plan.md: address every [material] flag, append ## Revision notes.")  # ONE pass, no recursion
         -> review .pipeline/plan.md + plan-audit.md, then: touch .pipeline/plan-approved     # human checkpoint
-2.  Agent(implementation, "Implement .pipeline/plan.md.")
+2.  Agent(implementation, "Implement .pipeline/plan.md.")   # SINGLE-SHOT — runs once
         -> smoke-check.sh (+ infra-validate.sh) fire on Stop
         -> if smoke fails: Agent(debugging, "<smoke error>") up to max_retries, then re-smoke
-3.  Agent(security,       "Scan per diff-scoping-conventions. Write security-report.md + security-status.json.")
-4.  Agent(testing,        "Add missing tests, run suite. Write test-results.json (incl. tested_change_hash).")
-        -> record-clean.sh fires on Stop (resets retry counters iff both gates clean)
-        -> if security issues-found OR any test fails:
-             Agent(debugging, "<finding>") up to max_retries, then re-run BOTH security + testing
-5.  Agent(documentation,  "Update docs for the diff. Write .pipeline/pr-description.md.")  # only when both gates clean
+        -> bash ~/.claude/hooks/loop-guard.sh reset       # arm the circuit-breaker for this feature
+3-4. RUN-TO-CONDITION LOOP — security ⇄ debugging ⇄ testing, deterministic exit ONLY:
+        repeat:
+          bash ~/.claude/hooks/loop-guard.sh              # tick; exit 2 = CAP HIT -> STOP + escalate to human
+          Agent(security, "Scan per diff-scoping-conventions. Write security-report.md + security-status.json.")
+          if security-status.json status == issues-found: Agent(debugging, "<finding>"); continue
+          Agent(testing, "Add missing tests, run suite. Write test-results.json (criteria_covered + tested_change_hash).")
+            -> record-clean.sh fires on Stop (resets the per-cycle debug counters iff both gates clean)
+          if test-results.json status == fail: Agent(debugging, "<finding>"); continue
+        until GREEN (jq on status files, never LLM-judged):
+          security-status.json status==clean  AND  test-results.json status==pass
+          AND criteria_covered.covered >= criteria_covered.total
+        # GREEN = exactly the gate's test/security/criteria checks (its other two,
+        # pr-description + currency, come from documentation after the loop).
+        # planning/plan-audit/implementation/documentation/deployment NEVER run inside the loop.
+5.  Agent(documentation,  "Update docs for the diff. Write .pipeline/pr-description.md.")  # only after GREEN
         -> REVIEW POINT: read the finished result (code, tests, docs, pr-description) before deploying
 6.  Agent(deployment,     "Commit the reviewed change and open a PR on GitHub.")
         -> deployment-gate.sh (PreToolUse) runs before the commit, blocking
-           unless: tests pass + security clean + pr-description.md exists
+           unless: tests pass + criteria_covered complete + security clean
+           + pr-description.md exists
            + working tree still matches documentation's reviewed_change_hash
              (currency, checked on the commit; push/PR run against a clean tree)
         -> deployment commits (git add -A && git commit), pushes (git push — human prompt),
@@ -2417,7 +2428,7 @@ v1 is driven from an interactive Claude Code session — you are the orchestrato
            happens outside this pipeline after the PR is merged — see pipeline-deployment-targets.md
 ```
 
-For a headless run, formalize this same sequence as the `/pipeline` skill or an Agent SDK script. The gate scripts (`deployment-gate.sh`, `record-clean.sh`) remain the source of truth regardless of who drives the stages.
+For a headless run, formalize this same sequence as the `/pipeline` skill or an Agent SDK script. The gate scripts (`deployment-gate.sh`, `record-clean.sh`, `loop-guard.sh`) remain the source of truth regardless of who drives the stages — the loop's exit and the deploy gate read the **same** deterministic conditions, and `loop-guard.sh` is the non-negotiable cap that bounds the autonomous loop.
 
 <a id="human-checkpoint-protocol"></a>
 ## Human checkpoint protocol
@@ -2684,7 +2695,7 @@ These were the open forks the consistency audit surfaced; each is now settled an
 3. **Security `clean` vs `issues-found`.** `status: issues-found` iff `critical_count > 0`; warnings are reported but advisory and non-blocking. Remediation/debugging triggers only on `issues-found` (security) or a failing test.
 4. **MFA convergence on one claim.** Both MFA paths set the `mfa_verified` (+ `mfa_method`) custom claim server-side — Path A via a backend finalize-MFA endpoint calling `token.ts → setMfaVerified`, Path B via the Duo callback — so a single `requireMfa` middleware gates both.
 5. **Sentry MCP scope.** Canonical scope is security, testing, debugging, deployment (the MCP table); Next steps now matches.
-6. **Deployment gate enforces all four conditions** it claims: tests pass, security clean (via `security-status.json`), `pr-description.md` exists, and the working tree still matches documentation's `reviewed_change_hash` in `review-manifest.json` (currency — nothing changed since the human's pre-deploy review). Currency is anchored to documentation's post-write hash rather than testing's earlier `tested_change_hash`, because documentation legitimately edits README/architecture files after testing runs; it is enforced on the commit, after which the clean tree lets push/PR through. The deployment agent commits the reviewed change as its first step (the pipeline's single commit). Plus: `debugging` model is `sonnet` (matches Defaults), and `documentation` writes its PR description to `.pipeline/pr-description.md`.
+6. **Deployment gate enforces all five conditions** it claims: tests pass, acceptance criteria fully covered (`criteria_covered.covered >= .total`), security clean (via `security-status.json`), `pr-description.md` exists, and the working tree still matches documentation's `reviewed_change_hash` in `review-manifest.json` (currency — nothing changed since the human's pre-deploy review). Currency is anchored to documentation's post-write hash rather than testing's earlier `tested_change_hash`, because documentation legitimately edits README/architecture files after testing runs; it is enforced on the commit, after which the clean tree lets push/PR through. The deployment agent commits the reviewed change as its first step (the pipeline's single commit). Plus: `debugging` model is `opus` (retuned in PR A — low-volume, highest-reasoning), and `documentation` writes its PR description to `.pipeline/pr-description.md`.
 
 <a id="hook-wiring-per-agent-frontmatter-stop-hooks"></a>
 ## Hook wiring (per-agent frontmatter `Stop` hooks)
