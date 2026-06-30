@@ -196,7 +196,7 @@ documentation** has no effect — it isn't buying the depth it implies. **Implic
 is a real lever only on a stage running **Sonnet 4.6 or the Opus 4.x family**. That is an
 independent reason — beyond raw capability — to move the *reasoning-heavy* Haiku stages up.
 
-**Recommended wiring under Max:**
+**Recommended wiring under Max** *(original analysis — **partly superseded by the SETTLED DECISIONS banner at the top of this doc**: implementation and security ship `sonnet/high`, not Opus; deployment ships `haiku`; net retune ≈ 1.7×, not 2–2.5×. The table is kept as the capability-first reasoning; the settled allocation wins wherever they differ):*
 
 | Agent | → Model / Effort | Why | Stage-cost multiplier* | Impl. effort | Risk |
 |---|---|---|---|---|---|
@@ -252,6 +252,15 @@ loads none of them.
 | **Maestro MCP** (`maestro`) | **debugging** / a new **ui-verify** agent (opt-in) | Cross-platform mobile E2E: the *same* YAML flow drives iOS simulator **and** Android emulator. **The test *run* is deterministic in the runner — zero model cost** | Heavy *only when live-driving* (screenshots per step). Reserve MCP for debugging one failing flow; author flows from code | Mobile projects |
 | **iOS Simulator MCP** (`ios-simulator-mcp`, joshuayoes) — *or* **`claude-in-mobile`** (ADB + simctl + Android) | **ui-verify** / **debugging** (opt-in, **macOS-only** for the iOS half) | Tap / type / swipe / screenshot / record / accessibility-inspect the simulator for live UI verification and a11y checks | Heavy (screenshots / a11y snapshots per step) — **same budget hazard as Playwright**; keep it to verification/debug, never standing authoring | Mobile projects, and (iOS) only on a Mac/cloud-Mac |
 | **context7** (already wired to implementation) | — | Already correct; even more valuable now — RN/Expo/native APIs move fast and context7 kills wrong-API write/fail/rewrite cycles | Low (targeted snippets) | Already opt-in |
+
+> **Name-verification caveat (unverified server names).** Of the servers above, only
+> **Figma Dev Mode MCP** (first-party) and **context7** (already wired) are confirmed. The
+> mobile-control names — **Maestro MCP**, **`ios-simulator-mcp`** (joshuayoes), and
+> **`claude-in-mobile`** — are cited from memory as *candidates*, not verified picks: confirm
+> the exact package/server still exists, is the one you mean, and is maintained **before
+> wiring it** (the same anti-slopsquatting discipline `plan-audit` applies to dependencies).
+> If a name doesn't resolve, the capability (mobile E2E / simulator control) is the
+> requirement — find the current server that provides it rather than trusting the name here.
 
 **Discipline to preserve:** pin versions/digests in `.mcp.json`; keep the heavy
 simulator/Maestro/Playwright servers **off** standing test authoring (the deterministic

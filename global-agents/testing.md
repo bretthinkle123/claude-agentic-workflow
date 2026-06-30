@@ -124,9 +124,10 @@ When invoked:
    **`criteria_covered`** records acceptance-criteria coverage from `acceptance.md`
    — a *distinct* axis from line `coverage` (a criterion is covered only when a
    named test asserts it). It is `{total:0,covered:0,by_id:[]}` when no
-   `acceptance.md` exists. PR C's deploy gate will require
-   `criteria_covered.covered == criteria_covered.total`; until then it is a
-   reported diagnostic.
+   `acceptance.md` exists. The deploy gate requires
+   `criteria_covered.covered >= criteria_covered.total` (an absent/empty field
+   means `0 >= 0`, so a criteria-less feature still passes); the orchestrator's
+   run-to-condition loop exits on the same check.
 8. Report a summary listing:
    - **Passing tests**: count and test suite names
    - **Failing tests**: name and failure reason for each

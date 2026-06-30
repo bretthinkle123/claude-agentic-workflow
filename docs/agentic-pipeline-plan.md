@@ -1234,7 +1234,7 @@ jq '.debug_retry_count = {"sanity":0,"remediation":0}' "$STATE" > "$tmp" && mv "
 exit 0
 ```
 
-**`.claude/hooks/deployment-gate.sh`** — `PreToolUse` hook on the `deployment` agent's Bash tool; the one hard-enforced gate. Because it fires before *every* Bash command, it guards the agent's first action — the commit. Checks four conditions: tests pass, security clean, documentation produced (`pr-description.md`), and **currency** — the working tree still matches the reviewed state documentation finalized in `review-manifest.json` (nothing slipped in since the human's pre-deploy review). **Currency is enforced on the commit only:** once the reviewed change is committed the working tree is clean, so the later commands in the same run (`git push`, `gh pr create`) pass straight through — they were already cleared when the commit passed. (This is why the anchor is documentation's `reviewed_change_hash`, not testing's `tested_change_hash`: documentation legitimately writes README/architecture files *after* testing runs, so the post-documentation tree — exactly what the human reviews and what gets committed — is the correct reference.) Parses only machine-readable files with `jq`, never markdown:
+**`.claude/hooks/deployment-gate.sh`** — `PreToolUse` hook on the `deployment` agent's Bash tool; the one hard-enforced gate. Because it fires before *every* Bash command, it guards the agent's first action — the commit. Checks five conditions: tests pass, acceptance criteria fully covered (`criteria_covered`), security clean, documentation produced (`pr-description.md`), and **currency** — the working tree still matches the reviewed state documentation finalized in `review-manifest.json` (nothing slipped in since the human's pre-deploy review). **Currency is enforced on the commit only:** once the reviewed change is committed the working tree is clean, so the later commands in the same run (`git push`, `gh pr create`) pass straight through — they were already cleared when the commit passed. (This is why the anchor is documentation's `reviewed_change_hash`, not testing's `tested_change_hash`: documentation legitimately writes README/architecture files *after* testing runs, so the post-documentation tree — exactly what the human reviews and what gets committed — is the correct reference.) Parses only machine-readable files with `jq`, never markdown:
 
 ```bash
 #!/bin/bash
@@ -1348,6 +1348,17 @@ echo "[write-review-manifest] reviewed_change_hash=$HASH"
 
 <a id="subagent-files"></a>
 ## Subagent files
+
+> **⚠ Illustrative snapshots — NOT authoritative.** The agent definitions reproduced below are
+> a point-in-time copy from before the A/B/C pipeline revision and **lag the live files**. The
+> authoritative, current definitions are **`global-agents/*.md`** in this repo (published to
+> `~/.claude/agents/`); read those for actual behavior. Known drift here vs. live: the model/effort
+> retune (e.g. planning is `opus/xhigh`, debugging `opus/xhigh`, security/implementation `sonnet/high`,
+> documentation/deployment `haiku` with no `effort:`); plan-audit's completeness check + material/advisory
+> classification + `revision_recommended`; planning's validation contracts + `.pipeline/acceptance.md`;
+> implementation/testing reading `acceptance.md` (`criteria_covered`); security steps 6c/6e; and the
+> debugging upgrades (`Write` tool, reproduce-first, regression test, flaky discrimination, `debug-notes.md`).
+> These snapshots are kept only as a shape reference; do not treat any specific value below as current.
 
 **`.claude/agents/planning.md`**
 
@@ -2845,7 +2856,7 @@ After the 2026-06-25 reduction, **`planning` preloads 1** skill (`stride-threat-
 
 **`deployment-checklist-and-rollback`** — (global, references project env) — → deployment
 - **description:** "Pre-flight gate checks, the GitHub handoff sequence, and a pointer to CI for production delivery."
-- **SKILL.md sections:** pre-flight = confirm the four conditions `deployment-gate.sh` enforces (tests pass, security clean, `pr-description.md` exists, working tree matches documentation's `reviewed_change_hash` — currency, checked on the commit); deploy sequence = commit (`git add -A && git commit`), push (`git push` — human prompt), open PR (`gh pr create --body-file .pipeline/pr-description.md` — also prompts), report PR URL and stop; the "if a command is blocked, report why — don't work around the gate" rule; note that production delivery (terraform apply, app deploy, migrations, App Store) runs in CI after merge — see `pipeline-deployment-targets.md`.
+- **SKILL.md sections:** pre-flight = confirm the five conditions `deployment-gate.sh` enforces (tests pass, acceptance criteria fully covered, security clean, `pr-description.md` exists, working tree matches documentation's `reviewed_change_hash` — currency, checked on the commit); deploy sequence = commit (`git add -A && git commit`), push (`git push` — human prompt), open PR (`gh pr create --body-file .pipeline/pr-description.md` — also prompts), report PR URL and stop; the "if a command is blocked, report why — don't work around the gate" rule; note that production delivery (terraform apply, app deploy, migrations, App Store) runs in CI after merge — see `pipeline-deployment-targets.md`.
 - **Sibling files:** none (rollback procedure lives in `pipeline-deployment-targets.md`).
 - **Source:** `deployment.md` + `deployment-gate.sh` (extract).
 - **Budget:** ~50 lines.
