@@ -115,7 +115,7 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Ten deterministic scripts — zero LLM cost
+├── global-hooks/           Eleven deterministic scripts — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
@@ -125,6 +125,7 @@ claude-agentic-workflow/
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
 │   ├── semgrep-scan.sh         runs Semgrep via Docker (no native Windows build)
+│   ├── trivy-scan.sh           runs Trivy via Docker — container image/Dockerfile CVE scan (when a Dockerfile is in the change set)
 │   └── post-deploy-check.sh    [UNIMPLEMENTED] CI hook — runs after PR merges, not in pipeline
 │
 ├── global-skills/          Reference knowledge preloaded into agents that need it
@@ -138,6 +139,7 @@ claude-agentic-workflow/
 │   ├── deployment-checklist-and-rollback/  pre-flight gates, commit/push/PR sequence
 │   ├── auth-patterns/              Firebase/Cognito facade, OAuth, MFA, mfa_verified claim
 │   ├── logging-conventions/        structlog/Pino, OTel, CloudWatch/X-Ray, log field schema
+│   ├── secrets-management/         runtime-secret fetch facade (Secrets Manager/SSM), caching, rotation
 │   ├── iac-conventions/            Terraform infra/ layout, AWS provider, IaC security baseline
 │   ├── ddia-patterns/              storage, replication, consistency trade-offs (from DDIA)
 │   └── containerization-conventions/  Docker vs. serverless decision rubric
@@ -199,7 +201,7 @@ it, which is why all cross-stage state must travel through `.pipeline/` files.
 | maxTurns | 20 |
 | Tools | Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `stride-threat-model-template` |
-| On-demand skills | `ddia-patterns`, `auth-patterns`, `logging-conventions`, `iac-conventions`, `containerization-conventions` |
+| On-demand skills | `ddia-patterns`, `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions`, `containerization-conventions` |
 | Stop hook | `log-run.sh planning` (model auto-derived from frontmatter) |
 
 **Responsibility:** Read the codebase (or `PROJECT.md` on greenfield), define scope and
@@ -268,7 +270,7 @@ the checkpoint.
 | maxTurns | 25 |
 | Tools | Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `code-standards` |
-| On-demand skills | `auth-patterns`, `logging-conventions`, `iac-conventions` |
+| On-demand skills | `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions` |
 | Stop hooks (in order) | `smoke-check.sh`, `infra-validate.sh`, `log-run.sh implementation` |
 
 **Responsibility:** Verify `plan-approved` exists, read `plan.md`, write code. Runs a
@@ -338,6 +340,7 @@ directly, and report remaining findings. Runs:
 1. **Semgrep** via `semgrep-scan.sh` Docker wrapper — SAST, SCA, secrets scanning
 2. **OSV Scanner** — dependency CVE scanning
 3. **Checkov** — IaC scanning (only when `infra/` is in the change set)
+3b. **Trivy** via `trivy-scan.sh` Docker wrapper — container image / Dockerfile CVE + misconfig scanning (only when a `Dockerfile`/image is in the change set); critical CVEs fold into `critical_count` and block at the deploy gate
 4. **Manual checks** — secrets grep, row-level security audit, input sanitization, context-specific
    output encoding (HTML body/attribute, JavaScript, URL sinks), log-sink safety (log forging,
    secrets/PII in logs), and STRIDE-mechanism verification
@@ -373,6 +376,11 @@ full suite with coverage. Follows the plan's `test_strategy` shape (`pyramid` de
 merged `combined` coverage (the only gated figure), and **`criteria_covered`** — per-criterion
 acceptance coverage mapped from `.pipeline/acceptance.md` (a distinct axis from line coverage; PR C's
 deploy gate will require it complete). Never edits production code to make tests pass.
+**Conditional resilience/perf modes** fire only on their trigger and write a `resilience`/`perf`
+block: migration up/down/up round-trip (migration files present), property/fuzz tests
+(parsers/validators), concurrency/idempotency (declared idempotent handler), and load-vs-budget
+(a perf budget declared in `acceptance.md`). They are reported by default and only block when the
+guarantee is a declared acceptance criterion (riding `criteria_covered`) — they add no new gate.
 
 **When it stops:** `record-clean.sh` fires first. It reads both gate artifacts — if
 `security-status.json` is `clean` AND `test-results.json` is `pass`, it resets the

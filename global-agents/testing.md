@@ -75,6 +75,43 @@ When invoked:
    to make a criterion pass — if a criterion cannot be satisfied by the current
    implementation, leave it `uncovered` with a reason; the orchestrator routes that
    to debugging like any other gap. (Skip this step if no `acceptance.md` exists.)
+5c. **Migration reversibility (only when the change set includes migration
+   files).** Prove the down-path actually *works* — security flags a *missing*
+   downgrade critical (its step 5), but a present downgrade can still be broken.
+   On a scratch database (sqlite/in-memory, or a testcontainers instance per
+   `test-conventions`), apply **up → down → up** and assert the schema
+   round-trips. When the plan declares data-preservation for the migration, seed
+   representative rows and assert they survive the down+up cycle. For a
+   **zero-downtime** change, verify the migration is expand/contract
+   (add-nullable → backfill → swap), never an in-place destructive rename in a
+   single step. Record the outcome in `resilience.migration_roundtrip` (step 7);
+   a broken round-trip is a `fail`. Skip entirely when no migration files changed.
+5d. **Property-based / fuzz tests (only for pure functions with non-trivial
+   input domains — parsers, serializers, encoders, or any boundary input
+   carrying a plan validation contract).** Author property tests with the
+   project's library (Hypothesis for Python, fast-check for JS — see
+   `test-conventions`): assert invariants (`decode(encode(x)) == x`,
+   never-throws-on-valid, always-rejects-out-of-range) over *generated* inputs
+   rather than fixed examples. Record the count in `resilience.property_tests`;
+   when a property test backs an acceptance criterion, also mark that criterion
+   covered (step 5b). Skip when nothing in the change set has a fuzzable input domain.
+5e. **Concurrency / idempotency tests (only when the plan declares a handler
+   idempotent, uses an idempotency key, or mutates shared state under concurrent
+   access).** Drive the target with a parallel-request harness (N concurrent
+   identical requests) and assert: an idempotency-keyed write is applied **once**
+   (no duplicate side effects), and concurrent updates to the same row don't lose
+   writes (an optimistic-lock/version field or row lock holds). Record in
+   `resilience.concurrency`. This **blocks only if** the guarantee is a declared
+   acceptance criterion (it then rides `criteria_covered`); otherwise it is
+   reported. Skip when no concurrency-sensitive surface changed.
+5f. **Performance / load (only when `.pipeline/acceptance.md` declares a perf
+   budget for a path — p95 latency or throughput).** Scaffold a smoke-level load
+   test with the project's runner (k6 or Locust — see `test-conventions`),
+   exercise the budgeted path, and record measured-vs-budget in `perf` (step 7).
+   When the budget is a declared acceptance criterion, map it like any criterion
+   (step 5b) so the gate enforces it; otherwise report the numbers for the human.
+   Keep the load **smoke-sized** (seconds, bounded VUs) — a regression signal, not
+   a full load campaign. Skip when no perf budget is declared.
 6. Run the full test suite with coverage enabled using the project's configured
    runner (Jest, pytest, go test -cover, etc.) with its coverage flag. The
    **combined** figure is the merge of every suite — a line covered by *any* test
@@ -110,6 +147,16 @@ When invoked:
        "total": 0, "covered": 0,
        "by_id": [{ "id": "AC1", "covered": true, "test": "", "reason": "" }]
      },
+     "resilience": {
+       "migration_roundtrip": "pass|fail|n/a",
+       "property_tests": 0,
+       "concurrency": "pass|fail|n/a"
+     },
+     "perf": {
+       "budget":   { "p95_ms": null, "throughput_rps": null },
+       "measured": { "p95_ms": null, "throughput_rps": null },
+       "status": "pass|fail|n/a"
+     },
      "coverage": {
        "combined":    { "lines": 0, "branches": 0, "functions": 0 },
        "unit":        { "lines": 0, "branches": 0 },
@@ -128,6 +175,12 @@ When invoked:
    `criteria_covered.covered >= criteria_covered.total` (an absent/empty field
    means `0 >= 0`, so a criteria-less feature still passes); the orchestrator's
    run-to-condition loop exits on the same check.
+   **`resilience`** records the conditional modes (steps 5c–5e). Each field is
+   `n/a` when its trigger was absent — these are *reported* by default and never
+   add a new gate; a resilience guarantee only blocks deployment when planning
+   declared it as an acceptance criterion, in which case it already rides
+   `criteria_covered`. (`perf` is added by the performance mode, step 5f, on the
+   same reported-unless-an-acceptance-criterion basis.)
 8. Report a summary listing:
    - **Passing tests**: count and test suite names
    - **Failing tests**: name and failure reason for each
@@ -137,4 +190,6 @@ When invoked:
      counts; flag any divergence from the planned shape
    - **Acceptance criteria**: `criteria_covered.covered / total`, and name any
      criterion left `uncovered` with its reason (omit if no `acceptance.md`)
+   - **Resilience / perf**: only the modes that fired (migration round-trip,
+     property tests, concurrency, perf-vs-budget); omit any that were `n/a`
    Then stop.

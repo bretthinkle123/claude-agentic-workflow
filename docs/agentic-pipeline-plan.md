@@ -15,6 +15,23 @@ A **telemetry-activation pass (2026-06-26, later)** then took the run log live b
 
 A **portable-install migration (2026-06-26, latest)** then moved the whole pipeline from per-project copies to a **publish-once / bootstrap-per-project** model, so a new repo no longer copies `.claude/` file-by-file. **Source of truth is now the repo's `global-agents/`, `global-hooks/`, `global-skills/`, `global-project-skills/`, and `templates/` directories**, published to the user level (`~/.claude/agents`, `~/.claude/hooks`, `~/.claude/skills`, `~/.claude/pipeline-templates`) by **`scripts/install-global.sh`** (which supersedes the old `install-global-skills.sh`, adds a manifest-backed collision guard so it never silently overwrites another user's same-named files, and a `--force` override). A new **`scripts/bootstrap-project.sh`** (run from inside any repo, also installed to `~/.claude/pipeline-templates/`) writes only the per-project files: `.claude/settings.json` (the broad command allow-list stays **project-scoped**, never elevated to global settings), `.pipeline/state.json`, the two project skills, `CLAUDE.md`/`PROJECT.md`, and `.gitignore` entries — idempotent and never committing. Consequently **all hook paths became `$HOME/.claude/hooks/…`** (frontmatter, agent bodies, skills, and the `Bash($HOME/.claude/hooks/*.sh)` allow-list), and cross-hook calls resolve self-relative via `HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`. Global-hook safety rests on three facts: hooks are wired in **agent frontmatter** so they fire only when a pipeline agent is invoked (no always-on session hook); every ambient hook opens with `[ -f .pipeline/state.json ] || exit 0` (instant no-op outside a bootstrapped project); and `deployment-gate.sh` keeps **no** guard so it fails closed where interlock files are absent. `smoke-check.sh` also gained an optional `.pipeline/smoke.env` source for per-project start/health/build commands, and **refuses to source it if git tracks it** (blocks a hostile cloned repo from shipping a committed `smoke.env` to run code on the next pipeline user). **Below, the historical `.claude/agents/*.md` and `.claude/hooks/*.sh` paths describe the original in-repo design and remain conceptually accurate; the live runtime location is now `~/.claude/`, published from the `global-*/` source dirs.**
 
+A **robustness-roadmap pass (2026-06-30)** then implemented the seven items previously parked in
+`pipeline-revision-plan.md`'s "Roadmap — robustness items" table, all as **conditional,
+trigger-gated conventions that no-op unless a feature warrants them** (no new gate hook added). The
+testing agent gained four conditional modes (steps 5c–5f): **migration up/down/up round-trip** (when
+migration files change), **property-based / fuzz** (parsers/validators), **concurrency / idempotency**
+(declared-idempotent handlers), and **load-vs-perf-budget** (when planning declares a perf budget as
+an acceptance criterion); results land in new `resilience`/`perf` blocks of `test-results.json` and
+only block when the guarantee is a declared acceptance criterion (riding `criteria_covered`). Security
+gained **Trivy** container-image/Dockerfile scanning via a new `trivy-scan.sh` Docker wrapper (critical
+CVEs fold into `critical_count`, so they block at the existing deploy gate like a Checkov critical),
+closing the `containerization-conventions` image-scanning gap. A new on-demand **`secrets-management`**
+skill (13th global skill) documents the runtime-secret fetch facade (Secrets Manager / SSM, caching,
+rotation), and **`iac-conventions` + `baseline.md`** gained production-scale defaults (multi-AZ,
+target-tracking auto-scaling, ALB health checks, no single point of failure). Enforcement rides the
+two existing surfaces — the fail-closed security gate and `criteria_covered` — so a trigger-less
+feature behaves exactly as before.
+
 <a id="table-of-contents"></a>
 ## Table of contents
 

@@ -36,6 +36,25 @@ warnings unless project policy raises them.
   versioning where data loss matters).
 - Deletion protection on production databases.
 
+## Production scale (Availability — only when the stack runs long-lived compute)
+
+Applies when `infra/` provisions a service that must **stay available** (an
+ASG / ECS service / managed runtime fronting user traffic) — not a one-off job or
+a static bucket. Most are Availability checks Checkov does not rate critical by
+default, so they are **surfaced at the human checkpoint via `infra-plan.txt`**;
+the deterministic ones (Multi-AZ RDS, deletion protection) ride Checkov.
+
+- **Multi-AZ** — compute and the managed data tier span ≥ 2 Availability Zones
+  (ASG across per-AZ subnets; RDS Multi-AZ; cache with a cross-AZ replica).
+- **Auto-scaling** — a target-tracking policy (CPU or request-count-per-target)
+  with sane `min`/`max`, never a fixed single instance for a user-facing service.
+- **Health checks** — an ALB target-group health check wired to a real app
+  **readiness** endpoint; unhealthy targets are drained, not served.
+- **No single point of failure** — `desired_count` / `min_size` ≥ 2 behind the
+  load balancer for a production service.
+- **Graceful deploy** — rolling or blue/green with connection draining so a
+  deploy does not drop in-flight requests.
+
 ## Drift
 
 - Remote state locked (DynamoDB) so concurrent applies can't corrupt state.

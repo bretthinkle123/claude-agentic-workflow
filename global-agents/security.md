@@ -32,6 +32,7 @@ baseline Checkov checks against) — it is not preloaded.
   would pass to `semgrep`. Requires Docker Desktop running.
 - **OSV Scanner** — dependency CVE scanning against the OSV vulnerability database
 - **Checkov** — infrastructure-as-code scanning (run only when the change includes an `infra/` directory); tfsec/Trivy are drop-in alternatives
+- **Trivy** — container image / Dockerfile CVE + misconfiguration scanning (run only when the change includes a `Dockerfile` or a built image). On this (Windows) machine it runs via the Docker wrapper `$HOME/.claude/hooks/trivy-scan.sh` — call that with the same arguments you would pass to `trivy`. Requires Docker Desktop running.
 
 When invoked:
 1. Read .pipeline/state.json. If it does not exist, create it with defaults
@@ -59,6 +60,20 @@ When invoked:
    ```
    checkov -d infra --quiet --compact
    ```
+4b. If the change set includes a **`Dockerfile` or a built container image**, scan
+   it with Trivy via the Docker wrapper and fold the results into the same finding
+   counts:
+   ```
+   $HOME/.claude/hooks/trivy-scan.sh config --severity CRITICAL,HIGH --format json .            # Dockerfile/image misconfig
+   $HOME/.claude/hooks/trivy-scan.sh image  --severity CRITICAL,HIGH --format json <image:tag>  # if an image is built
+   ```
+   Treat **critical** CVEs / misconfigurations as `critical_count` (they then block
+   via the deployment gate exactly like a Checkov critical); high/medium as
+   `warning_count`. A fixable CVE with a patched version available is a hygiene
+   finding — record it and the safe version in the report's **Action required**
+   section (like an OSV CVE), but do not auto-bump base images. If the wrapper
+   reports Docker is not running, surface that in your summary rather than skipping
+   the scan silently.
 5. If the change includes database migration files, scan each one for:
    - **No downgrade path** — a migration with an upgrade but no rollback
      function is flagged critical (it cannot be safely reverted in production).
@@ -199,7 +214,7 @@ When invoked:
    - `ran_at`, `scope` (`diff`|`full`), `since_commit` (the HEAD hash the
      working-tree diff was measured against, or `null` on a full first scan)
    - `critical_count` (remaining after fixes), `warning_count`, `fixed_count`
-   - `semgrep_findings`, `osv_findings`, plus `checkov_findings` when infra was scanned (counts per tool, pre-fix)
+   - `semgrep_findings`, `osv_findings`, plus `checkov_findings` when infra was scanned and `trivy_findings` when a container image/Dockerfile was scanned (counts per tool, pre-fix)
    - A **Fixes applied** section listing each remediation (file, line, before/after)
    - A **Could not remediate** section for any finding that resisted fixing
    - An **Action required** section for OSV CVEs (package, CVE, safe version)

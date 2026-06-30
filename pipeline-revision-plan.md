@@ -151,19 +151,26 @@ and every human checkpoint.
 
 ---
 
-## Roadmap — robustness items (not in the 6 PRs; app/infra-heavy or hard; add per project on demand)
+## Roadmap — robustness items (originally not in the 6 PRs; app/infra-heavy or hard) · ☑ shipped 2026-06-30 (PR E)
 
-| Item | Size | Home |
+**Shipped as PR E (2026-06-30):** all seven items below, wired as **conditional, trigger-gated
+conventions that no-op unless a feature warrants them** — not mandatory gates on every feature.
+Enforcement adds **no new gate hook**: deterministic security findings (migration down-path,
+Trivy critical CVE, secret exposure) fold into the security gate's `critical_count`, and any
+project-specific guarantee that should block (a perf budget, an idempotency contract) is declared
+by planning as an **acceptance criterion** and rides the existing `criteria_covered` deploy gate.
+
+| Item | Home (as shipped) | Status |
 |---|---|---|
-| Migration reversibility / zero-downtime test | M | `testing.md` (apply up+down on scratch DB) + convention |
-| Property-based / fuzz testing | M | `test-conventions` + testing mode (Hypothesis / fast-check) |
-| Load / perf testing + budgets | M | k6 / Locust scaffold + a perf-review step |
-| Concurrency / idempotency testing | M–L | parallel-request harness + idempotency-key assertions (hardest) |
-| Runtime secrets management | M | Secrets Manager pattern + skill (per project) |
-| Container image scanning (Trivy) | S–M | fold into `security.md` / `infra-validate.sh` when a Dockerfile is built — closes the known `containerization-conventions` wiring gap (advisory §3.3/§3.6) |
-| IaC scale primitives (auto-scale / multi-AZ / health-check) | M | `iac-conventions` production-scale defaults (advisory §3.3/§3.8) |
+| Migration reversibility / zero-downtime test | `testing.md` step 5c (up→down→up on scratch DB) + `test-conventions` | ☑ |
+| Property-based / fuzz testing | `testing.md` step 5d + `test-conventions` (Hypothesis / fast-check) | ☑ |
+| Load / perf testing + budgets | `planning.md` (budget as acceptance criterion) + `testing.md` step 5f (k6 / Locust) | ☑ |
+| Concurrency / idempotency testing | `testing.md` step 5e (parallel-request harness + idempotency-key assertions) | ☑ |
+| Runtime secrets management | new on-demand `secrets-management` skill (Secrets Manager / SSM facade) | ☑ |
+| Container image scanning (Trivy) | new `trivy-scan.sh` + `security.md` step 4b; closes the `containerization-conventions` wiring gap | ☑ |
+| IaC scale primitives (auto-scale / multi-AZ / health-check) | `iac-conventions` + `baseline.md` production-scale defaults | ☑ |
 
-(Production observability / Sentry lives in the deferred production-debugger workstream.)
+(Production observability / Sentry lives in the deferred production-debugger workstream — still out of scope.)
 
 ---
 
