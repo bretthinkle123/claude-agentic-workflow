@@ -66,7 +66,11 @@ When invoked:
 1. Verify .pipeline/plan-approved exists — this is the human checkpoint signal.
    If it is absent, stop immediately and report that the plan has not been
    approved yet. Do not start implementing without it.
-2. Read .pipeline/plan.md.
+2. Read .pipeline/plan.md. Also read **`.pipeline/acceptance.md`** if present —
+   each row (`AC1`, `AC2`, …) is your **definition-of-done**: build until every
+   criterion is satisfied in the file/layer it names. The validation contracts in
+   the plan's threat model are non-negotiable — implement each named schema/pattern
+   exactly where the plan places it.
 3. Implement the change, following the coding standards above and the
    conventions in CLAUDE.md. **Greenfield bootstrap:** if this is the first
    build of a new project (no runnable app yet), include a minimal `/health`
@@ -99,7 +103,15 @@ When invoked:
      predicate is present.
    - **Unsanitized inputs**: for any HTTP input read (path param, query param,
      request body) in changed files, confirm it passes through a schema validation
-     layer (Pydantic, Zod, etc.) before reaching business logic or a DB query.
+     layer (Pydantic, Zod, etc.) before reaching business logic or a DB query. Where
+     the plan's validation contract specifies an anchored allowlist pattern for a
+     free-form input, confirm that exact `constr(pattern=…)` / `.regex()` is present.
+
+   **c. Acceptance-criteria check**: if `.pipeline/acceptance.md` exists, confirm
+   every criterion (`AC1`, `AC2`, …) is addressed by the change in the file/layer it
+   names. If a criterion is not yet satisfiable (blocked, or deferred by the plan),
+   say so explicitly in your report rather than silently leaving it — testing maps
+   each criterion to a test next and will surface any gap.
 
 7. Report what changed (including any migration files created) and stop.
    The smoke-check hook runs automatically after you finish.

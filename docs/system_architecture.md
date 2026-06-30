@@ -205,9 +205,12 @@ the plan wrong is the most expensive mistake in the pipeline — every downstrea
 on a bad direction. It is also a low-volume stage, so Opus barely dents the weekly cap. Opus at
 xhigh effort is the right investment here.
 
-**Human checkpoint:** after planning stops, the plan-audit agent runs automatically (below),
-then a human reads `plan.md` and `plan-audit.md` and runs `touch .pipeline/plan-approved`.
-Implementation refuses to start without this marker.
+**Human checkpoint:** after planning stops, the plan-audit agent runs automatically (below); if it
+sets `revision_recommended: true`, planning is re-invoked **once** to address the material flags
+(it reads `plan-audit.md`, fixes each, and appends a `## Revision notes` block). Then a human reads
+`plan.md` and `plan-audit.md` and runs `touch .pipeline/plan-approved`. Implementation refuses to
+start without this marker. Planning also emits `.pipeline/acceptance.md` — the downstream
+definition-of-done that implementation builds to and testing maps to tests.
 
 ---
 
@@ -224,20 +227,28 @@ Implementation refuses to start without this marker.
 
 **Responsibility:** Runs automatically after planning and **before** the human checkpoint, to
 focus the human's manual review. Reads `.pipeline/plan.md` and writes an advisory report
-`.pipeline/plan-audit.md` with three classes of flag: (1) **ambiguous wording** that could
-lead a downstream agent (especially implementation) to guess at intent and guess wrong;
-(2) **dependency reality** — every suggested frontend/backend package is checked for actual
-existence on its registry (npm / PyPI) via `curl`, catching hallucinated or slopsquatted names;
-(3) **version policy** — pinned versions are checked against a cooldown window (minor/patch
-14–30 days old, major 30–90, CVE fixes immediate), the obsolescence limit (no more than one
-major behind latest; reject EOL), exact-pin determinism (no `^`/`~`/`*`/ranges), and minimal
-dependency-footprint fit.
+`.pipeline/plan-audit.md` with four classes of flag: (0) **completeness** — a structural check
+that every applicable layer section is present, acceptance criteria are traced, STRIDE threats
+name a concrete mechanism, boundary inputs carry validation contracts, the test strategy is
+declared, and **Files affected** is concrete; (1) **ambiguous wording** that could lead a
+downstream agent (especially implementation) to guess at intent and guess wrong; (2) **dependency
+reality** — every suggested frontend/backend package is checked for actual existence on its
+registry (npm / PyPI) via `curl`, catching hallucinated or slopsquatted names; (3) **version
+policy** — pinned versions are checked against a cooldown window (minor/patch 14–30 days old,
+major 30–90, CVE fixes immediate), the obsolescence limit (no more than one major behind latest;
+reject EOL), exact-pin determinism (no `^`/`~`/`*`/ranges), and minimal dependency-footprint fit.
+
+Each flag is classified **material vs. advisory**, and the frontmatter carries
+`revision_recommended: true` iff any material flag exists. **Conditional revision loop:** when
+`revision_recommended` is true, the orchestrator re-invokes planning **exactly once** to address
+the material flags before the human sees the plan (capped — no recursion); the human checkpoint
+stays the hard stop regardless.
 
 **Why sonnet + advisory, not a gate?** Moved off Haiku so its `effort` setting is real and to give
-the ambiguity/dependency judgment more capability (PR 3 turns this into a structural completeness
-check). Still cheap enough to run on every feature. It is deliberately
-**non-gating** — it never blocks the pipeline or edits `plan.md`; it only surfaces flags for the
-human, who remains the decision-maker at the checkpoint.
+the completeness/ambiguity/dependency judgment more capability. Still cheap enough to run on every
+feature. It is deliberately **non-gating** — it never blocks the pipeline or edits `plan.md`; it
+surfaces flags and the `revision_recommended` signal, but the human remains the decision-maker at
+the checkpoint.
 
 ---
 
@@ -275,11 +286,15 @@ Sonnet weekly pool. Sonnet at high effort handles well-specified build tasks eff
 | Model | `opus` |
 | Effort | `xhigh` |
 | maxTurns | 15 |
-| Tools | Read, Edit, Bash, Grep |
+| Tools | Read, Write, Edit, Bash, Grep |
 | Preloaded skills | `debugging-escalation-protocol` |
 | Stop hook | `log-run.sh debugging` |
 
-**Responsibility:** Fix specific, reported problems. Same agent definition, two roles:
+**Responsibility:** Fix specific, reported problems — reproduce-first, author a failing→passing
+regression test (its `Write` tool authors the new test file and `.pipeline/debug-notes.md`),
+discriminate flakiness by re-running 5–10×, remove debug probes, and log the root-cause hypothesis
+to `.pipeline/debug-notes.md`. Testing still owns full-suite validation on the post-remediation
+re-run. Same agent definition, two roles:
 
 - **Sanity role** — triggered when smoke check fails. Reads the error, finds root cause, applies
   a minimal fix, increments `debug_retry_count.sanity`. Loops back to the smoke check (orchestrator
@@ -316,7 +331,9 @@ directly, and report remaining findings. Runs:
 1. **Semgrep** via `semgrep-scan.sh` Docker wrapper — SAST, SCA, secrets scanning
 2. **OSV Scanner** — dependency CVE scanning
 3. **Checkov** — IaC scanning (only when `infra/` is in the change set)
-4. **Manual checks** — secrets grep, row-level security audit, input sanitization audit
+4. **Manual checks** — secrets grep, row-level security audit, input sanitization, context-specific
+   output encoding (HTML body/attribute, JavaScript, URL sinks), log-sink safety (log forging,
+   secrets/PII in logs), and STRIDE-mechanism verification
 
 Writes two output files: `security-report.md` (human-readable) and `security-status.json`
 (machine-readable, parsed by gate hooks). Status is `clean` unless `critical_count > 0` — warnings
@@ -346,7 +363,9 @@ stage).
 full suite with coverage. Follows the plan's `test_strategy` shape (`pyramid` default, or
 `integration-heavy`) as a tier-priority bias. Writes `test-results.json` including
 `tested_change_hash` (SHA-256 of the change set it tested), the realized `tests_by_type` counts,
-and merged `combined` coverage (the only gated figure). Never edits production code to make tests pass.
+merged `combined` coverage (the only gated figure), and **`criteria_covered`** — per-criterion
+acceptance coverage mapped from `.pipeline/acceptance.md` (a distinct axis from line coverage; PR C's
+deploy gate will require it complete). Never edits production code to make tests pass.
 
 **When it stops:** `record-clean.sh` fires first. It reads both gate artifacts — if
 `security-status.json` is `clean` AND `test-results.json` is `pass`, it resets the
@@ -563,11 +582,13 @@ commit; until then, all changes live in the working tree.
 | File | Writer | Readers | Purpose |
 |---|---|---|---|
 | `plan.md` | planning agent | plan-audit, human, implementation, testing, documentation | The implementation spec + STRIDE threat model |
-| `plan-audit.md` | plan-audit agent | human (read at the checkpoint) | Advisory flags: ambiguity, dependency reality, version policy — non-gating |
+| `plan-audit.md` | plan-audit agent | orchestrator (`revision_recommended`), planning (revision pass), human (checkpoint) | Advisory flags: completeness, ambiguity, dependency reality, version policy — each material/advisory; non-gating |
+| `acceptance.md` | planning agent | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag) | Per-criterion contract: ID, criterion, file/layer, how verified |
 | `plan-approved` | human (`touch`) | implementation agent (refuses to start without it) | The human checkpoint gate marker |
+| `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
 | `security-status.json` | security agent | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,...}` |
-| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `coverage` (gated `combined` + best-effort per-suite `unit`/`integration`) |
+| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `coverage` (gated `combined` + best-effort per-suite `unit`/`integration`) |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |

@@ -16,8 +16,11 @@ string and those files — never assume it can see the conversation.
 ## Stage sequence
 
 ```
-1. Agent(planning, "Plan <feature>. Write .pipeline/plan.md incl. STRIDE threat model.")
-1b. Agent(plan-audit, "Audit .pipeline/plan.md. Write .pipeline/plan-audit.md.")  # automatic, before the human
+1. Agent(planning, "Plan <feature>. Write .pipeline/plan.md (incl. STRIDE threat model) + .pipeline/acceptance.md.")
+1b. Agent(plan-audit, "Audit .pipeline/plan.md (completeness + deps). Write .pipeline/plan-audit.md.")  # automatic
+1c. read revision_recommended from .pipeline/plan-audit.md frontmatter:
+     if true: Agent(planning, "Revise .pipeline/plan.md: address every [material] flag in
+              .pipeline/plan-audit.md, append ## Revision notes.")   # ONE pass only, no recursion
      -> review plan.md + plan-audit.md, then: touch .pipeline/plan-approved       # human checkpoint
 2. Agent(implementation, "Implement .pipeline/plan.md.")
      -> smoke-check.sh (+ infra-validate.sh) fire on Stop
@@ -72,8 +75,10 @@ and pre-wire the smoke check). Before each new feature, remove any stale
 | File | Writer | Readers |
 |---|---|---|
 | `plan.md` | planning | plan-audit, human, implementation, testing, documentation |
-| `plan-audit.md` | plan-audit | human (advisory — read at the checkpoint; non-gating) |
+| `plan-audit.md` | plan-audit | orchestrator (`revision_recommended`), planning (revision pass), human (advisory, non-gating) |
+| `acceptance.md` | planning | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag) |
 | `plan-approved` | human | implementation (refuses to start without it) |
+| `debug-notes.md` | debugging | human (root-cause + evidence trail; advisory) |
 | `security-report.md` / `security-status.json` | security | documentation (md), gate hooks (json) |
 | `test-results.json` | testing | record-clean.sh, deployment-gate.sh, documentation |
 | `pr-description.md` | documentation | deployment, gate |
@@ -84,10 +89,15 @@ and pre-wire the smoke check). Before each new feature, remove any stale
 
 ## Gate semantics
 
-- **Planning → plan-audit → human checkpoint:** `plan-audit` runs automatically
-  after planning and writes `plan-audit.md` (ambiguity, dependency-reality, and
-  version-policy flags). It is **advisory, not a gate** — it never blocks; the
-  human reads it alongside `plan.md` before approving.
+- **Planning → plan-audit → (conditional revision) → human checkpoint:**
+  `plan-audit` runs automatically after planning and writes `plan-audit.md`
+  (completeness, ambiguity, dependency-reality, and version-policy flags), tagging
+  each flag **material vs. advisory** and setting `revision_recommended`. It is
+  **advisory, not a gate** — it never blocks and never approves. When
+  `revision_recommended: true` (≥1 material flag), the orchestrator re-invokes
+  **planning once** to address the material flags before the human sees the plan;
+  capped at a single pass (no recursion). The human checkpoint stays the hard stop
+  regardless of the revision.
 - **Planning → implementation:** `plan-approved` marker (human).
 - **Smoke / infra:** deterministic hooks; exit 2 routes to sanity debugging.
 - **Security → testing:** serial by default (token cost over wall-clock).

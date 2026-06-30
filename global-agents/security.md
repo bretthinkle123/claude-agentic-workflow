@@ -69,8 +69,9 @@ When invoked:
      rather than parameterised queries. Flag as critical.
    Record migration findings in the same `critical_count` / `warning_count`
    totals as other findings.
-6. **Manual security checks** — three invariants that scanners miss or under-report.
-   Fold all findings into the same `critical_count` / `warning_count` totals.
+6. **Manual security checks** — invariants and verifications that scanners miss or
+   under-report (a–e below). Fold all findings into the same `critical_count` /
+   `warning_count` totals.
 
    **a. Secrets / API key exposure** — grep the change set for string literals
    assigned to variables named `key`, `token`, `secret`, `password`, `api_key`,
@@ -101,9 +102,18 @@ When invoked:
      `request.args['x']` used directly is a finding
    - Database interactions: verify parameterized queries or ORM bindings — grep for
      f-strings or `%`-formatted SQL (`f"SELECT.*{`, `"SELECT.*" % `)
-   - HTML output: verify template engine autoescape is enabled; flag any `Markup()`,
-     `dangerouslySetInnerHTML`, or raw string injection into HTML
-   Flag any bypass of validation or unparameterized query as **critical**.
+   - **Output encoding (context-specific)** — verify each user value is encoded for
+     the sink it actually lands in, not just the HTML body:
+     - **HTML body:** template autoescape on; flag `Markup()`,
+       `dangerouslySetInnerHTML`, Jinja `|safe`, or raw string injection into HTML.
+     - **HTML attribute:** value quoted and attribute-escaped; flag user data in an
+       unquoted attribute or inside `style=` / event-handler attributes.
+     - **JavaScript context:** flag user data interpolated into an inline `<script>`,
+       `eval`, `new Function`, or an `on*=` handler — require JSON-encoding/escaping.
+     - **URL context:** flag user data in `href` / `src` / redirect targets without
+       scheme allowlisting + percent-encoding (open-redirect, `javascript:` URIs).
+   Flag any bypass of validation, unparameterized query, or unencoded
+   context-specific output as **critical**.
 
    **d. STRIDE mechanism verification** — read `.pipeline/plan.md` and locate
    the `## Threat Model` section. For every STRIDE threat that has a concrete
@@ -124,16 +134,29 @@ When invoked:
    `stride_mechanisms_verified` count and `stride_mechanisms_missing` count in
    the `security-status.json` output (step 9).
 
+   **e. Log-sink safety** — inspect every logging call in the change set that
+   includes request-derived or user-controlled data:
+   - **Log forging / injection:** raw user input containing newlines or CR written
+     into a log line lets an attacker inject forged entries. Flag user data logged
+     without neutralizing newlines/control characters (or without structured-field
+     logging that escapes them) as **critical**.
+   - **Secrets / PII in logs:** flag any log statement that emits a raw request
+     body, password, token, API key, or unredacted PII as **critical** (see the
+     `logging-conventions` redaction rules).
+
 7. **Remediation** — work through every finding from steps 2–6 and act:
 
    **Fix immediately (exploitable threats, any severity):** These have a direct
    attack vector and must be fixed regardless of what severity the scanner assigned.
    - Injection: SQL (unparameterized queries, f-string SQL), command, path traversal
-   - XSS: `dangerouslySetInnerHTML`, unescaped template output, `Markup()` misuse
+   - XSS / output-encoding: `dangerouslySetInnerHTML`, unescaped template output,
+     `Markup()` misuse, and unencoded user data in HTML-attribute, JavaScript, or
+     URL contexts (step 6c)
    - Hardcoded credentials or secrets in source code
    - IDOR / missing row-level security scoping predicates on user-owned data
    - Missing input validation before business logic or DB queries
    - Missing STRIDE mechanisms (step 6d critical findings)
+   - Log forging, or secrets / PII written to logs (step 6e)
    - Any Semgrep OWASP Top 10 finding regardless of its reported severity
 
    **Fix if critical or high severity (hygiene findings):** Non-exploitable
