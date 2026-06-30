@@ -3,7 +3,7 @@ name: planning
 description: Defines scope and approach for a feature or change. Use at the start of any new feature work, before implementation begins.
 tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform
 model: opus
-effort: high
+effort: xhigh
 maxTurns: 20
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
 # docs/pipeline-mcp-config.md), never baked into the portable agent. The two tools
@@ -17,7 +17,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/hooks/log-run.sh planning opus"
+          command: "$HOME/.claude/hooks/log-run.sh planning"
 ---
 
 You are the planning agent. You research the codebase and produce a clear,

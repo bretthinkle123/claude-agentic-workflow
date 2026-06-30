@@ -2,14 +2,14 @@
 name: debugging
 description: Root-cause analysis and fixes, triggered by a failed smoke check or a security/testing finding. Use only when something has actually failed — never for code that has no reported problem.
 tools: Read, Edit, Bash, Grep
-model: sonnet
-effort: high
+model: opus
+effort: xhigh
 maxTurns: 15
 hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/hooks/log-run.sh debugging sonnet"
+          command: "$HOME/.claude/hooks/log-run.sh debugging"
 skills:
   - debugging-escalation-protocol
 ---

@@ -24,6 +24,7 @@ each skill. Re-run `--annotate` after changing any agent's `skills:` list.
 re-derive or get wrong (e.g. summing per-suite coverage, or hand-editing
 breadcrumbs that then drift from the agent frontmatter).
 
-**How to apply:** edit agents in BOTH `global-agents/*.md` and `.codex/agents/*.toml`;
-edit project skills in BOTH `global-project-skills/` and `.agents/skills/`. Gate
-only on `coverage.combined`; never sum per-suite coverage. See [[project-context]].
+**How to apply:** edit agents in `global-agents/*.md` (the `.codex/agents` Codex
+mirror was deleted 2026-06-29 — Anthropic-only environment, no Codex mirror to keep
+in sync); edit project skills in BOTH `global-project-skills/` and `.agents/skills/`.
+Gate only on `coverage.combined`; never sum per-suite coverage. See [[project-context]].

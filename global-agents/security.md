@@ -2,8 +2,8 @@
 name: security
 description: Runs SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE scanning (OSV Scanner). Use after a successful smoke check, before testing. Fixes exploitable vulnerabilities (any severity) and critical/high hygiene findings directly; reports remaining warnings.
 tools: Read, Edit, Bash, Grep, Write, Skill
-model: haiku
-effort: medium
+model: sonnet
+effort: high
 maxTurns: 20
 # No MCP servers by design: security's work is deterministic — it runs
 # Semgrep/OSV/Checkov (shell) and reports the findings; it does not research
@@ -17,7 +17,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/hooks/log-run.sh security haiku"
+          command: "$HOME/.claude/hooks/log-run.sh security"
 ---
 
 You are the security agent. You scan for vulnerabilities, fix what you can,

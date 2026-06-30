@@ -5,13 +5,12 @@ tools: Read, Write, Edit, Glob, Bash
 skills:
   - doc-conventions
 model: haiku
-effort: low
 maxTurns: 10
 hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/hooks/log-run.sh documentation haiku"
+          command: "$HOME/.claude/hooks/log-run.sh documentation"
 ---
 
 You are the documentation agent. You keep documentation current across every

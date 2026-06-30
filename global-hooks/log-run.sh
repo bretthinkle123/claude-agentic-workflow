@@ -2,13 +2,16 @@
 # Appends one line to .pipeline/run-log.jsonl — per-stage pipeline telemetry.
 # Wired as a Stop hook on every agent. Zero-LLM, deterministic.
 #
-# Usage: log-run.sh <stage> <model> [status] [retries] [notes]
-#   stage   : planning|implementation|debugging|security|testing|documentation|deployment
-#   model   : opus|sonnet|haiku
+# Usage: log-run.sh <stage> [model] [status] [retries] [notes]
+#   stage   : planning|plan-audit|implementation|debugging|security|testing|documentation|deployment
+#   model   : opus|sonnet|haiku  (default: auto-derived from the agent's published
+#             frontmatter ~/.claude/agents/<stage>.md — the Stop-hook wiring passes
+#             only <stage>, so the logged model can never desync from a frontmatter
+#             model change. An explicit arg-2 still wins.)
 #   status  : pass|fail|clean|issues-found|blocked|escalated  (default: auto-derive)
 #   retries : integer  (default: auto-read from state.json)
 #   notes   : free-text (default: auto-derive a short summary from the stage's
-#             artifact). The Stop-hook wiring only ever passes <stage> <model>,
+#             artifact). The Stop-hook wiring only ever passes <stage>,
 #             so an explicit note is rare — auto-derivation keeps the field
 #             populated instead of writing "notes":"" on every line.
 #
@@ -33,7 +36,21 @@ set -euo pipefail
 [ -f .pipeline/state.json ] || exit 0
 
 STAGE="${1:?stage required}"
-MODEL="${2:?model required}"
+# Model: derive from the agent's published frontmatter when not passed explicitly.
+# The Stop-hook wiring passes only <stage>, so $2 is normally empty -> read the
+# model from ~/.claude/agents/<stage>.md (the single source of truth) so a model
+# change in frontmatter can never desync a hardcoded arg. $STAGE matches the agent
+# filename for all 8 agents. An explicit arg-2 still wins (back-compatible).
+MODEL="${2:-auto}"
+if [ "$MODEL" = "auto" ]; then
+  AGENT_FILE="$HOME/.claude/agents/$STAGE.md"
+  # Clear first so a missing agent file (not installed) falls through to "unknown"
+  # rather than logging the literal "auto" sentinel.
+  MODEL=""
+  [ -f "$AGENT_FILE" ] && MODEL=$(grep -m1 '^model:' "$AGENT_FILE" 2>/dev/null \
+    | sed 's/^model:[[:space:]]*//' | tr -d '[:space:]')
+  [ -n "$MODEL" ] || MODEL="unknown"
+fi
 STATUS="${3:-auto}"
 RETRIES="${4:-auto}"
 NOTES="${5:-}"

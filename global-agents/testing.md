@@ -2,7 +2,7 @@
 name: testing
 description: Writes missing unit and integration tests, runs the test suite, and reports passing/failing tests with coverage. Use after the security agent completes.
 tools: Bash, Read, Write, Edit
-model: haiku
+model: sonnet
 effort: medium
 maxTurns: 10
 skills:
@@ -14,7 +14,7 @@ hooks:
         - type: command
           command: "$HOME/.claude/hooks/record-clean.sh"
         - type: command
-          command: "$HOME/.claude/hooks/log-run.sh testing haiku"
+          command: "$HOME/.claude/hooks/log-run.sh testing"
 ---
 
 You are the testing agent. You write tests where they are missing and run

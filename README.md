@@ -82,6 +82,32 @@ and `PreToolUse` frontmatter). Beyond that:
   `.claude/settings.json` — nothing broad is elevated to global settings, so unrelated
   Claude Code sessions on this machine are unaffected.
 
+## Propagating a pipeline update to active projects
+
+When you push changes to this repo and want target projects (e.g. `photography-editor-guide`) to use them:
+
+**Step 1 — Publish to `~/.claude/`** (from this repo):
+```bash
+./scripts/install-global.sh
+```
+This covers all agent, hook, skill, and template changes. Target projects reference `~/.claude/` directly, so they get the update immediately — no per-project step needed for these files.
+
+**Step 2 — Restart Claude Code / IDE**
+New agents and hooks don't hot-reload. Restart so Claude picks up the updated global files.
+
+**Step 3 — Re-run bootstrap in each target project** (only needed if `templates/project-settings.json` or `scripts/bootstrap-project.sh` changed):
+```bash
+# From inside the target project repo:
+bash ~/.claude/pipeline-templates/bootstrap-project.sh
+```
+Bootstrap is idempotent — it only writes files that don't already exist. This means an existing `.claude/settings.json` won't be overwritten. If the settings template changed, diff it manually:
+```bash
+diff .claude/settings.json ~/.claude/pipeline-templates/project-settings.json
+```
+Merge in any missing `allowedTools` entries by hand.
+
+> **Quick check:** If your PR only touched `global-agents/`, `global-hooks/`, or `global-skills/`, Step 1 + 2 is all you need. Step 3 is only for template or script changes.
+
 ## Editing the pipeline
 
 Change files under `global-agents/`, `global-hooks/`, `global-skills/`,

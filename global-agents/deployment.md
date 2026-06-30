@@ -13,9 +13,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/hooks/log-run.sh deployment sonnet"
-model: sonnet
-effort: low
+          command: "$HOME/.claude/hooks/log-run.sh deployment"
+model: haiku
 maxTurns: 8
 ---
 

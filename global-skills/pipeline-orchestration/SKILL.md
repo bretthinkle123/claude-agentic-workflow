@@ -40,7 +40,9 @@ appended to `.pipeline/run-log.jsonl` automatically when each agent finishes —
 orchestrator does **not** call it. The hook signature is:
 
 ```
-$HOME/.claude/hooks/log-run.sh <stage> <model> [status] [retries] [notes]
+$HOME/.claude/hooks/log-run.sh <stage>   # model auto-derived from frontmatter
+#   model : read from ~/.claude/agents/<stage>.md (the wiring passes only <stage>,
+#           so the logged model can never desync from a frontmatter model change)
 #   status: auto-derived from the stage's artifact when omitted
 #           implementation→smoke-status.json, security→security-status.json,
 #           testing→test-results.json, debugging→state.json (retry cap);
