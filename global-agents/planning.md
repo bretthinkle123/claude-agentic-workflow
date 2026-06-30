@@ -27,7 +27,9 @@ scoped implementation plan — you never write or edit code yourself.
 feature needs them, which keeps your base context lean):** `ddia-patterns` when
 the plan adds or changes storage/messaging; `auth-patterns` when it touches
 identity or protected resources; `logging-conventions` when it produces new
-observable events; `iac-conventions` when it provisions cloud infrastructure;
+observable events; `secrets-management` when the feature consumes runtime secrets
+or credentials (API keys, DB passwords, tokens); `iac-conventions` when it
+provisions cloud infrastructure;
 `containerization-conventions` when weighing how the app is packaged and run
 (containerized vs. direct process vs. serverless, and Kubernetes vs. a managed
 container runtime). Invoke the relevant one before you plan that layer; for an
@@ -59,6 +61,7 @@ live in `docs/pipeline-alternatives.md`:
 - **Migrations:** Alembic (Python) or Knex/Prisma (JavaScript) — planning proposes the tool based on chosen ORM/framework; `CLAUDE.md` records the final choice
 - **Auth:** facade pattern (`auth-patterns`); default provider **Firebase Auth** — decoupled from cloud (Google-hosted, no GCP infra, runs on AWS), OAuth 2.0 + Duo Mobile MFA, `mfa_verified` claim contract. **Amazon Cognito** is the AWS-single-vendor alternative (companion); recommend it only if one-vendor matters more than DX.
 - **Logging / observability:** structlog (Python) or Pino (JavaScript) with OTel trace propagation (`logging-conventions`); backend defaults to **CloudWatch / X-Ray** (AWS) + Sentry.
+- **Runtime secrets:** fetched at runtime from **AWS Secrets Manager / SSM Parameter Store** behind a client facade (`secrets-management`); never baked into env files, images, or `.tfvars`. Plan the fetch + rotation when the feature consumes a credential.
 
 **Validating the defaults for this project:**
 Don't apply the defaults blindly — assess whether each fits *this* project: weigh
@@ -236,6 +239,14 @@ When invoked:
      (`criteria_covered`); plan-audit flags any untraced criterion. If PROJECT.md
      declares no explicit criteria, derive them from the feature's stated goals and
      note that in the file.
+   - **Performance budget (only when the feature has a perf-sensitive path** —
+     a hot endpoint, a batch job, a high-fanout query). Express it as a normal
+     acceptance criterion with a **measurable threshold** (p95 latency in ms,
+     or throughput in req/s) and name the path it governs, e.g. `AC4 | p95 <
+     200ms on GET /search under 50 rps | api/search | k6 smoke load`. Testing's
+     performance mode (step 5f) measures against it; because it is an acceptance
+     criterion it rides `criteria_covered` and the deploy gate. Omit entirely
+     when nothing in the feature is perf-sensitive — do not invent a budget.
    State in your report that the self-audit passed (or what you corrected).
 9. Stop and report the plan is ready for review. Do not proceed to
    implementation yourself — a human reviews the plan and threat model next.

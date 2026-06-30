@@ -52,6 +52,24 @@ else pyramid>`. Record realized per-tier counts in the results file.
 - Thresholds (gate on combined only): lines `>= <N>%`, branches `>= <N>%`,
   functions `>= <N>%`.
 
+## Resilience & performance modes (conditional)
+
+These run **only when the change set triggers them** (the testing agent's steps
+5c–5f); each no-ops otherwise. Fill the ones this project can hit.
+
+- **Migration round-trip** (trigger: migration files) — scratch DB + up/down/up
+  command: `<e.g. sqlite in-memory via alembic upgrade head && downgrade base && upgrade head;
+  or testcontainers Postgres>`. Data-preservation seed/assert: `<how, if applicable>`.
+- **Property-based / fuzz** (trigger: parsers/serializers/validation-contract inputs) —
+  library + location: `<e.g. Hypothesis (Python) in tests/property/; fast-check (JS)>`.
+- **Concurrency / idempotency** (trigger: idempotent handler / idempotency key /
+  shared-state mutation) — harness: `<e.g. pytest + asyncio.gather / threads firing N
+  identical requests; assert single side-effect + no lost update>`.
+- **Load / performance** (trigger: a perf budget declared in `acceptance.md`) —
+  runner: `<e.g. k6 run script.js | Locust>`. Budget source: the acceptance
+  criterion (p95 latency / throughput); record results vs budget in
+  `test-results.json.perf`. Reported unless the budget is an acceptance criterion.
+
 ## Results contract
 
 Write `.pipeline/test-results.json` with: `status` (`pass`/`fail`), `ran_at`,

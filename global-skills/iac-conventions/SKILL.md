@@ -45,6 +45,18 @@ Tag every resource with at least `environment`, `service`, and `managed-by=terra
 Name resources `<service>-<environment>-<resource>` so they're greppable in the
 console and in CloudTrail.
 
+## Production-scale defaults
+
+When the stack provisions **long-lived compute that fronts user traffic** (an ASG,
+an ECS service, a managed runtime behind a load balancer), default to
+production-scale primitives, not a single fixed instance: **multi-AZ**,
+**target-tracking auto-scaling** with sane min/max, **ALB health checks** against a
+real readiness endpoint, and **≥ 2 instances/tasks** so there's no single point of
+failure. The full checklist is in `baseline.md` ("Production scale"). These are
+Availability concerns — surfaced at the human checkpoint via `.pipeline/infra-plan.txt`;
+the deterministic ones (Multi-AZ RDS, deletion protection) ride Checkov. Skip for a
+one-off job, a static asset bucket, or any stack with no always-on service.
+
 ## Where it threads through the stages
 
 - **planning** names provider + services, declares Terraform under `infra/`, adds

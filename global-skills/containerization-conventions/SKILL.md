@@ -50,11 +50,14 @@ is genuinely warranted, say what specifically requires it.
 - **Secrets** embedded in image layers or build args.
 - Over-broad **registry/pull credentials**.
 
-## Scope note (deferred wiring)
+## Scope note (wiring)
 
-This skill is **planning-only** for now: the decision and its threat-model
-implications. Authoring the Dockerfile / Kubernetes manifests in implementation and
-**image scanning** (e.g. Trivy) in security are a known, deferred gap — there is no
-designated home or scanner for those artifacts yet. Until then, planning surfaces the
-decision at the human checkpoint and CI handles delivery (see
-`docs/pipeline-deployment-targets.md`).
+This skill is primarily a **planning** decision guide: the containerize-or-not call
+and its threat-model implications. **Image scanning is now wired** — when a change
+set includes a `Dockerfile` or a built image, the security agent scans it with Trivy
+via `$HOME/.claude/hooks/trivy-scan.sh`, and critical CVEs/misconfigurations fold
+into its `critical_count` (so they block at the deploy gate like any other critical).
+The one remaining gap is **authoring** the Dockerfile / Kubernetes manifests in
+implementation — there is no dedicated convention for that artifact yet; until then
+planning surfaces the packaging decision at the human checkpoint and CI handles
+delivery (see `docs/pipeline-deployment-targets.md`).
