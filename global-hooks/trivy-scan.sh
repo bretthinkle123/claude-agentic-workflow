@@ -27,7 +27,12 @@ fi
 # in-container paths (/src, severity args) into Windows paths.
 HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
 
+# Pin the entrypoint to `trivy` so callers pass bare subcommands (`config`,
+# `image`, ...) — the same "don't repeat the binary name" contract as
+# semgrep-scan.sh — and the wrapper still works if TRIVY_IMAGE is overridden to an
+# image that doesn't default its entrypoint to trivy.
 MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
+  --entrypoint trivy \
   -v "${HOST_DIR}:/src" \
   -v trivy-cache:/root/.cache/ \
   -v //var/run/docker.sock:/var/run/docker.sock \
