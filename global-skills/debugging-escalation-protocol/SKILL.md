@@ -30,10 +30,13 @@ Follow this order on every invocation:
    finding, capture error + stack) before editing. Never fix an unobserved failure.
    For a regression, localize with `git bisect` / a diff of the suspect range.
 2. **Minimal fix** — patch the root cause, localized; never redesign the approach.
-3. **Regression test** — author a test that **fails before / passes after**,
-   following the plan's `test_strategy` shape. This is what guards the bug.
-4. **Flaky discrimination** — re-run the failing test **5–10×**; declare fixed only
-   on an all-pass streak. Intermittent passing means the flakiness is the bug.
+3. **Prove the fix** — *remediation role* (test/security finding): author a regression
+   test that **fails before / passes after**, following the plan's `test_strategy` shape.
+   *Sanity role* (smoke/build break): make the smoke check pass deterministically; a unit
+   regression test is degenerate unless the break has a unit-testable cause.
+4. **Flaky discrimination** — when the trigger was a failing test, re-run it **5–10×**;
+   declare fixed only on an all-pass streak (intermittent passing means the flakiness is
+   the bug). For a smoke/build break, the equivalent is a clean smoke re-run.
 5. **Remove debug probes** — strip scratch prints/logs/breakpoints before finishing.
 6. **Hypothesis log** — append a dated entry to `.pipeline/debug-notes.md` (root
    cause, evidence, what was tried, the closing fix + test).

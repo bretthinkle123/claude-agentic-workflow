@@ -72,6 +72,10 @@ case "${1:-tick}" in
     CYCLES=$(jq -r '.cycles' "$LOOP_STATE")
     STARTED=$(jq -r '.started_epoch' "$LOOP_STATE")
     STATUS=$(jq -r '.status' "$LOOP_STATE")
+    # Report against the caps this loop was armed with (stored at reset), so the
+    # display matches what the breaker actually enforces — not a since-changed env.
+    MAX_CYCLES=$(jq -r "(.max_cycles // $MAX_CYCLES)" "$LOOP_STATE")
+    MAX_WALL_S=$(jq -r "(.max_wall_clock_s // $MAX_WALL_S)" "$LOOP_STATE")
     echo "[loop-guard] cycle ${CYCLES}/${MAX_CYCLES}, elapsed $((NOW - STARTED))s/${MAX_WALL_S}s, status=${STATUS}"
     exit 0
     ;;
@@ -82,6 +86,12 @@ case "${1:-tick}" in
     jq '.cycles += 1' "$LOOP_STATE" > "$tmp" && mv "$tmp" "$LOOP_STATE"
     CYCLES=$(jq -r '.cycles' "$LOOP_STATE")
     STARTED=$(jq -r '.started_epoch' "$LOOP_STATE")
+    # Enforce the caps the loop was ARMED with (persisted in loop-state.json at
+    # reset) rather than the ambient env, so the budget can't silently change
+    # mid-feature if LOOP_MAX_* differs between reset and a later tick. Fall back to
+    # the env/default only for a pre-existing state file that predates these fields.
+    MAX_CYCLES=$(jq -r "(.max_cycles // $MAX_CYCLES)" "$LOOP_STATE")
+    MAX_WALL_S=$(jq -r "(.max_wall_clock_s // $MAX_WALL_S)" "$LOOP_STATE")
     ELAPSED=$(( NOW - STARTED ))
 
     if [ "$CYCLES" -gt "$MAX_CYCLES" ]; then

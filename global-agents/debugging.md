@@ -36,16 +36,24 @@ When invoked:
 4. **Diagnose the root cause and apply a minimal fix** — patch the cause, not the
    symptom; keep the change localized to the finding. Do not redesign the
    implementation's approach.
-5. **Author a regression test** that **fails before** the fix and **passes after**,
-   following the plan's `test_strategy` shape (the tier the plan favors). This
-   proves the fix and guards the bug from returning. **Ownership:** you prove the
-   fix with this one failing→passing reproduction; the **testing agent owns full
-   suite validation** on the post-remediation re-run — you are not re-authoring the
-   suite.
-6. **Discriminate flakiness.** Re-run the previously failing test **5–10 times**.
-   Declare it fixed only if it passes on *every* run — a single clean pass is not
-   enough. If it passes intermittently, the flakiness (ordering, timing, shared
-   state) is itself the bug: fix that, don't declare victory.
+5. **Prove the fix (scope by failure type).**
+   - **Remediation role** (a failing **test** or a **security** finding): author a
+     **regression test** that **fails before** the fix and **passes after**, following
+     the plan's `test_strategy` shape. This guards the bug from returning. **Ownership:**
+     you prove the fix with this one failing→passing reproduction; the **testing agent
+     owns full suite validation** on the post-remediation re-run — you are not
+     re-authoring the suite.
+   - **Sanity role** (a **smoke / build** break — the app doesn't build or boot): a unit
+     regression test is usually degenerate here. Instead, prove it by making the **smoke
+     check pass deterministically** (re-run the build/import or `/health` probe and confirm
+     a clean result). Add a regression test only if the break maps to a unit-testable cause
+     (e.g. a specific import/config bug); otherwise the smoke check itself is the guard.
+6. **Discriminate flakiness** *(when the trigger was a failing test).* Re-run the
+   previously failing test **5–10 times**; declare it fixed only if it passes on *every*
+   run — a single clean pass is not enough. Intermittent passing means the flakiness
+   (ordering, timing, shared state) is itself the bug: fix that, don't declare victory.
+   *(For a smoke/build break, the equivalent is a clean re-run of the smoke check; there is
+   no flaky-test set to re-sample.)*
 7. **Remove temporary debug probes** — any print/log/breakpoint/scratch code added
    while diagnosing — before finishing. Leave only the fix and the regression test.
 8. **Write the hypothesis log** to `.pipeline/debug-notes.md`: root cause, the
@@ -58,4 +66,5 @@ When invoked:
     can't satisfy the requirement — stop immediately and say so explicitly; do not
     attempt a redesign yourself (escalate to planning per the
     `debugging-escalation-protocol` skill).
-11. Report what changed (fix + regression test + `debug-notes.md` entry) and stop.
+11. Report what changed (fix + regression test where applicable + `debug-notes.md`
+    entry) and stop.

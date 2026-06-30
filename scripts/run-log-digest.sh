@@ -35,7 +35,7 @@ jq -r '
   | awk -F'\t' '{printf "%-21s %-20s %-15s %-8s %-13s %-8s %s\n", $1,$2,$3,$4,$5,$6,$7}'
 echo
 
-echo "-- coverage.combined trend (testing stages) --"
+echo "-- combined-coverage trend (testing stages: lines/branches/functions) --"
 HAS_TESTING=$(jq -rs 'map(select(.stage=="testing")) | length' "$LOG")
 if [ "${HAS_TESTING:-0}" -eq 0 ]; then
   echo "  (no testing stages logged yet)"

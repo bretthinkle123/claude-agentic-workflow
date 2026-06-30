@@ -7,6 +7,11 @@ numbers for rationale and never re-argues it; the advisory never lists files or 
 
 **Status legend:** ☐ not started · ◐ in progress · ☑ done · ⏸ deferred
 
+> **DELIVERED (2026-06-30) — all three ship-PRs merged to `main`.** PR A → #2, PR B → #3,
+> PR C → #4 (design PR 1–6 all shipped). Remaining: run `scripts/install-global.sh` to publish
+> to `~/.claude/` (local activation), and the ⏸ deferred workstreams below. Follow-up polish
+> (MCP-name caveats, sanity-role debugging scope, these status markers) landed in the PR D cleanup.
+
 **Invariants preserved across every PR:** fresh-context agents, file-based `.pipeline/*` handoff,
 deterministic fail-closed shell-hook gates, portable user-level install + per-project bootstrap,
 and every human checkpoint.
@@ -31,7 +36,7 @@ and every human checkpoint.
 
 ---
 
-## PR 1 — Advisory doc corrections · doc-only, zero pipeline risk · ☐
+## PR 1 — Advisory doc corrections · doc-only, zero pipeline risk · ☑
 
 **Goal:** make `max-pipeline-improvements.md` factually correct and forward-looking before any code change.
 
@@ -44,7 +49,7 @@ and every human checkpoint.
 
 ---
 
-## PR 2 — Model/effort retune + telemetry arg fix · pure config · ☐
+## PR 2 — Model/effort retune + telemetry arg fix · pure config · ☑
 
 **Goal:** cheapest, fastest quality lift; lands the limit-aware allocation. Rationale: advisory §3.1.
 
@@ -68,7 +73,7 @@ and every human checkpoint.
 
 ---
 
-## PR 3 — Plan-stage workflow: opus → plan-audit (sonnet) → opus revision + completeness check · ☐
+## PR 3 — Plan-stage workflow: opus → plan-audit (sonnet) → opus revision + completeness check · ☑
 
 **Goal:** give Opus's biased self-audit unbiased external feedback before the human, and make plan-audit a structural completeness check.
 
@@ -87,7 +92,7 @@ and every human checkpoint.
 
 ---
 
-## PR 4 — Plan contracts (validation + acceptance) + downstream verification · ☐
+## PR 4 — Plan contracts (validation + acceptance) + downstream verification · ☑
 
 **Goal:** give downstream agents explicit, checkable goals — security-related *and* project-specific. *(Splittable into 4a / 4b if review size matters.)* **Depends on:** PR 3 (completeness-check hook).
 
@@ -108,7 +113,7 @@ and every human checkpoint.
 
 ---
 
-## PR 5 — Loops & goals + circuit-breaker + run-log digest · ☐
+## PR 5 — Loops & goals + circuit-breaker + run-log digest · ☑
 
 **Goal:** drive the post-approval cycle to green hands-free, **bounded so it can't drain the weekly cap.** **Depends on:** PR 4 (green condition includes criteria coverage). Rationale: advisory §3.10.
 
@@ -123,7 +128,7 @@ and every human checkpoint.
 
 ---
 
-## PR 6 — Debugging agent upgrades (pre-merge only) · ☐
+## PR 6 — Debugging agent upgrades (pre-merge only) · ☑
 
 **Goal:** make the pre-merge debugger reliable. `opus/xhigh` lands in PR 2; this is behavior. Rationale: advisory §3.5.
 
@@ -166,12 +171,12 @@ and every human checkpoint.
 
 | PR | Theme | Risk | Depends on | Status |
 |---|---|---|---|---|
-| 1 | Advisory doc corrections | none | — | ☐ |
-| 2 | Model retune + telemetry arg | low | impl-model decision | ☐ |
-| 3 | Plan-stage workflow (opus → audit → opus) | low-mod | — | ☐ |
-| 4 | Plan contracts (validation + acceptance) | mod | 3 | ☐ |
-| 5 | Loops + circuit-breaker + digest | mod | 4 | ☐ |
-| 6 | Debugging upgrades | low | 2 | ☐ |
+| 1 | Advisory doc corrections | none | — | ☑ |
+| 2 | Model retune + telemetry arg | low | impl-model decision | ☑ |
+| 3 | Plan-stage workflow (opus → audit → opus) | low-mod | — | ☑ |
+| 4 | Plan contracts (validation + acceptance) | mod | 3 | ☑ |
+| 5 | Loops + circuit-breaker + digest | mod | 4 | ☑ |
+| 6 | Debugging upgrades | low | 2 | ☑ |
 
 **Token efficiency:** the retune dominates but lands **~1.7×** for this config (range ~1.6–1.9×, unmeasured until telemetry). Implementation and security — the high-volume / re-firing stages — stay Sonnet; **Opus is confined to planning + debugging, both low-volume**, so the spend lands where it is both cheap on the cap and decisive on quality (the advisory's "~2–2.5×" assumed implementation→Opus, which this plan rejects). On the limit lens, Opus draws only the shared all-models weekly cap with no fallback, so keeping it off the high-volume stages is what prevents that cap from gating a feature mid-run. Loops add *bounded* overhead on small stages only; the circuit-breaker (PR 5) is the non-negotiable cap backstop. The single biggest efficiency risk is an unbounded loop — which is why PR 5 ships the breaker with the loop.
 
@@ -183,23 +188,23 @@ The six PRs above are the *design units*. For delivery they collapse into **thre
 
 | Ship PR | Bundles | Theme | Risk | Depends on | Status |
 |---|---|---|---|---|---|
-| **A** | PR 1 + PR 2 | Instrument + retune (doc + pure config) | ~none (instant `git revert`) | model decisions (settled) | ☐ |
-| **B** | PR 3 + PR 4 + PR 6 | Smarter agents + contracts (deterministic, checkpoint-protected behavior) | moderate | A | ☐ |
-| **C** | PR 5 | Autonomous loop + circuit-breaker + digest | high (tail-risk) | B | ☐ |
+| **A** | PR 1 + PR 2 | Instrument + retune (doc + pure config) | ~none (instant `git revert`) | model decisions (settled) | ☑ |
+| **B** | PR 3 + PR 4 + PR 6 | Smarter agents + contracts (deterministic, checkpoint-protected behavior) | moderate | A | ☑ |
+| **C** | PR 5 | Autonomous loop + circuit-breaker + digest | high (tail-risk) | B | ☑ |
 
-### PR A — Instrument + retune  (= design PR 1 + PR 2) · ☐
+### PR A — Instrument + retune  (= design PR 1 + PR 2) · ☑
 - **Why bundled:** doc-only + pure config, no behavior change. PR 1 corrects the advisory that PR 2 implements — the config-and-its-rationale pair.
 - **Build order inside:** PR 1 (advisory doc) → PR 2 (frontmatter retune + `log-run.sh` arg fix).
 - **Gate before merge:** implementation = `sonnet/high` and security = `sonnet/high` both settled (✓). Opus only on planning + debugging.
 - **Verify:** run one feature; `run-log.jsonl` records the correct model per stage; revert is a clean `git revert`.
 
-### PR B — Smarter agents + contracts  (= design PR 3 + PR 4 + PR 6) · ☐
+### PR B — Smarter agents + contracts  (= design PR 3 + PR 4 + PR 6) · ☑
 - **Why bundled:** all *deterministic, human-checkpoint-protected* behavior/contract work, **no autonomous spend**. PR 3↔4 are coupled (4 plugs into 3's completeness hook; 3 forward-references 4). PR 6 is independent low-risk behavior that only soft-depends on PR A's `opus/xhigh`.
 - **Build order inside (dependency-ordered, verify each before the next):** PR 3 (plan-stage workflow + completeness hook) → PR 4 (validation + acceptance contracts that plug into it) → PR 6 (debugging upgrades).
 - **Gate before merge:** **resolve PR 6's `Write` tool-gap first** (option a or b). This is the heaviest review surface — if it feels too big, peel out PR 4b (acceptance) using PR 4's built-in split.
 - **Verify:** each sub-PR's own verification step (omitted-section plan → revision once; missing validation contract → security flags critical; untraced criterion → testing reports uncovered; flaky test → debugging re-runs N times).
 
-### PR C — Autonomous loop + breaker  (= design PR 5) · ☐
+### PR C — Autonomous loop + breaker  (= design PR 5) · ☑
 - **Why alone + last:** the single high-variance change — kept isolated so a looping/spend bug is bisectable, and **the circuit-breaker ships in the same PR as the loop, never before it.**
 - **Build order inside:** `loop-guard.sh` (breaker) and the loop logic land together; `deployment-gate.sh` gains the `criteria_covered` check (loop-exit ≡ deploy gate); `run-log-digest.sh` is additive.
 - **Gate before merge:** PR B merged (loop's green condition needs `criteria_covered` from PR 4); breaker counters independent of `record-clean.sh` resets.
