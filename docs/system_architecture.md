@@ -64,29 +64,29 @@ then run `./scripts/install-global.sh` and restart Claude Code. The repo is the 
 
 ```mermaid
 flowchart TD
-    START([Feature request]) --> P[planning agent\nopus · effort high · maxTurns 20]
+    START([Feature request]) --> P[planning agent\nopus · effort xhigh · maxTurns 20]
     P -->|writes| PLAN[.pipeline/plan.md\n+ STRIDE threat model]
-    PLAN --> PA[plan-audit agent\nhaiku · effort medium · maxTurns 15]
+    PLAN --> PA[plan-audit agent\nsonnet · effort medium · maxTurns 15]
     PA -->|writes advisory| PAUDIT[.pipeline/plan-audit.md\nambiguity · dep-reality · version-policy flags]
     PAUDIT --> HC{Human checkpoint\nread plan.md + plan-audit.md\ntouch plan-approved}
     HC -->|rejected| P
-    HC -->|approved| I[implementation agent\nsonnet · effort medium · maxTurns 25]
+    HC -->|approved| I[implementation agent\nsonnet · effort high · maxTurns 25]
     I -->|Stop hook fires| SC{smoke-check.sh\n+ infra-validate.sh}
-    SC -->|exit 2 = FAIL| DB1[debugging agent — sanity role\nsonnet · effort high · maxTurns 15]
+    SC -->|exit 2 = FAIL| DB1[debugging agent — sanity role\nopus · effort xhigh · maxTurns 15]
     DB1 -->|fix applied\nretry count++| SC
     DB1 -->|cap hit| HC
-    SC -->|exit 0 = PASS| SEC[security agent\nhaiku · effort low · maxTurns 12]
+    SC -->|exit 0 = PASS| SEC[security agent\nsonnet · effort high · maxTurns 20]
     SEC -->|writes| SECREP[security-report.md\nsecurity-status.json]
-    SECREP --> TEST[testing agent\nhaiku · effort medium · maxTurns 10]
+    SECREP --> TEST[testing agent\nsonnet · effort medium · maxTurns 10]
     TEST -->|writes| TRES[test-results.json]
     TRES --> BOTH{Both clean?\nsecurity-status=clean\ntest-results=pass}
-    BOTH -->|no| DB2[debugging agent — remediation role\nsonnet · effort high · maxTurns 15]
+    BOTH -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 15]
     DB2 -->|fix applied\nretry count++| SEC
     DB2 -->|cap hit or unpatchable| HC
-    BOTH -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · effort low · maxTurns 10]
+    BOTH -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 10]
     DOC -->|writes| DOCS[README updates\npr-description.md\nreview-manifest.json]
     DOCS --> SOFTCK{Human pre-deploy review\nsoft checkpoint\nread code + docs}
-    SOFTCK --> DEP[deployment agent\nsonnet · effort low · maxTurns 8]
+    SOFTCK --> DEP[deployment agent\nhaiku · maxTurns 8]
     DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n4 conditions checked}
     GATE -->|blocked| DEP
     GATE -->|passed| COMMIT[git commit\ngit push\ngh pr create]
@@ -188,21 +188,22 @@ it, which is why all cross-stage state must travel through `.pipeline/` files.
 | Property | Value |
 |---|---|
 | Model | `opus` |
-| Effort | `high` |
+| Effort | `xhigh` |
 | maxTurns | 20 |
 | Tools | Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `stride-threat-model-template` |
 | On-demand skills | `ddia-patterns`, `auth-patterns`, `logging-conventions`, `iac-conventions`, `containerization-conventions` |
-| Stop hook | `log-run.sh planning opus` |
+| Stop hook | `log-run.sh planning` (model auto-derived from frontmatter) |
 
 **Responsibility:** Read the codebase (or `PROJECT.md` on greenfield), define scope and
 approach, then write `.pipeline/plan.md` including a STRIDE threat model. Never writes application
 code. The plan explains every non-trivial decision with *what / why / how* so Brett understands the
 full reasoning, not just the outcome.
 
-**Why opus + high effort?** Planning is open-ended reasoning over uncertain requirements. Getting
+**Why opus + xhigh effort?** Planning is open-ended reasoning over uncertain requirements. Getting
 the plan wrong is the most expensive mistake in the pipeline — every downstream agent spends tokens
-on a bad direction. Opus at high effort is the right investment here.
+on a bad direction. It is also a low-volume stage, so Opus barely dents the weekly cap. Opus at
+xhigh effort is the right investment here.
 
 **Human checkpoint:** after planning stops, the plan-audit agent runs automatically (below),
 then a human reads `plan.md` and `plan-audit.md` and runs `touch .pipeline/plan-approved`.
@@ -214,12 +215,12 @@ Implementation refuses to start without this marker.
 
 | Property | Value |
 |---|---|
-| Model | `haiku` |
+| Model | `sonnet` |
 | Effort | `medium` |
 | maxTurns | 15 |
 | Tools | Read, Grep, Glob, Bash, Write |
 | Preloaded skills | none (the version policy is inlined in the agent body) |
-| Stop hook | `log-run.sh plan-audit haiku` |
+| Stop hook | `log-run.sh plan-audit` |
 
 **Responsibility:** Runs automatically after planning and **before** the human checkpoint, to
 focus the human's manual review. Reads `.pipeline/plan.md` and writes an advisory report
@@ -232,8 +233,9 @@ existence on its registry (npm / PyPI) via `curl`, catching hallucinated or slop
 major behind latest; reject EOL), exact-pin determinism (no `^`/`~`/`*`/ranges), and minimal
 dependency-footprint fit.
 
-**Why haiku + advisory, not a gate?** The checks are largely mechanical (registry lookups, pattern
-matching, date math), so haiku is sufficient and cheap to run on every feature. It is deliberately
+**Why sonnet + advisory, not a gate?** Moved off Haiku so its `effort` setting is real and to give
+the ambiguity/dependency judgment more capability (PR 3 turns this into a structural completeness
+check). Still cheap enough to run on every feature. It is deliberately
 **non-gating** — it never blocks the pipeline or edits `plan.md`; it only surfaces flags for the
 human, who remains the decision-maker at the checkpoint.
 
@@ -244,20 +246,21 @@ human, who remains the decision-maker at the checkpoint.
 | Property | Value |
 |---|---|
 | Model | `sonnet` |
-| Effort | `medium` |
+| Effort | `high` |
 | maxTurns | 25 |
 | Tools | Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `code-standards` |
 | On-demand skills | `auth-patterns`, `logging-conventions`, `iac-conventions` |
-| Stop hooks (in order) | `smoke-check.sh`, `infra-validate.sh`, `log-run.sh implementation sonnet` |
+| Stop hooks (in order) | `smoke-check.sh`, `infra-validate.sh`, `log-run.sh implementation` |
 
 **Responsibility:** Verify `plan-approved` exists, read `plan.md`, write code. Runs a
 diff-vs-plan check and a security quick scan before reporting done. Creates database migration files
 when the plan calls for schema changes. On greenfield projects, scaffolds a `/health` endpoint so
 the smoke check has a target.
 
-**Why sonnet?** Implementation is structured and well-scoped by the plan — it does not need
-Opus's open-ended reasoning. Sonnet handles well-specified build tasks efficiently.
+**Why sonnet (high effort)?** Implementation is structured and well-scoped by the plan — it does
+not need Opus's open-ended reasoning, and as the highest-volume stage it stays on the dedicated
+Sonnet weekly pool. Sonnet at high effort handles well-specified build tasks efficiently.
 
 **What fires when it stops:** `smoke-check.sh` boots the app and hits `/health`. If that passes,
 `infra-validate.sh` checks for an `infra/` directory and runs `terraform validate` if found. Then
@@ -269,12 +272,12 @@ Opus's open-ended reasoning. Sonnet handles well-specified build tasks efficient
 
 | Property | Value |
 |---|---|
-| Model | `sonnet` |
-| Effort | `high` |
+| Model | `opus` |
+| Effort | `xhigh` |
 | maxTurns | 15 |
 | Tools | Read, Edit, Bash, Grep |
 | Preloaded skills | `debugging-escalation-protocol` |
-| Stop hook | `log-run.sh debugging sonnet` |
+| Stop hook | `log-run.sh debugging` |
 
 **Responsibility:** Fix specific, reported problems. Same agent definition, two roles:
 
@@ -288,8 +291,9 @@ Opus's open-ended reasoning. Sonnet handles well-specified build tasks efficient
 **On cap or unpatchable finding:** stops and escalates to human review / planning. Never loops
 indefinitely.
 
-**Why high effort?** Debugging requires thorough reasoning over error messages, stack traces, and
-code to find the actual root cause, not just symptoms.
+**Why opus + xhigh effort?** Debugging requires thorough reasoning over error messages, stack
+traces, and code to find the actual root cause — and to distinguish intermittent flakes from real
+fixes, not just symptoms. It fires only on failure, so the Opus cost is small in absolute terms.
 
 ---
 
@@ -297,13 +301,13 @@ code to find the actual root cause, not just symptoms.
 
 | Property | Value |
 |---|---|
-| Model | `haiku` |
-| Effort | `medium` |
+| Model | `sonnet` |
+| Effort | `high` |
 | maxTurns | 20 |
 | Tools | Read, Edit, Bash, Grep, Write, Skill |
 | Preloaded skills | `semgrep-ruleset-guide`, `diff-scoping-conventions` |
 | On-demand skills | `iac-conventions` (only when `infra/` exists) |
-| Stop hook | `log-run.sh security haiku` |
+| Stop hook | `log-run.sh security` |
 
 **Responsibility:** Scan the working-tree change set (tracked diff + untracked files since last
 commit), fix exploitable vulnerabilities (any severity) and critical/high hygiene findings
@@ -318,9 +322,12 @@ Writes two output files: `security-report.md` (human-readable) and `security-sta
 (machine-readable, parsed by gate hooks). Status is `clean` unless `critical_count > 0` — warnings
 are surfaced but do not block.
 
-**Why haiku + medium effort?** Security scanning is largely mechanical (running Semgrep/OSV/Checkov
-and grepping for patterns), but also applies targeted fixes for critical findings — medium effort
-gives it enough headroom to do both without the cost of stronger models.
+**Why sonnet + high effort?** The scanners (Semgrep/OSV/Checkov) are deterministic and
+model-independent, but triage, the manual IDOR/RLS/validation checks, STRIDE-mechanism
+verification, and remediation are real reasoning — and the stage **re-fires on every remediation
+cycle**, so its cumulative volume is high. Sonnet/high gives that judgment enough capability while
+staying on the dedicated Sonnet weekly pool (Opus would be the most expensive choice on a re-firing
+stage).
 
 ---
 
@@ -328,16 +335,18 @@ gives it enough headroom to do both without the cost of stronger models.
 
 | Property | Value |
 |---|---|
-| Model | `haiku` |
+| Model | `sonnet` |
 | Effort | `medium` |
 | maxTurns | 10 |
 | Tools | Bash, Read, Write, Edit |
 | Preloaded skills | `test-conventions`, `diff-scoping-conventions` |
-| Stop hooks (in order) | `record-clean.sh`, `log-run.sh testing haiku` |
+| Stop hooks (in order) | `record-clean.sh`, `log-run.sh testing` |
 
 **Responsibility:** Write missing unit and integration tests for the change set, then run the
-full suite with coverage. Writes `test-results.json` including `tested_change_hash` (SHA-256 of the
-change set it tested). Never edits production code to make tests pass.
+full suite with coverage. Follows the plan's `test_strategy` shape (`pyramid` default, or
+`integration-heavy`) as a tier-priority bias. Writes `test-results.json` including
+`tested_change_hash` (SHA-256 of the change set it tested), the realized `tests_by_type` counts,
+and merged `combined` coverage (the only gated figure). Never edits production code to make tests pass.
 
 **When it stops:** `record-clean.sh` fires first. It reads both gate artifacts — if
 `security-status.json` is `clean` AND `test-results.json` is `pass`, it resets the
@@ -351,11 +360,11 @@ coverage and test counts.
 | Property | Value |
 |---|---|
 | Model | `haiku` |
-| Effort | `low` |
+| Effort | *(none — Haiku exposes no effort levels)* |
 | maxTurns | 10 |
 | Tools | Read, Write, Edit, Glob, Bash |
 | Preloaded skills | `doc-conventions` |
-| Stop hook | `log-run.sh documentation haiku` |
+| Stop hook | `log-run.sh documentation` |
 
 **Responsibility:** Only runs once both gates are clean. Finds every directory touched by the
 change (via `git diff --name-only`), creates or updates per-directory `README.md` files, updates
@@ -373,21 +382,21 @@ committed change. The hash must be recorded *after* those writes, so it captures
 
 | Property | Value |
 |---|---|
-| Model | `sonnet` |
-| Effort | `low` |
+| Model | `haiku` |
+| Effort | *(none — Haiku exposes no effort levels)* |
 | maxTurns | 8 |
 | Tools | Bash |
 | Preloaded skills | `deployment-checklist-and-rollback` |
 | PreToolUse hook | `deployment-gate.sh` (fires before every Bash call) |
-| Stop hook | `log-run.sh deployment sonnet` |
+| Stop hook | `log-run.sh deployment` |
 
 **Responsibility:** The pipeline's only commit point. Creates a feature branch if needed, then
 runs `git add -A && git commit`. Before that command executes, `deployment-gate.sh` fires and
 blocks unless all four conditions hold. After a clean commit, runs `git push` (requires human
 approval — intentionally not in the allow-list) and `gh pr create`. Stops at the PR.
 
-**Why sonnet + low effort?** Deployment is mechanical — branch, commit, push, PR. It does not
-reason; it executes a short sequence of git commands.
+**Why haiku?** Deployment is mechanical — branch, commit, push, PR. It does not reason; it executes
+a short sequence of git commands, so the cheapest model fits (Haiku exposes no effort levels).
 
 **Hard gate:** `git push` and `gh pr create` are deliberately excluded from `settings.json`'s
 allow-list so they each require explicit human approval even after the gate passes. The human
@@ -558,7 +567,7 @@ commit; until then, all changes live in the working tree.
 | `plan-approved` | human (`touch`) | implementation agent (refuses to start without it) | The human checkpoint gate marker |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
 | `security-status.json` | security agent | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,...}` |
-| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + coverage |
+| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `coverage` (gated `combined` + best-effort per-suite `unit`/`integration`) |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |
@@ -696,8 +705,10 @@ flowchart LR
 }
 ```
 
-Testing lines also include `coverage` and `tests.{total,passed,failed}`. Security lines include
-`critical_findings` and `warning_findings`.
+Testing lines also include `coverage` (the merged `combined` figure),
+`tests.{total,passed,failed}`, `tests_by_type`, and `test_strategy`. Security lines include
+`critical_findings` and `warning_findings`. The `notes` field carries a short, auto-derived
+per-stage summary (smoke result, finding counts, test pass/fail, or debug-retry tally).
 
 **Derived metrics to watch:**
 
@@ -708,7 +719,7 @@ Testing lines also include `coverage` and `tests.{total,passed,failed}`. Securit
 | Debug-retry rate | mean `retries` across features | Rising = plans too ambitious or stage struggling |
 | Wall-clock per stage | timestamp delta between consecutive lines | Spot a hung stage |
 | Missing stage line | no entry for a stage | Suspect a `maxTurns` cap-out |
-| Coverage trend | `coverage.lines` over time | Regression guard |
+| Coverage trend | `coverage.combined.lines` over time | Regression guard |
 
 A missing stage line in the log means the agent's Stop hook never fired — the most likely cause is
 that the agent hit its `maxTurns` cap. `duration_s` and `tokens` are not available to shell hooks;

@@ -3,7 +3,7 @@ name: planning
 description: Defines scope and approach for a feature or change. Use at the start of any new feature work, before implementation begins.
 tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform
 model: opus
-effort: high
+effort: xhigh
 maxTurns: 20
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
 # docs/pipeline-mcp-config.md), never baked into the portable agent. The two tools
@@ -17,7 +17,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/hooks/log-run.sh planning opus"
+          command: "$HOME/.claude/hooks/log-run.sh planning"
 ---
 
 You are the planning agent. You research the codebase and produce a clear,
@@ -116,6 +116,12 @@ When invoked:
      rest of the system, and what tradeoffs were accepted.
    - **Files affected** — list of files to create or modify with a one-line
      reason for each.
+   - **Test strategy** — the test-pyramid shape the testing agent follows.
+     Default `pyramid` (most tests unit, fewer integration, few E2E). Choose
+     `integration-heavy` only when the feature is mostly orchestration/glue over
+     external systems or data stores with little local logic; state the shape and,
+     when it is not the default, a one-line rationale. Testing reads this as a
+     tier-priority bias — it never relaxes the coverage gate.
    - **Open questions** — anything unresolved; planning proposes an answer and
      flags it for confirmation at the checkpoint.
    The plan must be self-explanatory to someone reading it cold. Every decision
@@ -183,6 +189,8 @@ When invoked:
      in GitHub/VS Code) and a self-contained copy-paste LLM prompt block.
    - **Files affected** is concrete (paths + one-line reason each) and matches
      the per-layer sections.
+   - **Test strategy** is declared — `pyramid`, or `integration-heavy` with a
+     one-line rationale; never silently omitted.
    - **Stack notes** records every default you kept or changed, with rationale,
      and any default you're recommending against (e.g. non-AWS cloud, Cognito
      over Firebase) is flagged explicitly for the checkpoint.

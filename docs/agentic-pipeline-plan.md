@@ -1,6 +1,8 @@
 <a id="agentic-development-pipeline--planning-doc"></a>
 # Agentic development pipeline — planning doc
 
+> **⚑ Authoritative sources (read first).** This is a **chronological design log** and lags the live pipeline. For current per-agent **model / effort / wiring**, the source of truth is `global-agents/*.md` (and the synced diagram + tables in [`system_architecture.md`](system_architecture.md)). Net state as of **2026-06-29**: planning `opus/xhigh`, debugging `opus/xhigh`, implementation `sonnet/high`, security `sonnet/high`, plan-audit & testing `sonnet/medium`, documentation & deployment `haiku` (no effort — Haiku exposes none). `log-run.sh` is wired on all **8** agents (incl. `plan-audit`, which predates this table and isn't in it) and **auto-derives the model from frontmatter** (the wiring passes only `<stage>`). The `.codex` Codex mirror was deleted (Anthropic-only). The 7-agent table just below has its models refreshed; deeper embedded copies further down predate the 2026-06-29 retune and are kept as historical record.
+
 Status: design phase, not yet implemented. Audited once for token/time efficiency (token cost prioritized over wall-clock time) — this version reflects that pass. A full internal-consistency audit was applied on 2026-06-23; the design forks it surfaced are now settled and recorded under **Resolved design decisions** in the appendix. A Claude Agent SDK alignment pass (against code.claude.com/docs/en/agent-sdk) was also applied on 2026-06-23 — see **Platform alignment (Claude Agent SDK / Claude Code)** below. A readiness pass (2026-06-23) then added the operational pieces an implementer needs — `settings.json` permissions, a prerequisites checklist, `.pipeline/` bootstrap, the enforced human-checkpoint marker, a conversational run sequence, a `CLAUDE.md` template, and `effort` levels on every agent — and corrected the `documentation` agent's tool scope (it needs `Bash` for `git diff`). An orientation & learning guide (Part I), with a map to Anthropic's docs verified live on 2026-06-23, was then added at the top for following along and learning the system. A generalization pass (2026-06-24) established language defaults (Python backend, JavaScript frontend, SQL database), threaded database migration support through the implementation, security, and deployment agents, added fill-in-the-blank hook script templates for `smoke-check.sh` and `post-deploy-check.sh`, added a greenfield project kickoff section with a `PROJECT.md` spec format, and clarified that stack-specific skills are swappable defaults rather than hard requirements. A multi-cloud pass (2026-06-24) then documented **Amazon Cognito** (auth) and **AWS CloudWatch / X-Ray** (observability) as co-equal alternatives to the Firebase/GCP defaults, made the **cloud environment a `PROJECT.md`-declared choice the planning agent validates** for fit (rather than a hard default), and added full AWS scaffolds parallel to the Firebase/Pino ones — so the pipeline is portable across cloud providers, with AWS as the first documented concrete environment.
 
 A **major revision (2026-06-25)** then acted on a research-backed audit and settled the defaults toward simplicity and token efficiency: (1) **Finding A — the git model was reworked** — diff-scoping now measures the working tree against the last commit (tracked + untracked files), the `last_clean_commit` pointer was removed (it silently missed uncommitted/untracked work), the **deployment agent now commits the reviewed change as its first step** (the pipeline's only commit, after a new soft pre-deploy review point), and the deploy gate's currency check became a `tested_change_hash` recompute; (2) **Findings C/D/E** — one config-driven `smoke-check.sh` (Python-default, greenfield build/import fallback), a greenfield `/health` scaffold, and a machine-readable `security-status.json` so gate hooks parse with `jq` not `grep`; (3) **defaults narrowed to one documented path** — **AWS** (cloud/infra), **Firebase Auth** (decoupled from cloud), **Python** backend / **JavaScript** frontend, with Python `structlog`/Firebase-admin backend scaffolds added; non-default scaffolds (Cognito, GCP observability, JS backend, Go/Java loggers) moved to the **`pipeline-alternatives.md`** companion (documentation-only, never loaded at runtime); (4) a new **Pipeline observability & metrics** section (a `run-log.jsonl` + objective metrics) and a **planning self-audit** step; (5) **skills reduced 16 → 13** (three implementation guides merged into `code-standards`, two doc guides into `doc-conventions`) and **four conditional skills made on-demand** (auth/logging/iac/ddia), dropping planning's preload from 5 skills to 1 and implementation's from 6 to 1. Documents the current shape of the pipeline before scaffolding the actual Claude Code subagents, hooks, and skills.
@@ -365,14 +367,14 @@ Security and testing default to **serial**, not parallel — see the Token / per
 
 | # | Agent | Role | Tools | Parallel? | Notes |
 |---|---|---|---|---|---|
-| 1 | **planning** | Defines scope and approach from a feature request; covers frontend, backend, infra, auth, logging, and produces a STRIDE threat model | Read, Grep, Glob, WebSearch, Write | — | **Model: `opus`, effort: `high`, maxTurns: 20.** Read-only with respect to application/source code; writes only its own plan artifact to `.pipeline/plan.md`. Followed by a manual human checkpoint before implementation starts |
-| 2 | **implementation** | Writes code against the plan following SOLID principles, Clean Code style, and facade pattern; all functions have docstrings | Read, Write, Edit, Bash | — | **Model: `sonnet`, effort: `medium`, maxTurns: 25.** The only "generative" build agent |
+| 1 | **planning** | Defines scope and approach from a feature request; covers frontend, backend, infra, auth, logging, and produces a STRIDE threat model | Read, Grep, Glob, WebSearch, Write | — | **Model: `opus`, effort: `xhigh`, maxTurns: 20.** Read-only with respect to application/source code; writes only its own plan artifact to `.pipeline/plan.md`. Followed by a manual human checkpoint before implementation starts |
+| 2 | **implementation** | Writes code against the plan following SOLID principles, Clean Code style, and facade pattern; all functions have docstrings | Read, Write, Edit, Bash | — | **Model: `sonnet`, effort: `high`, maxTurns: 25.** The only "generative" build agent |
 | — | **smoke check** | Confirms the app actually builds/runs | n/a — a hook, not an LLM agent | — | **No model (deterministic hook).** Always fires, zero token cost |
-| 3 | **debugging** | Root-cause + fix, invoked twice (see below) | Read, Edit, Bash, Grep | — | **Model: `sonnet`, effort: `high`, maxTurns: 15.** Same agent definition, two trigger points. Capped retry count per loop |
-| 4 | **security** | SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE scanning (OSV Scanner); also scans migration files for unsafe operations | Read, Bash, Grep, Write | **default serial** with testing; parallel is opt-in per run | **Model: `haiku`, effort: `low`, maxTurns: 10.** Does not modify application/source code — writes only its own report to `.pipeline/security-report.md`. Diff-scoped after the first pass |
-| 5 | **testing** | Writes missing unit and integration tests, runs the suite, reports passing/failing tests and coverage | Bash, Read, Write, Edit | **default serial** with security; parallel is opt-in per run | **Model: `haiku`, effort: `medium`, maxTurns: 10.** Writes tests where missing; never edits production code. Diff-scoped after the first pass |
-| 6 | **documentation** | Writes per-directory README.md files, root README.md, system_architecture.md with Mermaid diagrams, and the PR description | Read, Write, Edit, Glob, Bash | — | **Model: `haiku`, effort: `low`, maxTurns: 10.** Only runs after both gates are clean. Updates only directories touched by the change |
-| 7 | **deployment** | Ships to production | Bash (scoped cloud/CI MCP is opt-in per project) | — | **Model: `sonnet`, effort: `low`, maxTurns: 8.** Hard gate, highest-stakes permissions |
+| 3 | **debugging** | Root-cause + fix, invoked twice (see below) | Read, Edit, Bash, Grep | — | **Model: `opus`, effort: `xhigh`, maxTurns: 15.** Same agent definition, two trigger points. Capped retry count per loop |
+| 4 | **security** | SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE scanning (OSV Scanner); also scans migration files for unsafe operations | Read, Bash, Grep, Write | **default serial** with testing; parallel is opt-in per run | **Model: `sonnet`, effort: `high`, maxTurns: 20.** _(Now remediates exploitable findings — see `global-agents/security.md`.)_ Does not modify application/source code — writes only its own report to `.pipeline/security-report.md`. Diff-scoped after the first pass |
+| 5 | **testing** | Writes missing unit and integration tests, runs the suite, reports passing/failing tests and coverage | Bash, Read, Write, Edit | **default serial** with security; parallel is opt-in per run | **Model: `sonnet`, effort: `medium`, maxTurns: 10.** Writes tests where missing; never edits production code. Diff-scoped after the first pass |
+| 6 | **documentation** | Writes per-directory README.md files, root README.md, system_architecture.md with Mermaid diagrams, and the PR description | Read, Write, Edit, Glob, Bash | — | **Model: `haiku` (no effort), maxTurns: 10.** Only runs after both gates are clean. Updates only directories touched by the change |
+| 7 | **deployment** | Ships to production | Bash (scoped cloud/CI MCP is opt-in per project) | — | **Model: `haiku` (no effort), maxTurns: 8.** Hard gate, highest-stakes permissions |
 | — | **post-deploy check** | Confirms the deployed instance is actually healthy | n/a — a hook, not an LLM agent | — | Mirrors the smoke check; failure triggers a manual rollback decision, not an automated loop into debugging against production |
 
 <a id="the-debugging-agents-two-roles"></a>
@@ -448,7 +450,8 @@ Fields always present: `ts`, `feature` (the git branch), `stage` (planning / imp
 | **First-pass gate rate** | % of features reaching documentation with `retries == 0` across smoke/security/testing | Measures plan + implementation quality; a drop signals scope too big or a degrading stage |
 | **Debug-retry & escalation rate** | mean `retries`; count of `status == escalated` | Rising retries/escalations = a stage struggling or plans too ambitious |
 | **Wall-clock per stage** | timestamp delta between consecutive `run-log.jsonl` lines | Spot a hung stage; a *missing* stage line flags a `maxTurns` cap-out (its Stop hook never fired) |
-| **Coverage trend** | `coverage.lines` from `test-results.json` over time | Regression guard |
+| **Coverage trend** | `coverage.combined.lines` from `test-results.json` over time | Regression guard |
+| **Test-pyramid shape** | `tests_by_type` (unit/integration/e2e counts) and the `combined − unit` coverage gap vs. the planned `test_strategy` | Catches drift toward an inverted pyramid; flags when realized shape diverges from plan |
 | **Post-deploy success rate** | % of PRs whose CI post-deploy check passed first try (tracked in CI, not in `run-log.jsonl`) | The production-truth metric — add when CI is wired up |
 
 **Opt-in (later): an LLM-judge eval of plan quality.** Once the pipeline is piloted, a small evaluator (cheap model — Haiku) can score each `plan.md` against a fixed rubric — completeness across the affected layers, every non-trivial decision carries a *what/why/how*, threat model present and scoped, open questions surfaced — and append the score to the run log. This is how Anthropic's multi-agent system measured and improved output quality; it is deliberately **not** in v1 (keep it simple first), but the schema already has a place for it (a `plan_score` field).
@@ -1051,13 +1054,24 @@ your-project/
   "scope": "diff",
   "since_commit": "a1b2c3d",
   "tested_change_hash": "9f2b…",
+  "test_strategy": "pyramid",
   "total": 42,
   "passed": 42,
   "failed": 0,
   "failures": [],
-  "coverage": { "lines": 82, "branches": 74, "functions": 88 }
+  "tests_by_type": { "unit": 31, "integration": 9, "e2e": 2 },
+  "coverage": {
+    "combined":    { "lines": 82, "branches": 74, "functions": 88 },
+    "unit":        { "lines": 71, "branches": 65 },
+    "integration": { "lines": 48, "branches": 40 }
+  }
 }
 ```
+
+`coverage.combined` is the merged, gated figure; the per-suite `unit`/`integration`
+blocks are best-effort diagnostics (a large `combined − unit` gap flags an inverted
+pyramid). `test_strategy` echoes the planned pyramid shape (planning declares it
+in `plan.md`, default `pyramid`); `tests_by_type` is what was actually written.
 
 **`.pipeline/security-report.md`** — kept as markdown (human-readable, since you'll read it directly), but starts with a small YAML frontmatter block so hooks can parse status without an LLM call:
 
@@ -1451,6 +1465,9 @@ When invoked:
      rest of the system, and what tradeoffs were accepted.
    - **Files affected** — list of files to create or modify with a one-line
      reason for each.
+   - **Test strategy** — the test-pyramid shape testing follows. Default
+     `pyramid`; choose `integration-heavy` only for orchestration/glue-heavy
+     features with little local logic, with a one-line rationale.
    - **Open questions** — anything unresolved; planning proposes an answer and
      flags it for confirmation at the checkpoint.
    The plan must be self-explanatory to someone reading it cold. Every decision
@@ -1476,6 +1493,8 @@ When invoked:
      and a mitigation per credible threat.
    - **Files affected** is concrete (paths + one-line reason each) and matches
      the per-layer sections.
+   - **Test strategy** is declared (`pyramid`, or `integration-heavy` with a
+     one-line rationale).
    - **Stack notes** records every default you kept or changed, with rationale,
      and any default you're recommending against (e.g. non-AWS cloud, Cognito
      over Firebase) is flagged explicitly for the checkpoint.
@@ -1769,15 +1788,27 @@ When invoked:
      "scope": "diff|full",
      "since_commit": "<hash or null>",
      "tested_change_hash": "<sha256 of the tracked diff + untracked file contents>",
+     "test_strategy": "pyramid|integration-heavy",
      "total": 0, "passed": 0, "failed": 0,
      "failures": [{ "name": "", "reason": "" }],
-     "coverage": { "lines": 0, "branches": 0, "functions": 0 }
+     "tests_by_type": { "unit": 0, "integration": 0, "e2e": 0 },
+     "coverage": {
+       "combined":    { "lines": 0, "branches": 0, "functions": 0 },
+       "unit":        { "lines": 0, "branches": 0 },
+       "integration": { "lines": 0, "branches": 0 }
+     }
    }
    ```
+   `coverage.combined` is required and is the figure the gate reads; per-suite
+   `unit`/`integration` are best-effort diagnostics. `test_strategy` echoes the
+   plan's shape and `tests_by_type` records the realized pyramid.
 8. Report a summary listing:
    - **Passing tests**: count and test suite names
    - **Failing tests**: name and failure reason for each
-   - **Coverage**: line, branch, and function coverage percentages
+   - **Coverage**: combined line, branch, and function percentages (plus per-suite
+     unit and integration when produced)
+   - **Shape**: the `test_strategy` followed and the realized unit/integration/e2e
+     counts; flag any divergence from the planned shape
    Then stop.
 ```
 
@@ -2757,7 +2788,7 @@ After the 2026-06-25 reduction, **`planning` preloads 1** skill (`stride-threat-
 
 **`test-conventions`** — (project) — → testing
 - **description:** "Project test layout, mocking strategy, unit-vs-integration boundary, runner/coverage commands, and coverage thresholds."
-- **SKILL.md sections:** file locations/naming; unit vs integration definitions + when each; mocking strategy; the runner + coverage flag (`<PLACEHOLDER>`); coverage thresholds (`<lines ≥ N>`); pointer to the `test-results.json` shape.
+- **SKILL.md sections:** file locations/naming; unit vs integration definitions + when each; the test-pyramid shape (`pyramid` default / `integration-heavy`, read from the plan's `test_strategy`); mocking strategy; the runner + coverage flag (`<PLACEHOLDER>`), including how combined vs. per-suite coverage is merged; coverage thresholds (`<lines ≥ N>`, gate on combined); pointer to the `test-results.json` shape.
 - **Sibling files:** none.
 - **Source:** `testing.md` body + project conventions (mostly project-authored).
 - **Budget:** ~70 lines; ships as a template with `<PLACEHOLDERS>`.

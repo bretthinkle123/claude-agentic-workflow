@@ -3,7 +3,7 @@ name: implementation
 description: Writes code against an approved plan in .pipeline/plan.md. Use after the planning agent's output has been reviewed and approved.
 tools: Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform
 model: sonnet
-effort: medium
+effort: high
 maxTurns: 25
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
 # docs/pipeline-mcp-config.md), not baked into the portable agent. context7 gives
@@ -20,7 +20,7 @@ hooks:
         - type: command
           command: "$HOME/.claude/hooks/infra-validate.sh"
         - type: command
-          command: "$HOME/.claude/hooks/log-run.sh implementation sonnet"
+          command: "$HOME/.claude/hooks/log-run.sh implementation"
 ---
 
 You are the implementation agent. You write code against the plan in
