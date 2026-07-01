@@ -1,0 +1,165 @@
+{
+  "status": "pass",
+  "ran_at": "2026-06-30T00:00:00Z",
+  "scope": "diff",
+  "since_commit": "adfd7bd3356f35db8951d97bf662367b9a536868",
+  "tested_change_hash": "eede37db3d811ae7464bce7f680243f73d4282b99b71298e7d547a2aac5e591f",
+  "test_strategy": "pyramid",
+  "total": 148,
+  "passed": 148,
+  "failed": 0,
+  "failures": [],
+  "tests_by_type": {
+    "unit": 102,
+    "integration": 26,
+    "e2e": 0,
+    "property": 10,
+    "resilience": 9,
+    "perf": 1
+  },
+  "criteria_covered": {
+    "total": 18,
+    "covered": 18,
+    "by_id": [
+      {
+        "id": "AC1",
+        "covered": true,
+        "test": "tests/integration/test_links_api.py::TestHealthEndpoint::test_health_ok",
+        "reason": "GET /health returns 200 {status: ok} with no auth"
+      },
+      {
+        "id": "AC2",
+        "covered": true,
+        "test": "tests/integration/test_links_api.py::TestCreateLinkHappyPath::test_create_link_returns_201",
+        "reason": "POST /links with valid bearer + url returns 201, 6-char base62 code, short_url"
+      },
+      {
+        "id": "AC3",
+        "covered": true,
+        "test": "tests/integration/test_links_api.py::TestCreateLinkAuth::test_create_without_auth_returns_401",
+        "reason": "POST /links without valid Authorization returns 401; also tests/unit/test_auth_facade.py"
+      },
+      {
+        "id": "AC4",
+        "covered": true,
+        "test": "tests/integration/test_links_api.py::TestRedirectKnownCode::test_redirect_location_header_is_target_url",
+        "reason": "GET /{code} for known code returns 302 with Location = stored URL"
+      },
+      {
+        "id": "AC5",
+        "covered": true,
+        "test": "tests/integration/test_links_api.py::TestRedirectUnknownCode::test_unknown_code_returns_404",
+        "reason": "GET /{code} for unknown well-formed code returns 404"
+      },
+      {
+        "id": "AC6",
+        "covered": true,
+        "test": "tests/unit/test_schemas_validation.py::TestCreateLinkRequestUrl",
+        "reason": "url must be http/https <=2048 chars; invalid scheme/non-url/>2048 all return 422"
+      },
+      {
+        "id": "AC7",
+        "covered": true,
+        "test": "tests/unit/test_schemas_validation.py::TestShortCodePattern + tests/integration/test_links_api.py::TestRedirectUnknownCode::test_malformed_code_returns_422",
+        "reason": "code path validated as base62 x6; malformed code returns 422 before DB"
+      },
+      {
+        "id": "AC8",
+        "covered": true,
+        "test": "tests/property/test_codec_roundtrip.py::test_encode_decode_roundtrip",
+        "reason": "Hypothesis: decode(encode(n)) == n for all n in [0, 62^6)"
+      },
+      {
+        "id": "AC9",
+        "covered": true,
+        "test": "tests/unit/test_codec.py::TestEncodeId::test_encode_id_zero_is_six_chars + tests/property/test_codec_roundtrip.py::test_encode_id_exactly_six_chars",
+        "reason": "encode_id(id) produces exactly 6 base62 chars for supported range"
+      },
+      {
+        "id": "AC10",
+        "covered": true,
+        "test": "tests/integration/test_idempotency_api.py::TestSameKeySameBody::test_same_key_same_body_exactly_one_row",
+        "reason": "Same key+body twice returns same code and creates exactly one row"
+      },
+      {
+        "id": "AC11",
+        "covered": true,
+        "test": "tests/integration/test_idempotency_api.py::TestSameKeyDifferentBody::test_different_body_returns_409",
+        "reason": "Same key + different body returns 409 and does not overwrite original"
+      },
+      {
+        "id": "AC12",
+        "covered": true,
+        "test": "tests/integration/test_idempotency_api.py::TestNoIdempotencyKey::test_no_key_allows_multiple_rows",
+        "reason": "No Idempotency-Key header produces distinct rows; NULL keys do not collide"
+      },
+      {
+        "id": "AC13",
+        "covered": true,
+        "test": "tests/resilience/test_concurrency_idempotency.py::test_concurrent_identical_requests_one_row",
+        "reason": "N concurrent identical POST /links with same key+body yield exactly one row/code"
+      },
+      {
+        "id": "AC14",
+        "covered": true,
+        "test": "tests/resilience/test_migration_roundtrip.py::TestMigrationRoundTrip::test_full_roundtrip_up_down_up",
+        "reason": "Alembic upgrade->downgrade->upgrade round-trip; links table + both unique indexes present/absent"
+      },
+      {
+        "id": "AC15",
+        "covered": true,
+        "test": "tests/unit/test_logging_redaction.py (full suite)",
+        "reason": "link.create and link.redirect events emitted with owner_hash/code; raw API key, raw owner, and target url never appear in any log field"
+      },
+      {
+        "id": "AC16",
+        "covered": true,
+        "test": "tests/unit/test_auth_facade.py (loads keys via facade only; no literal in source)",
+        "reason": "API keys read only through config.py facade from env bootstrap inputs; tests/unit/test_auth_facade.py verifies facade behavior"
+      },
+      {
+        "id": "AC17",
+        "covered": true,
+        "test": "Full suite: pytest --cov=src combined >= 80%",
+        "reason": "Combined coverage = 86.03% lines, 70.97% branches — exceeds 80% gate"
+      },
+      {
+        "id": "AC18",
+        "covered": true,
+        "test": "tests/perf/test_redirect_smoke.py::test_redirect_p95_under_50ms",
+        "reason": "GET /{code} measured p95 = 3.69 ms on warm ASGI transport — well under 50 ms budget"
+      }
+    ]
+  },
+  "resilience": {
+    "migration_roundtrip": "pass",
+    "property_tests": 10,
+    "concurrency": "pass"
+  },
+  "perf": {
+    "budget": {
+      "p95_ms": 50.0,
+      "throughput_rps": 100
+    },
+    "measured": {
+      "p95_ms": 3.69,
+      "throughput_rps": 100
+    },
+    "status": "pass"
+  },
+  "coverage": {
+    "combined": {
+      "lines": 86.03,
+      "branches": 70.97,
+      "functions": null
+    },
+    "unit": {
+      "lines": null,
+      "branches": null
+    },
+    "integration": {
+      "lines": null,
+      "branches": null
+    }
+  }
+}

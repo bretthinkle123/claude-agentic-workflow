@@ -1,0 +1,11 @@
+{
+  "status": "clean",
+  "critical_count": 0,
+  "warning_count": 6,
+  "fixed_count": 3,
+  "ran_at": "2026-06-30T00:00:00Z",
+  "scope": "full",
+  "since_commit": null,
+  "stride_mechanisms_verified": 9,
+  "stride_mechanisms_missing": 0
+}

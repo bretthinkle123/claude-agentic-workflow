@@ -160,6 +160,12 @@ claude-agentic-workflow/
 │   ├── bootstrap-project.sh    Per-project bootstrap; also installed to ~/.claude/pipeline-templates/
 │   └── run-log-digest.sh       Zero-LLM run-log.jsonl summary + inverted-pyramid flag; → ~/.claude/pipeline-templates/
 │
+├── tests/                  Eval/regression harness (M8) — deterministic, zero-LLM; run `bash tests/run-eval.sh`
+│   ├── run-eval.sh             Entry: runs every suite against golden fixtures; exit 0 iff all pass (CI-ready)
+│   ├── suites/                 gate, loop-guard, loop-exit-invariant, stamp-ran-at, record-clean, static
+│   ├── fixtures/linkly-green/  Golden pipeline snapshot (Linkly, perf corrected to a passing state)
+│   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
+│
 ├── docs/
 │   ├── agentic-pipeline-plan.md      Full design doc — orientation guide, rationale, appendix
 │   ├── system_architecture.md        This file
