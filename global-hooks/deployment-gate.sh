@@ -12,7 +12,7 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_RESULTS=".pipeline/test-results.json"
 SECURITY_STATUS=".pipeline/security-status.json"
 PR_DESCRIPTION=".pipeline/pr-description.md"
-REVIEW_MANIFEST=".pipeline/review-manifest.json"
+DIFF_APPROVED=".pipeline/diff-approved"
 
 # Fail closed if jq is unavailable — every status check below depends on it.
 # (Without this a missing jq still blocks, but with a misleading "tests not
@@ -70,21 +70,30 @@ if [ ! -f "$PR_DESCRIPTION" ]; then
   exit 2
 fi
 
-# Currency applies to the COMMIT only. Once the reviewed change is committed the
-# working tree is clean (git status --porcelain is empty), so the later commands
-# in the same deployment run (git push, gh pr create) pass straight through — the
-# commit already cleared this gate. While work is still uncommitted, the bytes
-# about to be committed must match exactly the reviewed state that documentation
-# finalized in review-manifest.json (README/architecture writes included).
+# Human diff-review checkpoint (M5) + currency, anchored to the HUMAN's approval (F3).
+# Applies to the COMMIT only: once the reviewed change is committed the working tree is
+# clean (git status --porcelain empty), so the later commands in the same run (git push,
+# gh pr create) pass straight through — the commit already cleared this gate. While work
+# is still uncommitted, a human must have approved the diff (`.pipeline/diff-approved`,
+# written only by approve-diff.sh, which refuses without a TTY), AND the bytes about to be
+# committed must match exactly the hash that human approved.
+#
+# The anchor is the human-owned diff-approved hash, NOT documentation's review-manifest:
+# that closes F3 — the deployment agent can regenerate review-manifest (it's in its Bash
+# allow-list), but it cannot produce a human approval, and any tree change it makes shifts
+# the change-set hash away from approved_change_hash → blocked → the human must re-review.
 if [ -n "$(git status --porcelain)" ]; then
-  RECORDED=$(jq -r '.reviewed_change_hash' "$REVIEW_MANIFEST" 2>/dev/null)
-  # Shared change-set hash helper: documentation's write-review-manifest.sh records
-  # reviewed_change_hash via this same script, so the two match byte-for-byte (see
-  # the diff-scoping-conventions skill). On an empty repo (no HEAD) both sides hash
-  # the untracked tree identically, so they still match.
+  if [ ! -f "$DIFF_APPROVED" ]; then
+    echo "Blocked: no human diff approval. Review the diff + the security/test/quality reports, then run approve-diff.sh (the M5 diff-review checkpoint)." >&2
+    exit 2
+  fi
+  APPROVED=$(jq -r '.approved_change_hash' "$DIFF_APPROVED" 2>/dev/null)
+  # Shared change-set hash helper: approve-diff.sh records approved_change_hash via this
+  # same script, so the two match byte-for-byte (see the diff-scoping-conventions skill).
+  # On an empty repo (no HEAD) both sides hash the untracked tree identically.
   CURRENT=$("$HOOK_DIR/compute-change-hash.sh")
-  if [ -z "$RECORDED" ] || [ "$RECORDED" = "null" ] || [ "$RECORDED" != "$CURRENT" ]; then
-    echo "Blocked: working tree does not match the reviewed state in $REVIEW_MANIFEST (or no hash recorded); re-run documentation after any change, then re-review." >&2
+  if [ -z "$APPROVED" ] || [ "$APPROVED" = "null" ] || [ "$APPROVED" != "$CURRENT" ]; then
+    echo "Blocked: working tree does not match the human-approved diff ($DIFF_APPROVED approved_change_hash). Something changed after approval — re-review and re-run approve-diff.sh." >&2
     exit 2
   fi
 fi

@@ -23,6 +23,15 @@ open a pull request on GitHub. You do not deploy to production — that is
 handled by CI after the PR is merged. If a command is blocked by the gate
 hook, report why rather than trying to work around it.
 
+**The diff approval is the human's, never yours.** The gate requires
+`.pipeline/diff-approved`, written only by a human running `approve-diff.sh` (it
+refuses without a TTY). Never run `approve-diff.sh` and never write or regenerate
+`diff-approved` or `review-manifest.json` — self-approving or re-anchoring the
+currency hash defeats the human diff-review checkpoint (this is finding F3). If the
+gate blocks you because the tree changed after approval (e.g. your pre-commit
+inspection requires a `.gitignore` fix), **stop and report it** — the human makes
+the change and re-runs `approve-diff.sh` to re-approve.
+
 When invoked:
 1. **Create a feature branch.** A PR cannot be opened from the default branch
    into itself, so the commit must land on a feature branch. Determine the
@@ -65,9 +74,10 @@ When invoked:
    reviewed tree (a stage left standing between commands would change the currency
    hash and block the commit).
    The `deployment-gate.sh` hook runs before this command and blocks unless tests
-   pass, security is clean, `pr-description.md` exists, and the working tree still
-   matches documentation's `reviewed_change_hash` in `.pipeline/review-manifest.json`
-   (currency — the bytes you commit are exactly the reviewed state). This commit
+   pass, security is clean, `pr-description.md` exists, a **human diff approval**
+   (`.pipeline/diff-approved`) exists, and the working tree still matches the
+   **human-approved** `approved_change_hash` in that file (currency — the bytes you
+   commit are exactly what the human reviewed and approved). This commit
    becomes the clean baseline that future diff-scoping measures against. (Currency
    is checked here, on the commit. Your next commands — `git push`, `gh pr create`
    — run against a now-clean tree, so the gate passes them through without

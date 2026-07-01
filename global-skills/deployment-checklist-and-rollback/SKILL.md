@@ -19,9 +19,14 @@ before your first command. Confirm them mentally too; if a command is blocked,
 1. **Tests pass** — `.pipeline/test-results.json` `status == "pass"`.
 2. **Security clean** — `.pipeline/security-status.json` `status == "clean"`.
 3. **Docs produced** — `.pipeline/pr-description.md` exists.
-4. **Currency** — the working tree still matches documentation's
-   `reviewed_change_hash` in `.pipeline/review-manifest.json`. This is checked on
-   the **commit**; once the tree is clean, push/PR pass through.
+4. **Human diff approval + currency** — a human ran `approve-diff.sh` (the M5
+   diff-review checkpoint; TTY-only, so you cannot run it yourself), producing
+   `.pipeline/diff-approved`, **and** the working tree still matches its
+   `approved_change_hash`. Checked on the **commit**; once the tree is clean, push/PR
+   pass through. The anchor is the **human** approval, not documentation's
+   `reviewed_change_hash` (which you could regenerate — that gap was finding F3).
+   **Never** run `approve-diff.sh` or write `diff-approved`/`review-manifest.json`
+   yourself; if the tree changed after approval, stop and let the human re-approve.
 
 ## Deploy sequence
 

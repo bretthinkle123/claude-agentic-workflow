@@ -15,7 +15,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ "${1:-}" = "-v" ] && export VERBOSE=1
 
-SUITES=(static gate loop-guard loop-exit-invariant stamp-ran-at record-clean)
+SUITES=(static gate diff-approved loop-guard loop-exit-invariant stamp-ran-at record-clean)
 
 command -v jq >/dev/null 2>&1 || { echo "run-eval: jq is required on PATH." >&2; exit 2; }
 

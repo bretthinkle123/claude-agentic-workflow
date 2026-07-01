@@ -90,8 +90,8 @@ flowchart TD
     DB2 -->|cap hit or unpatchable| HC
     GREEN -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 25]
     DOC -->|writes| DOCS[README updates\npr-description.md\nreview-manifest.json]
-    DOCS --> SOFTCK{Human pre-deploy review\nsoft checkpoint\nread code + docs}
-    SOFTCK --> DEP[deployment agent\nsonnet · maxTurns 15]
+    DOCS --> HARDCK{Human diff-review checkpoint M5\nreview diff + reports, run approve-diff.sh\nwrites diff-approved — TTY-only}
+    HARDCK --> DEP[deployment agent\nsonnet · maxTurns 15]
     DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n5 conditions checked}
     GATE -->|blocked| DEP
     GATE -->|passed| COMMIT[git commit\ngit push\ngh pr create]
@@ -115,14 +115,15 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Twelve deterministic scripts — zero LLM cost
+├── global-hooks/           Thirteen deterministic scripts — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
 │   ├── stamp-ran-at.sh         stamps real UTC ran_at into test-results/security-status JSON; fires first on testing + security Stop (F6)
 │   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle / done@GREEN-exit (caps the loop)
-│   ├── deployment-gate.sh      blocks git commit unless 5 conditions met; PreToolUse on deployment
-│   ├── write-review-manifest.sh writes reviewed_change_hash anchor; called by documentation agent
+│   ├── deployment-gate.sh      blocks git commit unless 5 conditions met (incl. human diff-approval); PreToolUse on deployment
+│   ├── approve-diff.sh         human-only (TTY) M5 checkpoint: writes diff-approved (approved_change_hash); the gate's review + currency anchor
+│   ├── write-review-manifest.sh writes reviewed_change_hash (documentation's record + approve-diff's sanity check); called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
 │   ├── semgrep-scan.sh         runs Semgrep via Docker (no native Windows build)
@@ -611,10 +612,13 @@ pass. That independence is what lets the breaker bound a thrashing loop the per-
    escape — that hides the criterion and fails the `criteria_covered` check above instead.
 4. `security-status.json` exists and `status == "clean"`.
 5. `pr-description.md` exists.
-6. If the working tree is dirty (change not yet committed): recomputes the change-set hash via
-   `compute-change-hash.sh` and verifies it matches `review-manifest.json`'s
-   `reviewed_change_hash`. A mismatch means something changed after documentation ran — block.
-   If the tree is already clean (post-commit), the currency check is skipped.
+6. **Human diff approval + currency (M5 + F3).** If the working tree is dirty (change not yet
+   committed): `.pipeline/diff-approved` must exist (a human ran `approve-diff.sh`, which refuses
+   without a TTY — the deploy-side counterpart to `plan-approved`), **and** the recomputed change-set
+   hash (`compute-change-hash.sh`) must equal that file's `approved_change_hash`. A mismatch means
+   something changed after the human approved — block. If the tree is already clean (post-commit), the
+   check is skipped. The anchor is the **human** approval, not documentation's machine-written
+   `review-manifest.json` (which the deployer could regenerate — that was **F3**).
 
 **Why currency matters:** documentation writes README files and architecture diagrams that become
 part of the commit. The hash ensures the human reviewed exactly the bytes that will be committed —
@@ -637,8 +641,22 @@ always comparable byte-for-byte.
 **Called by:** the `documentation` agent (via Bash, as its final action).
 
 **Logic:** Calls `compute-change-hash.sh`, writes the result to
-`.pipeline/review-manifest.json` as `reviewed_change_hash`. This is the currency anchor the
-deployment gate checks.
+`.pipeline/review-manifest.json` as `reviewed_change_hash`. This is documentation's record of the
+reviewed tree; `approve-diff.sh` verifies the tree still matches it before recording the human
+approval. It is **no longer the deploy gate's currency anchor** — the human-owned
+`diff-approved.approved_change_hash` is (F3).
+
+---
+
+### approve-diff.sh
+
+**Called by:** a **human** at the diff-review checkpoint (M5), after documentation — never an agent.
+
+**Logic:** Refuses unless stdin is a TTY (a subagent's Bash has no controlling terminal, so it cannot
+self-approve). Computes the change-set hash via `compute-change-hash.sh`, verifies it matches
+documentation's `reviewed_change_hash`, prompts for a typed `approve`, then writes
+`.pipeline/diff-approved` = `{approved_change_hash, approved_at, note}`. This is the gate's human
+review + currency anchor.
 
 ---
 
@@ -703,7 +721,8 @@ commit; until then, all changes live in the working tree.
 | `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
 | `test-quality.json` | testing agent | documentation (surfaces in PR description) | **Advisory — no gate/loop-exit reads it.** Mutation over changed core modules (`{tool,scope,score,killed,survived}`) + adversarial `gaps[]` ("what the tests don't catch") + `quality_ok` |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
-| `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |
+| `diff-approved` | **human** via `approve-diff.sh` (TTY-only) | deployment-gate.sh | `{"approved_change_hash":"<sha256>","approved_at":"...","note":"..."}` — the **M5 human-review gate + F3 currency anchor**: gate requires it and that the commit hash equals `approved_change_hash` |
+| `review-manifest.json` | write-review-manifest.sh (via documentation) | approve-diff.sh (sanity: tree == reviewed hash) | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — documentation's record; **no longer the gate's anchor** (F3) |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |
 | `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh | Feature-level breaker budget: `{"cycles":N,"max_cycles":5,"started_epoch":...,"max_wall_clock_s":3600,"status":"running\|capped\|completed"}`. `done` stamps the terminal `completed` on GREEN exit (counterpart to cap-out `capped`); left `running` only mid-loop. Independent of `record-clean.sh` resets |
 | `smoke-status.json` | smoke-check.sh | log-run.sh (implementation status) | `{"status":"pass|fail","ran_at":"..."}` |
@@ -815,7 +834,7 @@ flowchart LR
         DG4 -->|no| DGX
         DG4 -->|yes| DG5{working tree dirty?}
         DG5 -->|no — already committed| DGP[exit 0 passed]
-        DG5 -->|yes| DG6{reviewed_change_hash\n== current hash?}
+        DG5 -->|yes| DG6{diff-approved exists AND\napproved_change_hash == current?}
         DG6 -->|no| DGX
         DG6 -->|yes| DGP
     end

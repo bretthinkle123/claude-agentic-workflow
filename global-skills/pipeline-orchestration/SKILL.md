@@ -55,9 +55,14 @@ string and those files — never assume it can see the conversation.
      # (counterpart to the cap-out "capped"; without it the file is left "running" after a clean run)
 
 5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
-     -> REVIEW POINT: read code, tests, docs, pr-description before deploying
-6. Agent(deployment, "Commit the reviewed change and open a PR on GitHub.")
-     -> deployment-gate.sh (PreToolUse) blocks the commit unless all five gates pass
+5b. HARD HUMAN DIFF-REVIEW CHECKPOINT (M5) — the deploy-side counterpart to plan-approved:
+     -> (optional) run /code-review so the human reviews an already-triaged diff
+     -> present the diff + security/test/quality reports; the HUMAN reviews, then runs:
+          bash ~/.claude/hooks/approve-diff.sh     # human-only (refuses without a TTY); writes .pipeline/diff-approved
+     -> do NOT invoke deployment until .pipeline/diff-approved exists (mirrors the plan-approved gate)
+6. Agent(deployment, "Commit the reviewed change and open a PR on GitHub.")  # only after diff-approved
+     -> deployment-gate.sh (PreToolUse) blocks the commit unless every gate passes,
+        including the human diff approval + that the commit matches the approved hash
 ```
 
 ## Telemetry — logged automatically on every stage
@@ -116,7 +121,8 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 | `test-quality.json` | testing | documentation (surfaces mutation score + adversarial gaps); **advisory — no gate reads it** |
 | `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh (feature-level cycle/wall-clock budget; independent of `record-clean.sh`). Terminal `status`: `capped` (cap-out) or `completed` (`done`, on GREEN exit); left `running` only mid-loop |
 | `pr-description.md` | documentation | deployment, gate |
-| `review-manifest.json` | documentation | deployment-gate.sh (currency anchor) |
+| `diff-approved` | human (via `approve-diff.sh`, TTY-only) | deployment-gate.sh (**the M5 human-review gate + F3 currency anchor**: gate requires it + commit-hash == `approved_change_hash`) |
+| `review-manifest.json` | documentation | approve-diff.sh (sanity: tree == reviewed hash). **No longer the gate's currency anchor** — `diff-approved` is (F3) |
 | `state.json` | bootstrap / security / debugging | debugging, record-clean.sh |
 | `smoke-status.json` | smoke-check.sh | log-run.sh (implementation status) |
 | `run-log.jsonl` | each agent's `log-run.sh` Stop hook | you (metrics) |
@@ -155,9 +161,15 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 - **GREEN → documentation:** once the loop exits GREEN, run `loop-guard.sh done`
   (stamps `loop-state.json` `status="completed"` — the successful counterpart to the
   cap-out `capped`, so the file never reads `running` after a clean run), then invoke docs.
+- **Documentation → human diff-review (M5) → deployment:** after documentation, a
+  **human** reviews the diff + reports and runs `approve-diff.sh` (TTY-only; a subagent
+  cannot self-approve). The orchestrator does not invoke deployment until
+  `.pipeline/diff-approved` exists — the deploy-side counterpart to `plan-approved`.
 - **Documentation → deployment:** the `PreToolUse` gate enforces tests pass,
   security clean, **acceptance criteria fully covered**, `pr-description.md` exists,
-  and currency vs `reviewed_change_hash`.
+  a **human `diff-approved`** exists, and the commit matches its `approved_change_hash`
+  (currency — now anchored to the human approval, not the machine `review-manifest`, which
+  the deployer could re-anchor: that was **F3**).
 
 ## Debug-loop routing
 
