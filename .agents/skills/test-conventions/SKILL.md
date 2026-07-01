@@ -69,6 +69,18 @@ These run **only when the change set triggers them** (the testing agent's steps
   runner: `<e.g. k6 run script.js | Locust>`. Budget source: the acceptance
   criterion (p95 latency / throughput); record results vs budget in
   `test-results.json.perf`. Reported unless the budget is an acceptance criterion.
+  **Criterion-completeness:** measure *every* dimension the budget names — if the
+  budget states a throughput (e.g. "under 100 req/s"), drive that rate and record
+  `perf.measured.throughput_rps`; serial p95 alone does not satisfy it. The deploy
+  gate + loop-exit block a non-null `perf.budget.*` paired with a null
+  `perf.measured.*`, so never mark such a criterion covered while a dimension is
+  unmeasured (measure it, or leave the criterion uncovered).
+- **Test quality — mutation + adversarial** (advisory; runs after the suite passes,
+  never gates) — mutation tool: `<e.g. mutmut (Python) | Stryker (JS)>`, scoped to
+  the **changed core modules** (logic-dense paths): `<e.g. src/domain, src/codec —
+  not glue/generated code>`. Command: `<e.g. mutmut run --paths-to-mutate src/domain>`.
+  Also record an adversarial "what does this test not catch" review. Written to
+  `test-quality.json` (advisory sibling of `test-results.json`).
 
 ## Results contract
 
@@ -78,3 +90,8 @@ Write `.pipeline/test-results.json` with: `status` (`pass`/`fail`), `ran_at`,
 `failures[]`, `tests_by_type { unit, integration, e2e }`, and `coverage` with a
 required `combined { lines, branches, functions }` plus best-effort per-suite
 `unit`/`integration { lines, branches }`.
+
+Also write the advisory `.pipeline/test-quality.json` (mutation + adversarial
+review) as a **separate** file — no gate or loop-exit reads it; documentation
+surfaces it in the PR description. Keeping it out of `test-results.json` leaves the
+gate-critical fields stable.

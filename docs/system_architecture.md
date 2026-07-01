@@ -83,8 +83,8 @@ flowchart TD
     LG -->|ok| SEC[security agent\nopus · effort high · maxTurns 30]
     SEC -->|writes| SECREP[security-report.md\nsecurity-status.json]
     SECREP --> TEST[testing agent\nsonnet · effort medium · maxTurns 30]
-    TEST -->|writes| TRES[test-results.json\n+ criteria_covered]
-    TRES --> GREEN{GREEN? deterministic jq\nsecurity=clean · tests=pass\ncriteria_covered complete}
+    TEST -->|writes| TRES[test-results.json\n+ criteria_covered\n+ test-quality.json advisory]
+    TRES --> GREEN{GREEN? deterministic jq\nsecurity=clean · tests=pass\ncriteria_covered complete\n· perf-completeness}
     GREEN -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 25]
     DB2 -->|fix applied\nretry count++| LG
     DB2 -->|cap hit or unpatchable| HC
@@ -399,6 +399,12 @@ block: migration up/down/up round-trip (migration files present), property/fuzz 
 (parsers/validators), concurrency/idempotency (declared idempotent handler), and load-vs-budget
 (a perf budget declared in `acceptance.md`). They are reported by default and only block when the
 guarantee is a declared acceptance criterion (riding `criteria_covered`) — they add no new gate.
+For a perf-backed criterion, **criterion-completeness (PR G / F1)** applies: every dimension the
+budget names must be measured — the gate + loop-exit block a non-null `perf.budget.*` paired with a
+null `perf.measured.*`, so a serial-latency-only test can't score a throughput criterion complete.
+Separately writes the **advisory** `test-quality.json` (mutation over changed core modules +
+adversarial "what does this test not catch" review); it is surfaced by documentation in the PR
+description and **read by no gate or loop-exit**. Branch coverage is surfaced (reported), not gated.
 
 **When it stops:** `record-clean.sh` fires first. It reads both gate artifacts — if
 `security-status.json` is `clean` AND `test-results.json` is `pass`, it resets the
@@ -575,6 +581,22 @@ pass. That independence is what lets the breaker bound a thrashing loop the per-
    security-clean), so the loop can't exit green on a criteria state the gate would reject.
    Absent/empty `criteria_covered` (a criteria-less feature, or a pre-PR-C result file) is
    `0 >= 0` → passes, so it never blocks a legitimately criteria-less change.
+3b. **Criterion-completeness — perf-pairing (PR G / F1).** When perf mode ran
+   (`.perf.status != "n/a"`), every non-null `perf.budget.*` dimension (`p95_ms`,
+   `throughput_rps`) must have a non-null `perf.measured.*` counterpart. A declared budget
+   with an unmeasured dimension means the load/latency half of the criterion was never
+   exercised — block, so a partial verification can't score the AC complete. Deterministic
+   `jq`, mirrored into the loop-exit condition, so loop-exit ≡ gate (no drift).
+   **Scope (deliberate design choice):** the check keys on `perf.status != "n/a"`, **not**
+   on whether the perf block backs a specific acceptance criterion — the results schema has
+   no perf→AC link, and `perf.budget.*` is populated from the acceptance criterion's wording
+   (testing step 5f), so keying on perf-mode-ran catches F1 exactly with zero model-trust.
+   The trade-off: a *reported-only* perf budget (perf measured but not itself an AC) with a
+   partially-measured budget also blocks. This is intended — declaring a budget dimension
+   commits you to measuring it. The honest escapes are all legitimate: measure the dimension,
+   omit a budget field you won't measure (leave it `null`), or set `perf.status:"n/a"` when
+   perf mode genuinely didn't run. Nulling a budget dimension that the AC *names* is not an
+   escape — that hides the criterion and fails the `criteria_covered` check above instead.
 4. `security-status.json` exists and `status == "clean"`.
 5. `pr-description.md` exists.
 6. If the working tree is dirty (change not yet committed): recomputes the change-set hash via
@@ -666,7 +688,8 @@ commit; until then, all changes live in the working tree.
 | `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
 | `security-status.json` | security agent | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,...}` |
-| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `coverage` (gated `combined` + best-effort per-suite `unit`/`integration`) |
+| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
+| `test-quality.json` | testing agent | documentation (surfaces in PR description) | **Advisory — no gate/loop-exit reads it.** Mutation over changed core modules (`{tool,scope,score,killed,survived}`) + adversarial `gaps[]` ("what the tests don't catch") + `quality_ok` |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |
@@ -772,7 +795,7 @@ flowchart LR
         DG1{jq available?} -->|no| DGX[exit 2 blocked]
         DG1 -->|yes| DG2{test-results.json\nstatus=pass?}
         DG2 -->|no| DGX
-        DG2 -->|yes| DG2c{criteria_covered\ncovered ≥ total?}
+        DG2 -->|yes| DG2c{criteria complete?\ncovered ≥ total AND\nperf budget dims measured}
         DG2c -->|no| DGX
         DG2c -->|yes| DG3{security-status.json\nstatus=clean?}
         DG3 -->|no| DGX

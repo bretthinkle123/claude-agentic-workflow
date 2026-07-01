@@ -39,9 +39,15 @@ string and those files — never assume it can see the conversation.
             Agent(debugging, "<finding>");  continue
      until GREEN (jq on the status files — NEVER LLM-judged):
        jq -e '.status=="clean"' security-status.json   AND
-       jq -e '.status=="pass" and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))' test-results.json
-     # These 3 are EXACTLY the gate's test/security/criteria checks, so the loop never exits
-     # green on anything deployment-gate.sh would reject. The gate's other two checks
+       jq -e '.status=="pass"
+              and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))
+              and ( ((.perf.status // "n/a")=="n/a")
+                    or ( (.perf.budget.p95_ms==null         or .perf.measured.p95_ms!=null)
+                     and (.perf.budget.throughput_rps==null or .perf.measured.throughput_rps!=null) ) )' test-results.json
+     # These are EXACTLY the gate's test/security/criteria + perf-completeness (PR G) checks, so the
+     # loop never exits green on anything deployment-gate.sh would reject. The perf-completeness clause
+     # mirrors the gate byte-for-byte: a declared perf budget dimension with a null measured value keeps
+     # the loop running (route to debugging), never exits green. The gate's other two checks
      # (pr-description, currency) come from documentation AFTER the loop — not the loop's job.
      # planning / plan-audit / implementation / documentation / deployment NEVER run inside this loop.
 
@@ -103,7 +109,8 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 | `surface-delta.md` | implementation | security (6f STRIDE-delta reconciliation — non-authoritative hint; the diff is source of truth) |
 | `debug-notes.md` | debugging | human (root-cause + evidence trail; advisory) |
 | `security-report.md` / `security-status.json` | security | documentation (md), gate hooks (json) |
-| `test-results.json` | testing | record-clean.sh, deployment-gate.sh, documentation |
+| `test-results.json` | testing | record-clean.sh, deployment-gate.sh (incl. perf-completeness), documentation |
+| `test-quality.json` | testing | documentation (surfaces mutation score + adversarial gaps); **advisory — no gate reads it** |
 | `loop-state.json` | loop-guard.sh (`reset`/`tick`) | loop-guard.sh (feature-level cycle/wall-clock budget; independent of `record-clean.sh`) |
 | `pr-description.md` | documentation | deployment, gate |
 | `review-manifest.json` | documentation | deployment-gate.sh (currency anchor) |
@@ -127,11 +134,14 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 - **Run-to-condition loop (security ⇄ debugging ⇄ testing):** after implementation
   (single-shot) passes smoke, drive this loop until the **GREEN** condition holds —
   `security-status.json.status == clean` AND `test-results.json.status == pass` AND
-  `criteria_covered.covered >= .total`. **The exit is deterministic `jq` on the
-  status files — never an LLM judgement.** These three are **exactly the gate's
-  test/security/criteria checks**, so the loop can never exit green on something
-  `deployment-gate.sh` would reject; the gate's remaining two checks (pr-description,
-  currency) are produced by documentation *after* the loop, so they can't drift from it.
+  `criteria_covered.covered >= .total` AND **perf-completeness** (PR G: when perf mode
+  ran, every non-null `perf.budget.*` dimension has a non-null `perf.measured.*` — a
+  declared budget must actually be measured). **The exit is deterministic `jq` on the
+  status files — never an LLM judgement.** These are **exactly the gate's
+  test/security/criteria + perf-completeness checks**, so the loop can never exit green on
+  something `deployment-gate.sh` would reject; the gate's remaining two checks
+  (pr-description, currency) are produced by documentation *after* the loop, so they can't
+  drift from it.
 - **Circuit-breaker (`loop-guard.sh`):** `reset` once at feature start, then `tick`
   at the top of every cycle. It bounds the **whole feature** by cycle count and
   wall-clock in `.pipeline/loop-state.json` — **independent of the per-cycle

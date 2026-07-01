@@ -40,6 +40,26 @@ if [ "$CRIT_COVERED" -lt "$CRIT_TOTAL" ]; then
   exit 2
 fi
 
+# Criterion-completeness (PR G / F1). Counting criteria_covered trusts the testing
+# agent's per-criterion covered:true; this adds a deterministic backstop for the one
+# structured "measurable dimension" the schema carries — a declared perf budget must
+# actually be MEASURED. If perf mode ran (status != n/a) and a non-null budget field
+# (p95_ms / throughput_rps) has a null measured counterpart, the load/latency half of
+# the criterion was never exercised — block, so a partial verification can't score the
+# AC complete. Budget fields derive from the acceptance criterion's wording, so the
+# honest fix is to measure it or mark the criterion uncovered (which then fails the
+# criteria_covered check above). This same predicate is mirrored in the orchestrator's
+# loop-exit (pipeline-orchestration skill), so loop-exit ≡ gate and the two never drift.
+PERF_GAP=$(jq -r '
+  if (.perf.status // "n/a") == "n/a" then "ok"
+  elif (.perf.budget.p95_ms != null and .perf.measured.p95_ms == null) then "p95_ms"
+  elif (.perf.budget.throughput_rps != null and .perf.measured.throughput_rps == null) then "throughput_rps"
+  else "ok" end' "$TEST_RESULTS")
+if [ "$PERF_GAP" != "ok" ]; then
+  echo "Blocked: perf criterion under-covered — budget declares $PERF_GAP but measured is null. Measure it or mark the criterion uncovered. See $TEST_RESULTS .perf." >&2
+  exit 2
+fi
+
 if [ ! -f "$SECURITY_STATUS" ] || [ "$(jq -r '.status' "$SECURITY_STATUS")" != "clean" ]; then
   echo "Blocked: security status is not clean. See .pipeline/security-report.md." >&2
   exit 2
