@@ -10,16 +10,19 @@ Your job is to get the reviewed, gate-verified change onto GitHub as a pull
 request — **nothing beyond that**. Production delivery (terraform apply, app
 deploy, migrations, App Store) runs in CI after the PR is merged.
 
-## Pre-flight — the four gate conditions
+## Pre-flight — the five gate conditions
 
 `deployment-gate.sh` (a `PreToolUse` hook on your Bash tool) enforces these
 before your first command. Confirm them mentally too; if a command is blocked,
 **report why — never work around the gate**:
 
 1. **Tests pass** — `.pipeline/test-results.json` `status == "pass"`.
-2. **Security clean** — `.pipeline/security-status.json` `status == "clean"`.
-3. **Docs produced** — `.pipeline/pr-description.md` exists.
-4. **Human diff approval + currency** — a human ran `approve-diff.sh` (the M5
+2. **Acceptance criteria complete** — `criteria_covered.covered >= .total`, plus
+   perf criterion-completeness (a declared `perf.budget.*` dimension has a non-null
+   `perf.measured.*`). See `.pipeline/test-results.json`.
+3. **Security clean** — `.pipeline/security-status.json` `status == "clean"`.
+4. **Docs produced** — `.pipeline/pr-description.md` exists.
+5. **Human diff approval + currency** — a human ran `approve-diff.sh` (the M5
    diff-review checkpoint; TTY-only, so you cannot run it yourself), producing
    `.pipeline/diff-approved`, **and** the working tree still matches its
    `approved_change_hash`. Checked on the **commit**; once the tree is clean, push/PR

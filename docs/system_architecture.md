@@ -90,7 +90,7 @@ flowchart TD
     DB2 -->|cap hit or unpatchable| HC
     GREEN -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 25]
     DOC -->|writes| DOCS[README updates\npr-description.md\nreview-manifest.json]
-    DOCS --> CR[/code-review — standard automated pre-step\nreview-only triage of the diff]
+    DOCS --> CR["/code-review — standard automated pre-step\nreview-only triage of the diff"]
     CR --> HARDCK{Human diff-review checkpoint M5\nreview diff + code-review findings + reports\nrun approve-diff.sh — TTY-only, writes diff-approved}
     HARDCK --> DEP[deployment agent\nsonnet · maxTurns 15]
     DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n5 conditions checked}
