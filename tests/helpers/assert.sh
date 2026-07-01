@@ -37,6 +37,29 @@ mk_fixture() {
   echo "$w"
 }
 
+# mk_git_fixture — a real (throwaway) git repo with the green .pipeline snapshot and a
+# **dirty** working tree (an untracked source file = "the change under review"), so the
+# gate's dirty-tree path actually runs — the only way to exercise the diff-approval /
+# currency checks (in a non-git dir they self-skip). `.pipeline/` is gitignored like a
+# real bootstrapped project, so the change-set hash is over the source file, not state.
+mk_git_fixture() {
+  local w; w="$(mktemp -d)"; _WORKDIRS+=("$w")
+  (
+    cd "$w"
+    git init -q
+    git config user.email pipeline-eval@local && git config user.name pipeline-eval
+    printf '.pipeline/\n' > .gitignore
+    git add .gitignore && git commit -qm baseline
+    mkdir -p .pipeline && cp "$FIXTURE"/* .pipeline/
+    printf 'def handler():\n    return "ok"\n' > app.py   # the reviewed change (untracked ⇒ tree dirty)
+  ) >/dev/null 2>&1
+  echo "$w"
+}
+
+# change_hash <workdir> — the shared change-set hash for a workdir, as both the gate
+# and approve-diff.sh compute it.
+change_hash() { ( cd "$1" && bash "$HOOKS/compute-change-hash.sh" ); }
+
 # jq_edit <file> '<filter>' — apply a jq filter to a JSON file IN PLACE. The temp lands
 # beside the file (inside the caller's throwaway workdir, so cleanup covers it — no
 # TMPDIR residue), replacing the repeated `mktemp; jq > t && mv` mutation boilerplate.

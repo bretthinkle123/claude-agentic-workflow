@@ -31,6 +31,13 @@ One paragraph: what changed and why. Link the plan: see `.pipeline/plan.md`
 
 - Scope (diff/full) and finding counts from `.pipeline/security-report.md`.
 
+## Supply chain
+
+- **Lockfile integrity:** dependency manifests and their lockfiles are in sync
+  (from `lockfile-check.sh`); note any unpinned-dependency warnings.
+- **SBOM:** whether a CycloneDX SBOM (`.pipeline/sbom.cdx.json`) was generated and
+  its component count (best-effort; omit if Docker was unavailable).
+
 ## Threat model
 
 - Reference the `## Threat Model` section of `.pipeline/plan.md`; call out any

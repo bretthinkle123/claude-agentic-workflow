@@ -10,18 +10,26 @@ Your job is to get the reviewed, gate-verified change onto GitHub as a pull
 request — **nothing beyond that**. Production delivery (terraform apply, app
 deploy, migrations, App Store) runs in CI after the PR is merged.
 
-## Pre-flight — the four gate conditions
+## Pre-flight — the five gate conditions
 
 `deployment-gate.sh` (a `PreToolUse` hook on your Bash tool) enforces these
 before your first command. Confirm them mentally too; if a command is blocked,
 **report why — never work around the gate**:
 
 1. **Tests pass** — `.pipeline/test-results.json` `status == "pass"`.
-2. **Security clean** — `.pipeline/security-status.json` `status == "clean"`.
-3. **Docs produced** — `.pipeline/pr-description.md` exists.
-4. **Currency** — the working tree still matches documentation's
-   `reviewed_change_hash` in `.pipeline/review-manifest.json`. This is checked on
-   the **commit**; once the tree is clean, push/PR pass through.
+2. **Acceptance criteria complete** — `criteria_covered.covered >= .total`, plus
+   perf criterion-completeness (a declared `perf.budget.*` dimension has a non-null
+   `perf.measured.*`). See `.pipeline/test-results.json`.
+3. **Security clean** — `.pipeline/security-status.json` `status == "clean"`.
+4. **Docs produced** — `.pipeline/pr-description.md` exists.
+5. **Human diff approval + currency** — a human ran `approve-diff.sh` (the M5
+   diff-review checkpoint; TTY-only, so you cannot run it yourself), producing
+   `.pipeline/diff-approved`, **and** the working tree still matches its
+   `approved_change_hash`. Checked on the **commit**; once the tree is clean, push/PR
+   pass through. The anchor is the **human** approval, not documentation's
+   `reviewed_change_hash` (which you could regenerate — that gap was finding F3).
+   **Never** run `approve-diff.sh` or write `diff-approved`/`review-manifest.json`
+   yourself; if the tree changed after approval, stop and let the human re-approve.
 
 ## Deploy sequence
 
@@ -77,10 +85,29 @@ a greenfield repo with no HEAD). Any hit means report and stop for a human.
   `console.log`/`print(` added purely for tracing, `TODO`/`FIXME` introduced by this
   change) — report for a human call rather than committing silently.
 
+## Backup-before-migrate (data safety — M6)
+
+When the change set includes **database migrations**, the PR body must carry an
+explicit **backup-before-migrate** step for whoever runs the migration downstream
+(the pipeline stops at the PR; migrations execute in CI/prod, not here). State it in
+`pr-description.md` so it can't be forgotten:
+
+- **Snapshot before applying** — take a point-in-time backup / snapshot (e.g. RDS
+  snapshot, `pg_dump`, volume snapshot) **immediately before** `migrate up`, and
+  record how to restore it. A forward-only or destructive migration with no
+  pre-migration backup is the classic unrecoverable-data-loss path.
+- **Prefer expand/contract** — testing already round-trips the migration against a
+  prod-shaped seed (its step 5c); still gate the *destructive* half (drop column /
+  table, type narrowing) behind a separate, later release once the new shape is
+  proven in prod, so a rollback never needs the dropped data.
+- **Verify the restore path**, not just that a backup was taken — an untested backup
+  is not a backup.
+
 ## Rollback
 
 The pipeline never auto-rolls-back production. A post-deploy failure (detected in
 CI) surfaces a **manual** rollback decision — investigate first, because a
-rollback against a forward-only migration can lose data. The concrete rollback
-commands (ECS task-definition revert, Lambda alias, Alembic downgrade, git
+rollback against a forward-only migration can lose data (this is why the
+backup-before-migrate step above is mandatory for migration changes). The concrete
+rollback commands (ECS task-definition revert, Lambda alias, Alembic downgrade, git
 revert) live in `docs/pipeline-deployment-targets.md` — pull them when wiring CI.
