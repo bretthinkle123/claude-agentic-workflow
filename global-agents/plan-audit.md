@@ -4,7 +4,7 @@ description: Audits .pipeline/plan.md after planning and before the human checkp
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
 effort: medium
-maxTurns: 15
+maxTurns: 20
 hooks:
   Stop:
     - hooks:

@@ -25,16 +25,57 @@ before your first command. Confirm them mentally too; if a command is blocked,
 
 ## Deploy sequence
 
-1. **Commit** — `git add -A && git commit -m "<concise summary from pr-description.md>"`.
-   This is the pipeline's single commit, capturing the exact reviewed state.
-   First confirm `.pipeline/` is gitignored — if `git status` shows `.pipeline/`
-   files staged, stop and report it; they must not be committed.
+1. **Inspect, then commit** — never blindly `git add -A && git commit`. Inspect the
+   pending change set **read-only, before staging** (see the caution below), against
+   the **pre-commit inspection checklist** below. On any hit: report the offending
+   paths/lines and **stop** for a human (add a `.gitignore` entry, remove the
+   artifact, or explicitly confirm it belongs) — do not commit. Only once clean, stage
+   and commit as a **single** command: `git add -A && git commit -m "<concise summary
+   from pr-description.md>"` — the pipeline's single commit, capturing the exact
+   reviewed state.
+
+   > **Do not stage, then inspect, then commit as separate steps.** The deployment
+   > gate recomputes the currency hash on every Bash command while the tree is dirty;
+   > `git add -A` moves untracked files out of `git ls-files --others` and into
+   > `git diff HEAD`, changing that hash and spuriously blocking your next command.
+   > Inspect the unstaged tree, then keep `git add -A && git commit` atomic.
 2. **Push** — `git push` (or `git push -u origin HEAD` if no upstream). This
    **prompts for explicit human approval** — it is intentionally not in the
    allow-list. Wait for approval.
 3. **Open PR** — `gh pr create --title "<title>" --body-file .pipeline/pr-description.md`
    (also prompts). Use GitHub MCP instead of `gh` if configured.
 4. **Report the PR URL and stop.**
+
+## Pre-commit inspection checklist
+
+This is the single source of truth for what must **not** land in a PR. The
+deployment agent runs it against the **unstaged** pending change set before every
+commit — paths via `git status --porcelain`, and content via the change-set stream
+`{ git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard | xargs -r cat; }`
+(the same tracked-diff-plus-untracked-contents the gate hashes; `2>/dev/null` tolerates
+a greenfield repo with no HEAD). Any hit means report and stop for a human.
+
+- **Pipeline interlock files** — `.pipeline/` must never be committed. If
+  `git status --porcelain` lists anything under `.pipeline/`, stop and report that it
+  is not gitignored (caught here before the commit, not merely trusted).
+- **Secrets and credentials** — no `.env`/`.env.*` (other than `.env.example`),
+  `*.pem`, `*.key`, `id_rsa*`, `*.p12`, `*.keystore`, `credentials`, `*.tfvars`, or
+  service-account JSON. Also grep the change set for inline secret values:
+  `{ git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard | xargs -r cat; } | grep -niE "(api[_-]?key|secret|password|token|private[_-]?key|aws_access_key_id|BEGIN [A-Z ]*PRIVATE KEY)\s*[:=]"`
+  — treat any hit as fix-now (the security agent scans the tree, but a value can
+  still be introduced in the reviewed→commit window).
+- **Build/dependency/artifact junk** — no `node_modules/`, `dist/`, `build/`,
+  `target/`, `.venv/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`, `coverage/`,
+  `.terraform/`, `*.tfstate*`, `*.log`, `.DS_Store`, `Thumbs.db`, or editor dirs
+  (`.idea/`, `.vscode/` unless intentionally tracked).
+- **Scratch / temp / large files** — no `*.tmp`, `*.bak`, `*.orig`, `*.swp`,
+  scratchpad output, or unexpectedly large blobs (`git diff HEAD --stat 2>/dev/null`, plus the
+  size of any untracked file — flag any single file adding thousands of lines or any
+  binary you did not expect).
+- **Merge-conflict markers and debug leftovers** — grep the change set for conflict
+  markers (`^(<<<<<<<|=======|>>>>>>>)`) and obvious debug residue (`debugger;`, stray
+  `console.log`/`print(` added purely for tracing, `TODO`/`FIXME` introduced by this
+  change) — report for a human call rather than committing silently.
 
 ## Rollback
 

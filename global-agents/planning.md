@@ -4,7 +4,7 @@ description: Defines scope and approach for a feature or change. Use at the star
 tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform
 model: opus
 effort: xhigh
-maxTurns: 20
+maxTurns: 30
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
 # docs/pipeline-mcp-config.md), never baked into the portable agent. The two tools
 # above resolve only on a project that opts in — aws-knowledge + terraform earn

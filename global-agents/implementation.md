@@ -4,7 +4,7 @@ description: Writes code against an approved plan in .pipeline/plan.md. Use afte
 tools: Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform
 model: sonnet
 effort: high
-maxTurns: 25
+maxTurns: 40
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
 # docs/pipeline-mcp-config.md), not baked into the portable agent. context7 gives
 # current, version-specific library APIs (the main per-feature token win — avoids
@@ -115,5 +115,24 @@ When invoked:
    say so explicitly in your report rather than silently leaving it — testing maps
    each criterion to a test next and will surface any gap.
 
-7. Report what changed (including any migration files created) and stop.
+7. **Emit the attack-surface delta hint** — write `.pipeline/surface-delta.md`, a
+   best-effort hint the security agent reconciles against the diff (it is **not**
+   the source of truth — the diff is). List every NEW or CHANGED attack surface
+   this change introduces, grouped into four categories, each entry with its
+   `file:line`:
+   - **New entry points** — HTTP routes/handlers, CLI commands, event/queue
+     consumers, webhook receivers, other public interfaces
+   - **New trust boundaries** — outbound calls to third-party APIs, new
+     dependencies that process untrusted data, `subprocess`/`exec` invocations,
+     SSRF-capable fetches
+   - **New data flows / sinks** — DB tables/queries, file read/write paths,
+     caches, queues, deserialization/parsing of external input, new categories of
+     logged data
+   - **New privilege / authz surface** — authenticated routes, role checks, token
+     issuance, anything widening what a caller can reach
+   Write only what this change actually adds; mark an empty category "none". If
+   the change introduces no new surface at all, still write the file with every
+   category "none" — its presence tells security the check ran. This raises
+   security's recall; it does not replace the security agent's own diff analysis.
+8. Report what changed (including any migration files created) and stop.
    The smoke-check hook runs automatically after you finish.

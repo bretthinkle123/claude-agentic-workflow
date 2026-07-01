@@ -14,8 +14,8 @@ hooks:
     - hooks:
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh deployment"
-model: haiku
-maxTurns: 8
+model: sonnet
+maxTurns: 15
 ---
 
 You are the deployment agent. Your job is to commit the reviewed change and
@@ -39,13 +39,31 @@ When invoked:
    - If the repo has **no commits yet** (greenfield first run, `git rev-parse HEAD`
      fails), skip branching: the first commit establishes the trunk. Report that
      no PR branch was created and that a PR is not applicable for the initial commit.
-2. **Commit the reviewed change.** Stage and commit the whole working tree
-   — this is the single commit point in the pipeline, capturing the exact code,
-   tests, and docs the human reviewed before invoking you:
-   `git add -A && git commit -m "<concise summary from .pipeline/pr-description.md>"`.
-   This assumes `.pipeline/` is gitignored (see *Prerequisites and environment →
-   One-time bootstrap*); if `git status` shows `.pipeline/` files staged, stop and
-   report it — they must not be committed.
+2. **Pre-commit content inspection.** Do not blindly `git add -A && git commit`.
+   Inspect the pending change set **read-only — do not stage yet.** Staging
+   mid-run changes the currency hash the deployment gate recomputes on every Bash
+   command (untracked files move out of `git ls-files --others` and into
+   `git diff HEAD`), which would spuriously block your next command. Look at exactly
+   what is about to be committed using the unstaged working tree:
+   - **paths**: `git status --porcelain` (staged, unstaged, and untracked)
+   - **content**: `{ git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard | xargs -r cat; }`
+     — the same tracked-diff-plus-untracked-contents change set the gate hashes
+     (the `2>/dev/null` tolerates a greenfield repo with no HEAD, where the untracked
+     listing already covers the whole tree)
+   Check both against the category list and grep patterns in the
+   **`deployment-checklist-and-rollback`** skill (preloaded) — pipeline interlock
+   files, secrets/credentials, build & dependency junk, scratch/temp/large blobs,
+   and merge-conflict/debug leftovers. If anything trips, **report the offending
+   paths/lines and stop** — do not commit; a human must resolve it (add a
+   `.gitignore` entry, remove the artifact, or explicitly confirm it belongs).
+   Nothing was staged, so there is nothing to unstage.
+3. **Commit the reviewed change.** Only once the inspection above is clean, stage
+   and commit as a **single** command — this is the single commit point in the
+   pipeline, capturing the exact code, tests, and docs the human reviewed before
+   invoking you: `git add -A && git commit -m "<concise summary from .pipeline/pr-description.md>"`.
+   Keep staging and commit in one command so the gate only ever sees the unstaged
+   reviewed tree (a stage left standing between commands would change the currency
+   hash and block the commit).
    The `deployment-gate.sh` hook runs before this command and blocks unless tests
    pass, security is clean, `pr-description.md` exists, and the working tree still
    matches documentation's `reviewed_change_hash` in `.pipeline/review-manifest.json`
@@ -54,16 +72,16 @@ When invoked:
    is checked here, on the commit. Your next commands — `git push`, `gh pr create`
    — run against a now-clean tree, so the gate passes them through without
    re-checking the hash.)
-3. **Push to GitHub.** Run `git push`. This command prompts for explicit human
+4. **Push to GitHub.** Run `git push`. This command prompts for explicit human
    approval (intentionally not in the allow-list) — wait for approval before
    proceeding. A freshly created feature branch has no upstream, so use
    `git push -u origin HEAD`.
-4. **Open a pull request.** Run `gh pr create --title "<title from pr-description.md>" --body-file .pipeline/pr-description.md`.
+5. **Open a pull request.** Run `gh pr create --title "<title from pr-description.md>" --body-file .pipeline/pr-description.md`.
    This also prompts for human approval (intentionally not in the allow-list).
    `gh` opens the PR from your feature branch into the default branch by default.
    If GitHub MCP is configured, use it instead of `gh`. (Skip this step on a
    greenfield first commit where no branch was created.)
-5. **Report the PR URL and stop.** Production deployment (CI checks, infrastructure
+6. **Report the PR URL and stop.** Production deployment (CI checks, infrastructure
    apply, app deploy, DB migrations, App Store submission) happens outside this
    pipeline after the PR is merged. See `docs/pipeline-deployment-targets.md` for
    those patterns when you are ready to add them.

@@ -145,7 +145,9 @@ fi
 GI="$TARGET/.gitignore"
 touch "$GI"
 added=0
-for line in ".pipeline/" ".env" ".envrc" "__pycache__/" "*.pyc" ".venv/" "venv/" "*.tfstate" "*.tfvars"; do
+for line in ".pipeline/" ".env" ".envrc" "__pycache__/" "*.pyc" ".venv/" "venv/" \
+            ".pytest_cache/" ".hypothesis/" ".ruff_cache/" ".coverage" "coverage.json" "htmlcov/" \
+            "*.db" "*.sqlite" "*.sqlite3" "*.tfstate" "*.tfvars"; do
   if ! grep -qxF "$line" "$GI" 2>/dev/null; then
     echo "$line" >> "$GI"
     added=$((added + 1))

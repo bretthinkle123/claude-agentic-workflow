@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Glob, Bash
 skills:
   - doc-conventions
 model: haiku
-maxTurns: 10
+maxTurns: 25
 hooks:
   Stop:
     - hooks:

@@ -22,6 +22,7 @@ and every human checkpoint.
 
 **Open decision gating PR 2:** confirm **implementation = `sonnet/high`** (the limit-aware default; recommended).
 **Settled (2026-06-29):** **security = `sonnet/high`** (not Opus) — the model only triages/verifies over a scoped diff while deterministic scanners do the detection, the stage re-fires every remediation cycle, and Sonnet's dedicated weekly pool spares the all-models cap. Opus stays confined to **planning** and **debugging** (low-volume, highest-reasoning).
+**OVERRIDDEN — security = `opus/high`:** the "only triages/verifies over a scoped diff" premise no longer holds — a **STRIDE delta / attack-surface reconciliation** step (6f) added real independent reasoning to the stage, so it was moved to Opus for stronger bug-finding. The override knowingly accepts the higher all-models weekly-cap draw (security is still the highest-volume re-firing stage) as a cost/quality trade. Opus now covers planning, debugging, and security.
 
 ---
 
@@ -61,15 +62,15 @@ and every human checkpoint.
 | plan-audit | `haiku` → `sonnet`, effort `medium` (now real) |
 | implementation | keep `sonnet`; effort `medium` → `high` |
 | debugging | `sonnet` → `opus`, effort `high` → `xhigh` |
-| security | `haiku` → `sonnet`, effort `medium` → `high` (Sonnet, not Opus: scanners are deterministic, the model only triages/verifies over a scoped diff, **the stage re-fires every remediation cycle** so cumulative volume is high, and Sonnet's dedicated weekly pool spares the all-models cap) |
+| security | `haiku` → `sonnet` → **`opus`** (overridden), effort `medium` → `high` (originally Sonnet to spare the all-models cap on a re-firing stage; **later moved to Opus** once 6f added independent STRIDE-delta reasoning — deliberate cost/quality trade, see the OVERRIDDEN note above) |
 | testing | `haiku` → `sonnet`, effort `medium` (now real) |
 | documentation | keep `haiku/low`; remove inert `effort:` |
-| deployment | `sonnet` → `haiku`; remove inert `effort:` |
+| deployment | `sonnet` → `haiku` → **`sonnet`** (later moved back): the haiku retune removed the inert `effort:`, but deployment then gained a **read-only pre-commit content inspection** step (secrets/junk/interlock/conflict scan before the single commit) that needs real judgment — so model returned to `sonnet` (maxTurns 8→15) |
 
 **`global-hooks/log-run.sh`:** update the hardcoded arg-2 model literal in each Stop-hook wiring to match; **recommended:** auto-derive the model so it can never desync again. (Note: unlike `notes`, the model is not in any `.pipeline/*` artifact or the hook env — derive it by parsing the invoking agent's frontmatter, e.g. `grep '^model:' "$HOME/.claude/agents/$STAGE.md"`, since `$STAGE` matches the agent filename for all 8.)
 
 **Verification:** run one feature; confirm `run-log.jsonl` records the correct model per stage.
-**Token impact:** **~1.7× (range ~1.6–1.9×), unmeasured until real-run telemetry.** The advisory's "~2–2.5×" assumed implementation→Opus, which this plan rejects. The large/high-volume stages stay Sonnet: implementation (same price tier, only `medium→high` effort) and **security** (which re-fires every remediation cycle — keeping it off Opus matters precisely because it isn't one-shot). Opus is confined to **planning** and **debugging** — both **low-volume** stages, so their cap impact is small even at Opus rates, while their reasoning value is highest. On the subscription-limit lens: Opus draws only the shared all-models weekly cap (no fallback if a pinned-Opus stage hits the wall), so confining Opus to low-volume stages keeps that scarce cap from being the bottleneck; Sonnet stages additionally tap the separate, more generous Sonnet weekly pool. **Risk:** low (revert = git revert). **Depends on:** implementation-model decision.
+**Token impact:** **~1.7× (range ~1.6–1.9×), unmeasured until real-run telemetry.** The advisory's "~2–2.5×" assumed implementation→Opus, which this plan rejects. The large/high-volume stages stay Sonnet: implementation (same price tier, only `medium→high` effort) and **security** (which re-fires every remediation cycle — keeping it off Opus matters precisely because it isn't one-shot). *[Superseded: security was later overridden to `opus/high` after step 6f added independent STRIDE-delta reasoning; this pushes the estimate somewhat above 1.7×. See the OVERRIDDEN note in the settled-decisions section.]* Opus is confined to **planning** and **debugging** — both **low-volume** stages, so their cap impact is small even at Opus rates, while their reasoning value is highest. On the subscription-limit lens: Opus draws only the shared all-models weekly cap (no fallback if a pinned-Opus stage hits the wall), so confining Opus to low-volume stages keeps that scarce cap from being the bottleneck; Sonnet stages additionally tap the separate, more generous Sonnet weekly pool. **Risk:** low (revert = git revert). **Depends on:** implementation-model decision.
 
 ---
 
@@ -185,7 +186,7 @@ by planning as an **acceptance criterion** and rides the existing `criteria_cove
 | 5 | Loops + circuit-breaker + digest | mod | 4 | ☑ |
 | 6 | Debugging upgrades | low | 2 | ☑ |
 
-**Token efficiency:** the retune dominates but lands **~1.7×** for this config (range ~1.6–1.9×, unmeasured until telemetry). Implementation and security — the high-volume / re-firing stages — stay Sonnet; **Opus is confined to planning + debugging, both low-volume**, so the spend lands where it is both cheap on the cap and decisive on quality (the advisory's "~2–2.5×" assumed implementation→Opus, which this plan rejects). On the limit lens, Opus draws only the shared all-models weekly cap with no fallback, so keeping it off the high-volume stages is what prevents that cap from gating a feature mid-run. Loops add *bounded* overhead on small stages only; the circuit-breaker (PR 5) is the non-negotiable cap backstop. The single biggest efficiency risk is an unbounded loop — which is why PR 5 ships the breaker with the loop.
+**Token efficiency:** the retune dominates but lands **~1.7×** for this config (range ~1.6–1.9×, unmeasured until telemetry). Implementation and security — the high-volume / re-firing stages — stay Sonnet *(security has since been overridden to `opus/high` — see the OVERRIDDEN note; this nudges the estimate up)*; **Opus is confined to planning + debugging, both low-volume**, so the spend lands where it is both cheap on the cap and decisive on quality (the advisory's "~2–2.5×" assumed implementation→Opus, which this plan rejects). On the limit lens, Opus draws only the shared all-models weekly cap with no fallback, so keeping it off the high-volume stages is what prevents that cap from gating a feature mid-run. Loops add *bounded* overhead on small stages only; the circuit-breaker (PR 5) is the non-negotiable cap backstop. The single biggest efficiency risk is an unbounded loop — which is why PR 5 ships the breaker with the loop.
 
 ---
 
@@ -202,7 +203,7 @@ The six PRs above are the *design units*. For delivery they collapse into **thre
 ### PR A — Instrument + retune  (= design PR 1 + PR 2) · ☑
 - **Why bundled:** doc-only + pure config, no behavior change. PR 1 corrects the advisory that PR 2 implements — the config-and-its-rationale pair.
 - **Build order inside:** PR 1 (advisory doc) → PR 2 (frontmatter retune + `log-run.sh` arg fix).
-- **Gate before merge:** implementation = `sonnet/high` and security = `sonnet/high` both settled (✓). Opus only on planning + debugging.
+- **Gate before merge:** implementation = `sonnet/high` settled (✓); security was `sonnet/high` at PR-A merge but has since been **moved to `opus/high`** (see the OVERRIDDEN note in the settled-decisions section). Opus now on planning, debugging, and security.
 - **Verify:** run one feature; `run-log.jsonl` records the correct model per stage; revert is a clean `git revert`.
 
 ### PR B — Smarter agents + contracts  (= design PR 3 + PR 4 + PR 6) · ☑
