@@ -115,7 +115,7 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Thirteen deterministic scripts — zero LLM cost
+├── global-hooks/           Fifteen deterministic scripts — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
@@ -128,6 +128,8 @@ claude-agentic-workflow/
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
 │   ├── semgrep-scan.sh         runs Semgrep via Docker (no native Windows build)
 │   ├── trivy-scan.sh           runs Trivy via Docker — container image/Dockerfile CVE scan (when a Dockerfile is in the change set)
+│   ├── lockfile-check.sh       supply-chain integrity (M6): manifest-without-lockfile blocks, unpinned deps warn; run by security, folds into its findings
+│   ├── generate-sbom.sh        writes .pipeline/sbom.cdx.json (CycloneDX via Trivy); run by security; best-effort, non-gating (M6)
 │   └── post-deploy-check.sh    [UNIMPLEMENTED] CI hook — runs after PR merges, not in pipeline
 │
 ├── global-skills/          Reference knowledge preloaded into agents that need it
@@ -356,6 +358,7 @@ directly, and report remaining findings. Runs:
 2. **OSV Scanner** — dependency CVE scanning
 3. **Checkov** — IaC scanning (only when `infra/` is in the change set)
 3b. **Trivy** via `trivy-scan.sh` Docker wrapper — container image / Dockerfile CVE + misconfig scanning (only when a `Dockerfile`/image is in the change set); critical CVEs fold into `critical_count` and block at the deploy gate
+3c. **Supply-chain (M6)** — `lockfile-check.sh`: a manifest changed without its lockfile blocks (folds into `critical_count`); unpinned/floating deps and bare re-locks warn. Plus `generate-sbom.sh` writes a CycloneDX `.pipeline/sbom.cdx.json` (best-effort, non-gating)
 4. **Manual checks** — secrets grep, row-level security audit, input sanitization, context-specific
    output encoding (HTML body/attribute, JavaScript, URL sinks), log-sink safety (log forging,
    secrets/PII in logs), STRIDE-mechanism verification, and **STRIDE delta / attack-surface
@@ -717,7 +720,8 @@ commit; until then, all changes live in the working tree.
 | `surface-delta.md` | implementation agent | security agent (6f STRIDE-delta reconciliation) | Best-effort hint listing new/changed attack surface (entry points, trust boundaries, data flows, privilege surface); non-authoritative — the diff is the source of truth |
 | `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
-| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,...}` |
+| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`) |
+| `sbom.cdx.json` | `generate-sbom.sh` (via security) | documentation (surfaces component count in the PR) | CycloneDX SBOM (M6); **best-effort, non-gating** — absent when Docker is unavailable |
 | `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
 | `test-quality.json` | testing agent | documentation (surfaces in PR description) | **Advisory — no gate/loop-exit reads it.** Mutation over changed core modules (`{tool,scope,score,killed,survived}`) + adversarial `gaps[]` ("what the tests don't catch") + `quality_ok` |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |

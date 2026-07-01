@@ -82,10 +82,29 @@ a greenfield repo with no HEAD). Any hit means report and stop for a human.
   `console.log`/`print(` added purely for tracing, `TODO`/`FIXME` introduced by this
   change) — report for a human call rather than committing silently.
 
+## Backup-before-migrate (data safety — M6)
+
+When the change set includes **database migrations**, the PR body must carry an
+explicit **backup-before-migrate** step for whoever runs the migration downstream
+(the pipeline stops at the PR; migrations execute in CI/prod, not here). State it in
+`pr-description.md` so it can't be forgotten:
+
+- **Snapshot before applying** — take a point-in-time backup / snapshot (e.g. RDS
+  snapshot, `pg_dump`, volume snapshot) **immediately before** `migrate up`, and
+  record how to restore it. A forward-only or destructive migration with no
+  pre-migration backup is the classic unrecoverable-data-loss path.
+- **Prefer expand/contract** — testing already round-trips the migration against a
+  prod-shaped seed (its step 5c); still gate the *destructive* half (drop column /
+  table, type narrowing) behind a separate, later release once the new shape is
+  proven in prod, so a rollback never needs the dropped data.
+- **Verify the restore path**, not just that a backup was taken — an untested backup
+  is not a backup.
+
 ## Rollback
 
 The pipeline never auto-rolls-back production. A post-deploy failure (detected in
 CI) surfaces a **manual** rollback decision — investigate first, because a
-rollback against a forward-only migration can lose data. The concrete rollback
-commands (ECS task-definition revert, Lambda alias, Alembic downgrade, git
+rollback against a forward-only migration can lose data (this is why the
+backup-before-migrate step above is mandatory for migration changes). The concrete
+rollback commands (ECS task-definition revert, Lambda alias, Alembic downgrade, git
 revert) live in `docs/pipeline-deployment-targets.md` — pull them when wiring CI.

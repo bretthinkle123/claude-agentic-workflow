@@ -76,6 +76,24 @@ When invoked:
    section (like an OSV CVE), but do not auto-bump base images. If the wrapper
    reports Docker is not running, surface that in your summary rather than skipping
    the scan silently.
+4c. **Supply-chain integrity (M6)** — run the deterministic lockfile check over the
+   change set and fold its result into your finding counts:
+   ```
+   $HOME/.claude/hooks/lockfile-check.sh
+   ```
+   Exit **2** is a **blocking** violation (a dependency manifest changed without its
+   lockfile — deps unlocked): record it in `critical_count` so it blocks at the deploy
+   gate, and name the missing lockfile in **Action required**. Exit **1** is
+   warnings (unpinned/floating version specifiers, or a lockfile re-locked with no
+   manifest change): record in `warning_count`. Exit 0 is clean.
+4d. **SBOM (M6)** — generate a CycloneDX software bill of materials as a provenance
+   artifact (non-gating):
+   ```
+   $HOME/.claude/hooks/generate-sbom.sh      # writes .pipeline/sbom.cdx.json (best-effort; no-ops without Docker)
+   ```
+   Note in your report whether the SBOM was produced and its component count;
+   documentation surfaces it in the PR description. A missing SBOM (no Docker) never
+   blocks — it is a best-effort artifact.
 5. If the change includes database migration files, scan each one for:
    - **No downgrade path** — a migration with an upgrade but no rollback
      function is flagged critical (it cannot be safely reverted in production).

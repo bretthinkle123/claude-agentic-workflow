@@ -59,7 +59,10 @@ These run **only when the change set triggers them** (the testing agent's steps
 
 - **Migration round-trip** (trigger: migration files) — scratch DB + up/down/up
   command: `<e.g. sqlite in-memory via alembic upgrade head && downgrade base && upgrade head;
-  or testcontainers Postgres>`. Data-preservation seed/assert: `<how, if applicable>`.
+  or testcontainers Postgres>`. **Seed a prod-shaped dataset first** (M6 — never
+  round-trip an empty schema): representative rows for every touched table (NULLs,
+  a FK graph, dozens of rows) then assert all survive down+up. Seed helper/fixture:
+  `<e.g. tests/fixtures/seed.py / factory-boy factories>`.
 - **Property-based / fuzz** (trigger: parsers/serializers/validation-contract inputs) —
   library + location: `<e.g. Hypothesis (Python) in tests/property/; fast-check (JS)>`.
 - **Concurrency / idempotency** (trigger: idempotent handler / idempotency key /

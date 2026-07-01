@@ -51,8 +51,10 @@ When invoked:
    In the Testing section, surface the **branch** coverage figure explicitly and,
    when `.pipeline/test-quality.json` exists, the advisory test-quality signal
    (mutation score over the changed core modules + notable adversarial gaps) — it
-   is reviewer context, not a gate. The deployment gate checks that this file
-   exists before allowing a deploy.
+   is reviewer context, not a gate. Add a **Supply chain** section: lockfile
+   integrity (from the security report) and, when `.pipeline/sbom.cdx.json` exists,
+   that a CycloneDX SBOM was generated + its component count. The deployment gate
+   checks that this file exists before allowing a deploy.
 7. **Record the reviewed-state hash — do this LAST, after every README,
    system_architecture.md, and source-tree edit is written**, so it captures the
    exact bytes the human will review and the deployment agent will commit. You

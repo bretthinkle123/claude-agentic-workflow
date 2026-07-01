@@ -82,12 +82,18 @@ When invoked:
    downgrade critical (its step 5), but a present downgrade can still be broken.
    On a scratch database (sqlite/in-memory, or a testcontainers instance per
    `test-conventions`), apply **up → down → up** and assert the schema
-   round-trips. When the plan declares data-preservation for the migration, seed
-   representative rows and assert they survive the down+up cycle. For a
-   **zero-downtime** change, verify the migration is expand/contract
-   (add-nullable → backfill → swap), never an in-place destructive rename in a
-   single step. Record the outcome in `resilience.migration_roundtrip` (step 7);
-   a broken round-trip is a `fail`. Skip entirely when no migration files changed.
+   round-trips. **Seed a prod-shaped dataset first (M6): don't round-trip an empty
+   schema.** Insert representative rows for every table the migration touches —
+   realistic values, NULLs/optionals exercised, a foreign-key graph, and enough
+   volume to surface a batch/`NOT NULL`/unique-constraint failure (dozens of rows,
+   not one) — then assert **every seeded row survives** the down+up cycle unchanged
+   (count + spot-check key columns). This upgrades the old "empty scratch DB"
+   round-trip: an empty schema round-trips even when a real backfill would drop or
+   corrupt data. For a **zero-downtime** change, verify the migration is
+   expand/contract (add-nullable → backfill → swap), never an in-place destructive
+   rename in a single step. Record the outcome in `resilience.migration_roundtrip`
+   (step 7); a broken round-trip **or** any seeded-data loss is a `fail`. Skip
+   entirely when no migration files changed.
 5d. **Property-based / fuzz tests (only for pure functions with non-trivial
    input domains — parsers, serializers, encoders, or any boundary input
    carrying a plan validation contract).** Author property tests with the
