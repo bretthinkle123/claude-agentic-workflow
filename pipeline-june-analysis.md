@@ -319,21 +319,24 @@ hours, **M** ≈ a focused session/day, **L** ≈ multi-session. Status: ✅ don
 
 **Critical path:** `M2 ✅ → PR F ✅ → PR G (M1) → PR H (M8) → PR I (M5·M6·F3) → PR J (Polish)` →
 [10/10 scaffolder] → `PR L (CI) → PR M (build) → PR N (envs+load) → PR O (observability) → PR P (scale/DR)`
-→ [10/10 fully-functional]. **PR K (M9)** and the **side-tracks** (front-end FE, api-edge AE, parallel-impl PI, doc-consolidation DOC; DB ✅ and SEC ✅ done) run in parallel — none on the critical path.
+→ [10/10 fully-functional]. **PR K (M9)** and the **side-tracks** (front-end FE, api-edge AE, parallel-impl PI, doc-consolidation DOC; DB ✅, SEC ✅, and DEP ✅ done) run in parallel — none on the critical path.
 
 ### Done (2026-06-30)
 - ✅ **M2 run #1** — pipeline built + shipped `linkly-pipeline-test` PR #1 end-to-end, independently
   audited. Findings in §8. *Headline: test rigor was better than feared; the real gaps are F1/F5.*
-- ✅ **PR F — M2 fast-fixes** (branch `feature/pr-f-m2-fixes`, not yet merged): **F2** bootstrap
-  `.gitignore` now excludes Python test/coverage/db artifacts (kills the currency-anchor break); **F4**
-  per-agent `maxTurns` bumped (testing 10→30, impl 25→40, docs 10→25, etc.) + `system_architecture.md`
-  synced. *Remaining M2 nits F3, F6 are folded into PR I / PR G below.*
+- ✅ **PR F — M2 fast-fixes** (**merged as PR #7**, 2026-07-01): **F2** bootstrap `.gitignore` now
+  excludes Python test/coverage/db artifacts (kills the currency-anchor break); **F4** per-agent
+  `maxTurns` bumped (testing 10→30, impl 25→40, docs 10→25, etc.). Shipped as a **combined PR** that
+  also carried **SEC** + **DEP** (see the side-track rows) and the implementation `opus`→`sonnet`
+  revert; `system_architecture.md` + `agentic-pipeline-plan.md` + decision docs synced. *Remaining M2
+  nits F3, F6 are folded into PR I / PR G below.* **Merged but not yet live — still needs
+  `install-global.sh` + restart.**
 
 ### Track 1 — harden the authoring engine → **10/10 scaffolder**
 
 | PR | Item | Effort | Depends on | Closes | Why here |
 |---|---|---|---|---|---|
-| **F** ✅ | M2 fast-fixes (`.gitignore` + `maxTurns`) | S | M2 | F2, F4 | Unblocks a clean second run; done. |
+| **F** ✅ | M2 fast-fixes (`.gitignore` + `maxTurns`) | S | M2 | F2, F4 | Unblocks a clean second run; **merged as PR #7** (bundled SEC + DEP + the impl revert). Needs publish to go live. |
 | **G** ⬜ | **Quality + criterion-completeness gate (M1, retargeted by M2)** — enforce that every *measurable dimension* of an acceptance criterion is actually exercised (fail F1: a perf budget naming `throughput_rps` while the test only measures serial latency); **surface branch coverage** (F5); add mutation testing (mutmut/Stryker) + an adversarial "what does this test *not* catch" review; fix results-file integrity nits (real `ran_at`, terminal `loop-state`) (F6). New `test-quality.json`, folds into the existing gate via a `quality_ok`/criterion-complete check — **no new gate hook.** | L | F | F1, F5, F6 | **The #1 gap and the biggest single lever.** M2 proved tests aren't tautological but *can* under-cover a criterion while scoring it complete. Build this against the real Linkly artifacts. |
 | **H** ⬜ | **Pipeline eval/regression harness (M8)** — golden fixtures (Linkly is fixture #1) run on every `global-agents`/`global-hooks`/`global-skills` change, asserting gate fired, criteria mapped, each conditional mode triggered/no-op, breaker bounded, cap-outs visible. | M | G | — | You edit agent prompts constantly; nothing catches a regression today except a full manual run. |
 | **I** ⬜ | **Review + supply-chain + data safety (M5 + M6 + F3)** — a hard human **diff-review** checkpoint (`diff-approved`, optionally `/code-review` pre-step); **lockfile enforcement + SBOM**; **prod-shaped migration seed + backup-before-migrate**; and a **guard so deployment can't self-re-anchor** the currency hash post-review (F3). | M | F | F3 | Makes a green run *trustworthy* and closes "bad dep / unsafe migration / silent re-anchor." |
@@ -375,7 +378,7 @@ Strictly dependency-ordered; each presupposes the prior.
 > deterministic-gate invariants; it extends them rightward across the merge boundary.
 
 ### What to do next
-1. **Merge PR F** (already built) and re-run `install-global.sh` so a second M2 run gets the fixes.
+1. **PR F is merged (PR #7).** Re-run `install-global.sh` (+ restart) so the merged agents/skills go live and a second M2 run gets the fixes.
 2. **Build PR G (M1)** — the highest-leverage remaining work; design it against the real Linkly
    test/results artifacts in `linkly-pipeline-test`, not in the abstract.
 3. Optionally run a **second M2** (e.g. the container/Dockerfile variant) once PR F is live, to feed
@@ -397,10 +400,10 @@ skills* prose paragraph in each agent body — both already carry the `Skill` to
 - *(Optional)* draft `global-skills/api-edge-conventions/scaffold/middleware.py` if you want buildable
   starter code like `auth-patterns`/`logging-conventions` ship.
 
-**Step 2 — Publish DB + AE + SEC together, then restart.**
+**Step 2 — Publish the merged PR #7 changes + AE, then restart.**
 ```
 bash scripts/list-skills.sh --annotate      # regenerates the loading breadcrumbs (AE → on-demand)
-bash scripts/install-global.sh              # publishes agents+skills to ~/.claude (carries DB + AE + SEC: security opus+6f, implementation surface-delta)
+bash scripts/install-global.sh              # publishes agents+skills to ~/.claude — carries the merged PR #7 (SEC security opus+6f, DEP deployment→sonnet, DB debugging maxTurns, impl surface-delta + sonnet revert) plus AE once wired in Step 1
 # then restart Claude Code / IDE so ~/.claude/agents + skills reload
 ```
 
