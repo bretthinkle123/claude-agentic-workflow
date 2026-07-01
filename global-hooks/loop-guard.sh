@@ -128,6 +128,14 @@ case "${1:-tick}" in
       echo "[loop-guard] no loop state to finalize (nothing to do)"
       exit 0
     fi
+    # Never overwrite a terminal cap-out. A `capped` loop is a hard human-stop that
+    # never reaches GREEN, so the orchestrator should not call `done` after one — but
+    # guard anyway so a stray call can't erase the cap-out signal. Non-blocking (exit 0):
+    # `done` must never break the handoff, and the `capped` status already governs.
+    if [ "$(jq -r '.status // "running"' "$LOOP_STATE")" = "capped" ]; then
+      echo "[loop-guard] loop is 'capped' (cap-out human-stop) — leaving it; not stamping completed." >&2
+      exit 0
+    fi
     mark_done
     echo "[loop-guard] loop finalized — status=completed"
     exit 0
