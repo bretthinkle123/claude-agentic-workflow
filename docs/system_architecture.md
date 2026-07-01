@@ -64,34 +64,34 @@ then run `./scripts/install-global.sh` and restart Claude Code. The repo is the 
 
 ```mermaid
 flowchart TD
-    START([Feature request]) --> P[planning agent\nopus · effort xhigh · maxTurns 20]
+    START([Feature request]) --> P[planning agent\nopus · effort xhigh · maxTurns 30]
     P -->|writes| PLAN[.pipeline/plan.md\n+ STRIDE threat model]
-    PLAN --> PA[plan-audit agent\nsonnet · effort medium · maxTurns 15]
+    PLAN --> PA[plan-audit agent\nsonnet · effort medium · maxTurns 20]
     PA -->|writes advisory| PAUDIT[.pipeline/plan-audit.md\nambiguity · dep-reality · version-policy flags]
     PAUDIT --> REV{revision_recommended?\nany material flag}
     REV -->|yes| PREV[planning — ONE revision\naddress material flags\nappend Revision notes]
     PREV --> HC
     REV -->|no| HC{Human checkpoint\nread plan.md + plan-audit.md\ntouch plan-approved}
     HC -->|rejected| P
-    HC -->|approved| I[implementation agent — SINGLE-SHOT\nsonnet · effort high · maxTurns 25]
+    HC -->|approved| I[implementation agent — SINGLE-SHOT\nsonnet · effort high · maxTurns 40]
     I -->|Stop hook fires| SC{smoke-check.sh\n+ infra-validate.sh}
-    SC -->|exit 2 = FAIL| DB1[debugging agent — sanity role\nopus · effort xhigh · maxTurns 15]
+    SC -->|exit 2 = FAIL| DB1[debugging agent — sanity role\nopus · effort xhigh · maxTurns 25]
     DB1 -->|fix applied\nretry count++| SC
     DB1 -->|cap hit| HC
     SC -->|exit 0 = PASS\nloop-guard.sh reset| LG{{loop-guard.sh tick\ncycle / wall-clock cap}}
     LG -->|cap hit| HC
-    LG -->|ok| SEC[security agent\nsonnet · effort high · maxTurns 20]
+    LG -->|ok| SEC[security agent\nopus · effort high · maxTurns 30]
     SEC -->|writes| SECREP[security-report.md\nsecurity-status.json]
-    SECREP --> TEST[testing agent\nsonnet · effort medium · maxTurns 10]
+    SECREP --> TEST[testing agent\nsonnet · effort medium · maxTurns 30]
     TEST -->|writes| TRES[test-results.json\n+ criteria_covered]
     TRES --> GREEN{GREEN? deterministic jq\nsecurity=clean · tests=pass\ncriteria_covered complete}
-    GREEN -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 15]
+    GREEN -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 25]
     DB2 -->|fix applied\nretry count++| LG
     DB2 -->|cap hit or unpatchable| HC
-    GREEN -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 10]
+    GREEN -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 25]
     DOC -->|writes| DOCS[README updates\npr-description.md\nreview-manifest.json]
     DOCS --> SOFTCK{Human pre-deploy review\nsoft checkpoint\nread code + docs}
-    SOFTCK --> DEP[deployment agent\nhaiku · maxTurns 8]
+    SOFTCK --> DEP[deployment agent\nhaiku · maxTurns 15]
     DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n5 conditions checked}
     GATE -->|blocked| DEP
     GATE -->|passed| COMMIT[git commit\ngit push\ngh pr create]
@@ -198,7 +198,7 @@ it, which is why all cross-stage state must travel through `.pipeline/` files.
 |---|---|
 | Model | `opus` |
 | Effort | `xhigh` |
-| maxTurns | 20 |
+| maxTurns | 30 |
 | Tools | Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `stride-threat-model-template` |
 | On-demand skills | `ddia-patterns`, `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions`, `containerization-conventions` |
@@ -229,7 +229,7 @@ definition-of-done that implementation builds to and testing maps to tests.
 |---|---|
 | Model | `sonnet` |
 | Effort | `medium` |
-| maxTurns | 15 |
+| maxTurns | 20 |
 | Tools | Read, Grep, Glob, Bash, Write |
 | Preloaded skills | none (the version policy is inlined in the agent body) |
 | Stop hook | `log-run.sh plan-audit` |
@@ -267,7 +267,7 @@ the checkpoint.
 |---|---|
 | Model | `sonnet` |
 | Effort | `high` |
-| maxTurns | 25 |
+| maxTurns | 40 |
 | Tools | Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `code-standards` |
 | On-demand skills | `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions` |
@@ -294,7 +294,7 @@ Sonnet weekly pool. Sonnet at high effort handles well-specified build tasks eff
 |---|---|
 | Model | `opus` |
 | Effort | `xhigh` |
-| maxTurns | 15 |
+| maxTurns | 25 |
 | Tools | Read, Write, Edit, Bash, Grep |
 | Preloaded skills | `debugging-escalation-protocol` |
 | Stop hook | `log-run.sh debugging` |
@@ -325,9 +325,9 @@ fixes, not just symptoms. It fires only on failure, so the Opus cost is small in
 
 | Property | Value |
 |---|---|
-| Model | `sonnet` |
+| Model | `opus` |
 | Effort | `high` |
-| maxTurns | 20 |
+| maxTurns | 30 |
 | Tools | Read, Edit, Bash, Grep, Write, Skill |
 | Preloaded skills | `semgrep-ruleset-guide`, `diff-scoping-conventions` |
 | On-demand skills | `iac-conventions` (only when `infra/` exists) |
@@ -343,18 +343,29 @@ directly, and report remaining findings. Runs:
 3b. **Trivy** via `trivy-scan.sh` Docker wrapper — container image / Dockerfile CVE + misconfig scanning (only when a `Dockerfile`/image is in the change set); critical CVEs fold into `critical_count` and block at the deploy gate
 4. **Manual checks** — secrets grep, row-level security audit, input sanitization, context-specific
    output encoding (HTML body/attribute, JavaScript, URL sinks), log-sink safety (log forging,
-   secrets/PII in logs), and STRIDE-mechanism verification
+   secrets/PII in logs), STRIDE-mechanism verification, and **STRIDE delta / attack-surface
+   reconciliation** — reconciles the diff's new/changed entry points, trust boundaries, and data
+   flows against the plan's threat model, so the implemented app's attack surface is checked against
+   what was planned (uses the implementation agent's `.pipeline/surface-delta.md` hint, but the diff
+   is the source of truth). Newly-discovered exploitable gaps that are minimally fixable are patched
+   in place; design-level gaps are raised as critical findings that route to debugging.
 
-Writes two output files: `security-report.md` (human-readable) and `security-status.json`
-(machine-readable, parsed by gate hooks). Status is `clean` unless `critical_count > 0` — warnings
-are surfaced but do not block.
+Writes two output files: `security-report.md` (human-readable — including a **Complete findings
+inventory** listing every finding regardless of severity/exploitability/remediation, plus a STRIDE
+delta addendum) and `security-status.json` (machine-readable, parsed by gate hooks; carries
+`critical_count`, `warning_count`, `fixed_count`, `total_findings`, and `stride_new_threats`).
+Status is `clean` unless `critical_count > 0` — warnings are surfaced but do not block.
 
-**Why sonnet + high effort?** The scanners (Semgrep/OSV/Checkov) are deterministic and
-model-independent, but triage, the manual IDOR/RLS/validation checks, STRIDE-mechanism
-verification, and remediation are real reasoning — and the stage **re-fires on every remediation
-cycle**, so its cumulative volume is high. Sonnet/high gives that judgment enough capability while
-staying on the dedicated Sonnet weekly pool (Opus would be the most expensive choice on a re-firing
-stage).
+**Why opus + high effort?** The scanners (Semgrep/OSV/Checkov/Trivy) are deterministic and
+model-independent, but triage, the manual IDOR/RLS/validation checks, STRIDE-mechanism verification,
+the **STRIDE delta reconciliation**, and remediation are real reasoning — and that reasoning half
+grew when attack-surface reconciliation (6f) was added, tipping the choice to Opus for its stronger
+bug-finding recall and precision. **This overrides the earlier settled decision to keep security on
+`sonnet/high`** (2026-06-29, made to spare the shared all-models weekly cap since the stage re-fires
+on every remediation cycle). The override accepts that higher cap draw in exchange for the reasoning
+quality the expanded manual analysis now warrants; see the decision docs for the full rationale.
+The stage is still the highest-volume re-firing one, so this is the deliberate cost/quality trade,
+not a free upgrade.
 
 ---
 
@@ -364,7 +375,7 @@ stage).
 |---|---|
 | Model | `sonnet` |
 | Effort | `medium` |
-| maxTurns | 10 |
+| maxTurns | 30 |
 | Tools | Bash, Read, Write, Edit |
 | Preloaded skills | `test-conventions`, `diff-scoping-conventions` |
 | Stop hooks (in order) | `record-clean.sh`, `log-run.sh testing` |
@@ -395,7 +406,7 @@ coverage and test counts.
 |---|---|
 | Model | `haiku` |
 | Effort | *(none — Haiku exposes no effort levels)* |
-| maxTurns | 10 |
+| maxTurns | 25 |
 | Tools | Read, Write, Edit, Glob, Bash |
 | Preloaded skills | `doc-conventions` |
 | Stop hook | `log-run.sh documentation` |
@@ -418,7 +429,7 @@ committed change. The hash must be recorded *after* those writes, so it captures
 |---|---|
 | Model | `haiku` |
 | Effort | *(none — Haiku exposes no effort levels)* |
-| maxTurns | 8 |
+| maxTurns | 15 |
 | Tools | Bash |
 | Preloaded skills | `deployment-checklist-and-rollback` |
 | PreToolUse hook | `deployment-gate.sh` (fires before every Bash call) |
@@ -636,9 +647,10 @@ commit; until then, all changes live in the working tree.
 | `plan-audit.md` | plan-audit agent | orchestrator (`revision_recommended`), planning (revision pass), human (checkpoint) | Advisory flags: completeness, ambiguity, dependency reality, version policy — each material/advisory; non-gating |
 | `acceptance.md` | planning agent | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag) | Per-criterion contract: ID, criterion, file/layer, how verified |
 | `plan-approved` | human (`touch`) | implementation agent (refuses to start without it) | The human checkpoint gate marker |
+| `surface-delta.md` | implementation agent | security agent (6f STRIDE-delta reconciliation) | Best-effort hint listing new/changed attack surface (entry points, trust boundaries, data flows, privilege surface); non-authoritative — the diff is the source of truth |
 | `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
-| `security-status.json` | security agent | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,...}` |
+| `security-status.json` | security agent | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,...}` |
 | `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `coverage` (gated `combined` + best-effort per-suite `unit`/`integration`) |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |

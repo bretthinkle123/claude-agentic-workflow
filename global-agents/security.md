@@ -2,9 +2,9 @@
 name: security
 description: Runs SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE scanning (OSV Scanner). Use after a successful smoke check, before testing. Fixes exploitable vulnerabilities (any severity) and critical/high hygiene findings directly; reports remaining warnings.
 tools: Read, Edit, Bash, Grep, Write, Skill
-model: sonnet
+model: opus
 effort: high
-maxTurns: 20
+maxTurns: 30
 # No MCP servers by design: security's work is deterministic — it runs
 # Semgrep/OSV/Checkov (shell) and reports the findings; it does not research
 # provider docs. SAST stays a shell hook, never MCP. (aws-knowledge+terraform were
@@ -85,7 +85,7 @@ When invoked:
    Record migration findings in the same `critical_count` / `warning_count`
    totals as other findings.
 6. **Manual security checks** — invariants and verifications that scanners miss or
-   under-report (a–e below). Fold all findings into the same `critical_count` /
+   under-report (a–f below). Fold all findings into the same `critical_count` /
    `warning_count` totals.
 
    **a. Secrets / API key exposure** — grep the change set for string literals
@@ -159,6 +159,58 @@ When invoked:
      body, password, token, API key, or unredacted PII as **critical** (see the
      `logging-conventions` redaction rules).
 
+   **f. STRIDE delta / attack-surface reconciliation** — the plan's threat model
+   was built before the code existed; the implementation may have introduced
+   attack surface it never covered. 6d verifies *planned* mitigations are
+   present; this check finds surface that was *never planned*. Working **from the
+   diff-scoped change set** (not the whole app), identify each NEW or CHANGED
+   trust boundary, entry point, or data flow, and check whether the plan's
+   `## Threat Model` already covers it.
+
+   **Read `.pipeline/surface-delta.md` if present** — a non-authoritative hint
+   from the implementation agent listing surface it is aware of introducing. Use
+   it to raise the floor on what you inspect, but **the diff is the source of
+   truth**: verify every hinted surface against the actual diff (a hint entry
+   with no corresponding diff change is stale — note and ignore it), and
+   independently scan the diff for surface the hint omitted. Implementation can
+   only hint what it recognized as security-relevant, so a surface absent from
+   the hint is still fully your responsibility to catch. If the file is missing,
+   proceed diff-only — never block on its absence.
+
+   Surfaces to look for:
+   - **New entry points** — added HTTP routes/handlers, CLI commands, event/queue
+     consumers, webhook receivers, or other public interfaces
+   - **New trust boundaries** — new outbound calls to third-party APIs, new
+     external dependencies that process untrusted data, new subprocess/`exec`
+     invocations, new SSRF-capable fetches
+   - **New data flows / sinks** — new DB tables or queries, file read/write paths,
+     caches, message queues, deserialization/parsing of external input, or new
+     categories of data being logged
+   - **New privilege / authz surface** — new authenticated routes, role checks,
+     token issuance, or anything that widens what a caller can reach
+   For each new/changed surface, walk the relevant STRIDE categories (Spoofing,
+   Tampering, Repudiation, Information disclosure, Denial of service, Elevation
+   of privilege) and ask: is there a threat-model entry with a mitigation for
+   this surface? If yes → covered (6d already verifies the mechanism is present).
+   If **no threat-model entry covers this surface**, it is a **STRIDE gap** — a
+   real attack surface nobody threat-modeled. Disposition:
+   - **Exploitable and minimally fixable** (a targeted control closes it — input
+     validation, an authz predicate, output encoding, a scheme allowlist) → fix
+     it in place under step 7's exploitable rule; record it in the threat-model
+     addendum (step 8) with `disposition: fixed`.
+   - **Needs a design decision** (the mitigation requires an architectural change,
+     a new component, or a dependency) → do **not** patch it. Record it as a
+     **critical** finding via step 7's "could not remediate — human review
+     required" path. It stays counted in `critical_count`, so the gate flips to
+     `issues-found` and hands off to the **debugging** remediation role, which
+     owns the patch-vs-escalate-to-planning decision (per the
+     `debugging-escalation-protocol`). Security never routes to planning itself.
+   Append every STRIDE gap — fixed or raised-critical — to the threat-model
+   addendum (step 8) with its STRIDE category, the surface, and its disposition.
+   Record a `stride_new_threats` count (gaps found, regardless of disposition) in
+   `security-status.json` (step 9). A change set that introduces no new surface
+   has `stride_new_threats: 0` and no addendum entries.
+
 7. **Remediation** — work through every finding from steps 2–6 and act:
 
    **Fix immediately (exploitable threats, any severity):** These have a direct
@@ -171,6 +223,8 @@ When invoked:
    - IDOR / missing row-level security scoping predicates on user-owned data
    - Missing input validation before business logic or DB queries
    - Missing STRIDE mechanisms (step 6d critical findings)
+   - Newly-introduced exploitable attack surface with no threat-model coverage
+     that is minimally fixable (step 6f STRIDE gaps)
    - Log forging, or secrets / PII written to logs (step 6e)
    - Any Semgrep OWASP Top 10 finding regardless of its reported severity
 
@@ -213,22 +267,48 @@ When invoked:
      if findings were found and fixed. Warnings never affect status.
    - `ran_at`, `scope` (`diff`|`full`), `since_commit` (the HEAD hash the
      working-tree diff was measured against, or `null` on a full first scan)
-   - `critical_count` (remaining after fixes), `warning_count`, `fixed_count`
+   - `critical_count` (remaining after fixes), `warning_count`, `fixed_count`,
+     and `total_findings` (every finding surfaced by any source in steps 2–6,
+     pre-fix — the count of rows in the Complete findings inventory below)
    - `semgrep_findings`, `osv_findings`, plus `checkov_findings` when infra was scanned and `trivy_findings` when a container image/Dockerfile was scanned (counts per tool, pre-fix)
+   - A **Complete findings inventory** — this is the authoritative record and
+     the sections below are just focused views onto it. List EVERY finding from
+     steps 2–6 exactly once, **regardless of severity, exploitability, or
+     whether it was fixed** — nothing may be omitted on the grounds that it is
+     low-severity, unexploitable, or not remediated. Render as a table, one row
+     per finding, with columns: `source` (semgrep | osv | checkov | trivy |
+     migration | manual-6a…6f), `id` (rule ID / CVE / check name), `severity`
+     (as reported by the scanner, or your assessed severity for manual
+     findings), `exploitable` (yes/no — the step-7 attack-vector judgment),
+     `location` (file:line), and `disposition` (fixed | could-not-remediate |
+     reported-only | action-required). Unexploitable and medium/low findings
+     get a full row here even though they are deliberately not fixed (see
+     step 7) — the point is complete visibility, not complete remediation.
    - A **Fixes applied** section listing each remediation (file, line, before/after)
    - A **Could not remediate** section for any finding that resisted fixing
    - An **Action required** section for OSV CVEs (package, CVE, safe version)
+   - A **STRIDE delta addendum** section — every new attack surface found in
+     step 6f, listed as: STRIDE category, the new/changed surface (endpoint,
+     dependency, data sink…), the gap, and its disposition — matching the
+     inventory vocabulary: `fixed` (closed in place) or `could-not-remediate`
+     (raised as a critical finding for the debugging remediation role). This is the threat
+     model reconciled against what was actually implemented; leave it empty if
+     the diff added no new surface. Every entry also appears as a row in the
+     Complete findings inventory.
 9. ALSO write a machine-readable `.pipeline/security-status.json` so the gate
    hooks parse status with `jq` (already a required tool) instead of grepping
    the markdown — the hooks NEVER parse the `.md`:
    ```json
    { "status": "clean", "critical_count": 0, "warning_count": 1,
-     "fixed_count": 3, "ran_at": "<ISO timestamp>", "scope": "diff",
-     "since_commit": "<hash|null>",
-     "stride_mechanisms_verified": 4, "stride_mechanisms_missing": 0 }
+     "fixed_count": 3, "total_findings": 4, "ran_at": "<ISO timestamp>",
+     "scope": "diff", "since_commit": "<hash|null>",
+     "stride_mechanisms_verified": 4, "stride_mechanisms_missing": 0,
+     "stride_new_threats": 0 }
    ```
 10. **Self-audit before writing reports.** Before writing any output file, verify:
     - Every file in the diff-scoped change set appears in the scan results (none silently skipped).
+    - The **Complete findings inventory** contains every finding from steps 2–6 — every scanner result (2–5) and every manual finding (6a–6f) — with none omitted on grounds of low severity, non-exploitability, or not being fixed. `total_findings` equals the inventory row count, and every row in the Fixes applied / Could not remediate / Action required sections traces back to exactly one inventory row.
+    - Every new/changed attack surface introduced by the diff was reconciled against the threat model (step 6f): each STRIDE gap appears in both the **STRIDE delta addendum** and the Complete findings inventory, and `stride_new_threats` equals the number of gaps found. A diff that adds no new surface records `stride_new_threats: 0` with an empty addendum.
     - Every remaining critical finding includes a specific file path and line number — no vague "potential issue" entries.
     - `security-status.json` counts (`critical_count`, `warning_count`, `fixed_count`) exactly match the totals in `security-report.md`.
     - `status` in both files is "issues-found" if and only if `critical_count > 0` **after remediation**.

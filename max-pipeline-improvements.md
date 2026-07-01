@@ -32,7 +32,7 @@ explicitly.
 > **⚑ SETTLED DECISIONS (2026-06-29) — these supersede the recommendations below wherever they differ.**
 > The execution plan ([`pipeline-revision-plan.md`](pipeline-revision-plan.md)) is now authoritative for *what was decided*; this advisory remains the *why*. Net deltas from the recommendations in this document:
 > - **Telemetry is WIRED, not `[UNIMPLEMENTED]`.** `log-run.sh` runs as a `Stop` hook on all 8 agents (status / notes / coverage / tier-counts auto-derived; the model now auto-derives from each agent's frontmatter so it can't desync). The remaining gap is *reading* the log (a digest), not wiring it. Treat every "`run-log.jsonl` is `[UNIMPLEMENTED]`" line below as stale.
-> - **Implementation stays `sonnet/high`** (not `opus/xhigh`) and **security is `sonnet/high`** (not `opus`). Opus is confined to **planning** and **debugging** (low-volume, highest-reasoning). Rationale: implementation and security are the high-volume / re-firing stages; Sonnet has a dedicated weekly pool; Opus draws only the no-fallback all-models cap. Net retune ≈ **1.7×**, not 2–2.5×.
+> - **Implementation stays `sonnet/high`** (not `opus/xhigh`). **Security was `sonnet/high`, now OVERRIDDEN to `opus/high`** after a STRIDE delta / attack-surface reconciliation step (6f) added independent reasoning to the stage — Opus for stronger bug-finding, knowingly accepting the higher all-models-cap draw (security is still the highest-volume re-firing stage). Opus now covers **planning, debugging, and security**; Sonnet keeps plan-audit, implementation, testing. The 1.7× retune estimate below predates this override and now runs slightly higher.
 > - **`effort` on Haiku is inert** (harness-gated; errors at the raw-API level) — removed from the Haiku agents, not "a bug."
 > - **`xhigh` sits between `high` and `max`** (not "top-of-range"; `max` is higher) and is **not applied to any Sonnet stage**.
 > - **The `.codex` Codex mirror was deleted** — Anthropic-only environment; agent edits are single-source in `global-agents/`.
@@ -301,6 +301,7 @@ ios-simulator) that a mobile project uncomments.
 | `mobile-accessibility` | VoiceOver/TalkBack labels & roles (`accessibilityLabel`/`accessibilityRole`), Dynamic Type / font scaling, **44×44pt (iOS) / 48×48dp (Android)** tap targets, contrast, focus order | a11y step, testing | **P2** |
 | `design-system-conventions` | Design tokens, spacing/type scale, the chosen component kit (NativeWind / Tamagui for RN; shadcn/Radix for web), visual-regression conventions, the "propose N directions before building" pattern | design-review, implementation | **P2** |
 | `performance-conventions` | Load testing (k6 / Locust), backend perf budgets (p95 latency, N+1 detection), mobile startup/bundle-size budgets, profiling entry points | perf-review, testing | **P3** |
+| `api-edge-conventions` | **DRAFTED** (`global-skills/api-edge-conventions/SKILL.md`). Request-lifecycle hardening: rate limiting/throttling, CORS, security-header set, the error-envelope facade, idempotency keys, outbound timeouts/retries. The implementation counterpart to STRIDE's DoS/Tampering threats; defers auth to `auth-patterns` and logging to `logging-conventions`. Wiring TODO: add its trigger to the *on-demand skills* prose paragraph in the `planning` + `implementation` agent **bodies** (NOT `skills:` frontmatter — that preloads; both already have the `Skill` tool), then `list-skills.sh --annotate` + `install-global.sh` + restart | planning, implementation | **P2** |
 
 Note the existing **`containerization-conventions`** gap recorded in memory (no
 implementation/security wiring for authoring Dockerfiles/manifests or image scanning) — the
@@ -458,10 +459,29 @@ backend-shaped.
   design-review + implementation path so the agent generates against real tokens/layout
   instead of guessing — the difference between "generic AI UI" and "matches the design."
   Combine with the "propose N directions before building" pattern for greenfield screens.
+- **Claude Design as a design source (verified real — Anthropic Labs, Opus 4.7 research
+  preview).** A third input path into the `design-spec` stage, alongside Figma Dev Mode MCP
+  and propose-N-directions. A human designs the UI feature interactively in Claude Design
+  (start from a prompt, uploaded images/docs, or by **linking this repo** so output matches
+  our existing components/tokens), then uses **"Send to Claude Code"** to emit a **handoff
+  bundle**: vanilla HTML/CSS/JS, per-state screenshots, the design tokens used on the canvas,
+  and a README naming the target stack + conventions. That bundle *is* the `design-spec`
+  input — it feeds the `design-approved` checkpoint, then the implementation agent
+  **translates the vanilla markup into our framework** (React/JS per stack; it is not
+  drop-in components). Two guardrails carried from the deferred-frontend memo: the handoff is
+  the spec the deterministic **visual-regression pixel-diff gates against**, never itself a
+  gate; and screenshot/README text is **untrusted input** — advisory to the build, never a
+  driver of a deterministic gate.
+- **Base the `design-system-conventions` skill on the official `frontend-design` plugin.**
+  Anthropic ships `frontend-design` (in `anthropics/claude-code/plugins/`) — a two-pass
+  "design-lead" skill that forces a token plan (4–6 hex palette; display/body/utility type;
+  layout + ASCII wireframe; one signature element), self-critiques it against generic
+  defaults, then builds. Adopt it as-is or fork it as the starting point for
+  `design-system-conventions` rather than writing aesthetic guidance from scratch.
 
-The net: a `design-spec` stage + a design-conformance review + visual-regression in the
-runner + an a11y budget turns the front-end from "renders" into "professional and
-publishable."
+The net: a `design-spec` stage (fed by **Claude Design handoff / Figma MCP /
+propose-N-directions**) + a design-conformance review + visual-regression in the runner + an
+a11y budget turns the front-end from "renders" into "professional and publishable."
 
 ---
 

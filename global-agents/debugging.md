@@ -4,7 +4,7 @@ description: Root-cause analysis and fixes, triggered by a failed smoke check or
 tools: Read, Write, Edit, Bash, Grep
 model: opus
 effort: xhigh
-maxTurns: 15
+maxTurns: 30
 hooks:
   Stop:
     - hooks:

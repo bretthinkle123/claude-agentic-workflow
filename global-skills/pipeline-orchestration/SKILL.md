@@ -100,6 +100,7 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 | `plan-audit.md` | plan-audit | orchestrator (`revision_recommended`), planning (revision pass), human (advisory, non-gating) |
 | `acceptance.md` | planning | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag) |
 | `plan-approved` | human | implementation (refuses to start without it) |
+| `surface-delta.md` | implementation | security (6f STRIDE-delta reconciliation — non-authoritative hint; the diff is source of truth) |
 | `debug-notes.md` | debugging | human (root-cause + evidence trail; advisory) |
 | `security-report.md` / `security-status.json` | security | documentation (md), gate hooks (json) |
 | `test-results.json` | testing | record-clean.sh, deployment-gate.sh, documentation |

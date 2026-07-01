@@ -4,7 +4,7 @@ description: Writes missing unit and integration tests, runs the test suite, and
 tools: Bash, Read, Write, Edit
 model: sonnet
 effort: medium
-maxTurns: 10
+maxTurns: 30
 skills:
   - test-conventions
   - diff-scoping-conventions
