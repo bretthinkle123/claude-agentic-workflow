@@ -656,7 +656,8 @@ approval. It is **no longer the deploy gate's currency anchor** — the human-ow
 **Called by:** a **human** at the diff-review checkpoint (M5), after documentation — never an agent.
 
 **Logic:** Refuses unless stdin is a TTY (a subagent's Bash has no controlling terminal, so it cannot
-self-approve). Computes the change-set hash via `compute-change-hash.sh`, verifies it matches
+approve *through this helper*; deployment is separately instructed never to write the marker directly,
+and fully preventing a fabricated marker is a PR K threat-model item). Computes the change-set hash via `compute-change-hash.sh`, verifies it matches
 documentation's `reviewed_change_hash`, prompts for a typed `approve`, then writes
 `.pipeline/diff-approved` = `{approved_change_hash, approved_at, note}`. This is the gate's human
 review + currency anchor.

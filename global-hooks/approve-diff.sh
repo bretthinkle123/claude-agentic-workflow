@@ -12,8 +12,11 @@
 # deployment-gate.sh recomputes, so the two match byte-for-byte.
 #
 # HUMAN-ONLY BY DESIGN: refuses unless stdin is a TTY. A subagent's Bash tool runs
-# non-interactively (no controlling terminal), so the deployment agent cannot
-# self-approve and bypass the checkpoint. Run it yourself from your terminal:
+# non-interactively (no controlling terminal), so the deployment agent cannot approve
+# *through this helper*. It is also instructed never to write .pipeline/diff-approved by
+# any other means; the gate can't tell who wrote the file, so fully preventing a
+# determined/prompt-injected deployer from fabricating the marker is a pipeline
+# threat-model item (roadmap PR K). Run it yourself from your terminal:
 #     bash ~/.claude/hooks/approve-diff.sh
 set -euo pipefail
 
@@ -26,7 +29,7 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Human-only guard: no TTY ⇒ an automated/agent caller ⇒ refuse. This is what makes
 # the checkpoint a real human gate rather than something the deployment agent can tick.
-[ -t 0 ] || { echo "approve-diff: refusing — this is the human diff-review checkpoint and must be run interactively (no TTY detected). A subagent cannot self-approve." >&2; exit 2; }
+[ -t 0 ] || { echo "approve-diff: refusing — this is the human diff-review checkpoint and must be run interactively (no TTY detected). A subagent must not approve on your behalf." >&2; exit 2; }
 
 command -v jq >/dev/null 2>&1 || { echo "approve-diff: jq not found on PATH." >&2; exit 2; }
 

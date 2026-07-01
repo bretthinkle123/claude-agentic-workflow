@@ -162,8 +162,9 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
   (stamps `loop-state.json` `status="completed"` — the successful counterpart to the
   cap-out `capped`, so the file never reads `running` after a clean run), then invoke docs.
 - **Documentation → human diff-review (M5) → deployment:** after documentation, a
-  **human** reviews the diff + reports and runs `approve-diff.sh` (TTY-only; a subagent
-  cannot self-approve). The orchestrator does not invoke deployment until
+  **human** reviews the diff + reports and runs `approve-diff.sh` (TTY-only, so a subagent
+  can't approve through the helper; deployment is also forbidden to write `diff-approved`
+  itself — an adversarial deployer fabricating it is a PR K item). The orchestrator does not invoke deployment until
   `.pipeline/diff-approved` exists — the deploy-side counterpart to `plan-approved`.
 - **Documentation → deployment:** the `PreToolUse` gate enforces tests pass,
   security clean, **acceptance criteria fully covered**, `pr-description.md` exists,

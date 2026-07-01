@@ -63,4 +63,36 @@ w="$(mktemp -d)"; _WORKDIRS+=("$w")
 ( cd "$w" && git init -q && git config user.email t@local && git config user.name t && printf '{"dependencies":{"x":"^1"}}\n' > package.json ) >/dev/null 2>&1
 assert_eq 0 "$(run_lc "$w")" "outside a pipeline project → no-op (0)"
 
+# --- dependency-aware (the audit fix): committed manifest+lock, then edit ---
+# helper: baseline repo with a COMMITTED package.json (pinned) + lockfile
+lc_committed_npm() {
+  local w; w="$(lc_work)"
+  ( cd "$w"
+    printf '{"name":"x","dependencies":{"a":"1.0.0"}}\n' > package.json
+    printf '{"lockfileVersion":3}\n' > package-lock.json
+    git add package.json package-lock.json && git commit -qm deps
+  ) >/dev/null 2>&1
+  echo "$w"
+}
+
+# 10. metadata-only edit (scripts), deps unchanged, no lockfile touch → CLEAN (was a false-positive block)
+w="$(lc_committed_npm)"; printf '{"name":"x","scripts":{"t":"jest"},"dependencies":{"a":"1.0.0"}}\n' > "$w/package.json"
+assert_eq 0 "$(run_lc "$w")" "npm metadata-only edit, deps unchanged → clean (0)"
+
+# 11. an actual dependency change with no lockfile update → BLOCK
+w="$(lc_committed_npm)"; printf '{"name":"x","dependencies":{"a":"2.0.0"}}\n' > "$w/package.json"
+assert_eq 2 "$(run_lc "$w")" "npm dependency changed, no lockfile → block (2)"
+
+# 12. dependency change WITH the lockfile updated → CLEAN
+w="$(lc_committed_npm)"
+printf '{"name":"x","dependencies":{"a":"2.0.0"}}\n' > "$w/package.json"
+printf '{"lockfileVersion":3,"x":1}\n' > "$w/package-lock.json"
+assert_eq 0 "$(run_lc "$w")" "npm dep change + lockfile updated → clean (0)"
+
+# 13. modified pyproject without a lock → WARN (can't parse TOML deps; don't false-block)
+w="$(lc_work)"
+( cd "$w" && printf '[project]\nname="x"\ndependencies=["requests==2.31.0"]\n' > pyproject.toml && printf '[]' > poetry.lock && git add -A && git commit -qm deps ) >/dev/null 2>&1
+printf '[project]\nname="x"\nversion="1.2.0"\ndependencies=["requests==2.31.0"]\n' > "$w/pyproject.toml"
+assert_eq 1 "$(run_lc "$w")" "modified pyproject, no lock in set → warn not block (1)"
+
 finish lockfile-check

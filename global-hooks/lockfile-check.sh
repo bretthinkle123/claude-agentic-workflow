@@ -28,15 +28,41 @@ changed_has() { printf '%s\n' "$CHANGED" | grep -qiE "(^|/)$1$"; }
 block=0; warn=0
 say() { echo "[lockfile-check] $1"; }
 
-# --- Rule 1: manifest changed without a lockfile update (BLOCK) ---
-if changed_has 'package\.json' \
-   && ! { changed_has 'package-lock\.json' || changed_has 'npm-shrinkwrap\.json' || changed_has 'yarn\.lock' || changed_has 'pnpm-lock\.yaml'; }; then
-  say "BLOCK: package.json changed but no lockfile (package-lock.json / yarn.lock / pnpm-lock.yaml) in the change set — dependencies are unlocked. Commit the updated lockfile."; block=1
-fi
-if changed_has 'pyproject\.toml' \
-   && ! { changed_has 'poetry\.lock' || changed_has 'Pipfile\.lock'; }; then
-  say "BLOCK: pyproject.toml changed but no poetry.lock / Pipfile.lock in the change set — dependencies are unlocked. Commit the updated lockfile."; block=1
-fi
+# A manifest is "new" if it isn't tracked at HEAD (a brand-new dependency file).
+manifest_is_new() { ! git ls-files --error-unmatch "$1" >/dev/null 2>&1; }
+# npm dependency maps only (sorted) — so a scripts/name/version-only edit doesn't
+# look like a dependency change.
+npm_dep_maps() { jq -cS '{d:(.dependencies//{}),e:(.devDependencies//{}),p:(.peerDependencies//{}),o:(.optionalDependencies//{})}' 2>/dev/null; }
+
+npm_lock_in_set() { changed_has 'package-lock\.json' || changed_has 'npm-shrinkwrap\.json' || changed_has 'yarn\.lock' || changed_has 'pnpm-lock\.yaml'; }
+
+# --- Rule 1: DEPENDENCIES changed without a lockfile update (BLOCK) ---
+# Precise for npm (compare dep maps): block only when deps actually changed and no
+# lockfile is in the change set — a scripts/metadata-only manifest edit is NOT blocked
+# (a gate that fires on non-dependency edits just trains people to bypass it).
+while IFS= read -r pj; do
+  [ -n "$pj" ] && [ -f "$pj" ] || continue
+  npm_lock_in_set && continue
+  if manifest_is_new "$pj"; then
+    say "BLOCK: new $pj declares dependencies with no lockfile (package-lock.json / yarn.lock / pnpm-lock.yaml) in the change set — commit the lockfile."; block=1
+  elif command -v jq >/dev/null 2>&1 \
+       && [ "$(git show "HEAD:$pj" 2>/dev/null | npm_dep_maps)" != "$(npm_dep_maps < "$pj")" ]; then
+    say "BLOCK: $pj dependencies changed but no lockfile update in the change set — dependencies are unlocked. Commit the updated lockfile."; block=1
+  fi
+done <<< "$(printf '%s\n' "$CHANGED" | grep -iE '(^|/)package\.json$')"
+
+# python (pyproject): TOML dependency parsing isn't available in bash, so we can't
+# tell a dependency change from a metadata edit. Block only a NEW manifest; otherwise
+# WARN (never hard-block a possibly-metadata-only pyproject edit).
+while IFS= read -r pp; do
+  [ -n "$pp" ] && [ -f "$pp" ] || continue
+  { changed_has 'poetry\.lock' || changed_has 'Pipfile\.lock'; } && continue
+  if manifest_is_new "$pp"; then
+    say "BLOCK: new $pp declares dependencies with no poetry.lock / Pipfile.lock in the change set — commit the lockfile."; block=1
+  else
+    say "WARN: $pp changed with no poetry.lock / Pipfile.lock update — if you changed dependencies, commit the updated lockfile."; warn=1
+  fi
+done <<< "$(printf '%s\n' "$CHANGED" | grep -iE '(^|/)pyproject\.toml$')"
 
 # --- Rule 3: a lockfile changed with no manifest change (WARN) ---
 if { changed_has 'package-lock\.json' || changed_has 'yarn\.lock' || changed_has 'pnpm-lock\.yaml'; } && ! changed_has 'package\.json'; then
