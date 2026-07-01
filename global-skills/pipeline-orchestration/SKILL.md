@@ -51,6 +51,9 @@ string and those files — never assume it can see the conversation.
      # (pr-description, currency) come from documentation AFTER the loop — not the loop's job.
      # planning / plan-audit / implementation / documentation / deployment NEVER run inside this loop.
 
+4b. bash ~/.claude/hooks/loop-guard.sh done   # GREEN exit: stamp loop-state.json status="completed"
+     # (counterpart to the cap-out "capped"; without it the file is left "running" after a clean run)
+
 5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
      -> REVIEW POINT: read code, tests, docs, pr-description before deploying
 6. Agent(deployment, "Commit the reviewed change and open a PR on GitHub.")
@@ -111,7 +114,7 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 | `security-report.md` / `security-status.json` | security | documentation (md), gate hooks (json) |
 | `test-results.json` | testing | record-clean.sh, deployment-gate.sh (incl. perf-completeness), documentation |
 | `test-quality.json` | testing | documentation (surfaces mutation score + adversarial gaps); **advisory — no gate reads it** |
-| `loop-state.json` | loop-guard.sh (`reset`/`tick`) | loop-guard.sh (feature-level cycle/wall-clock budget; independent of `record-clean.sh`) |
+| `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh (feature-level cycle/wall-clock budget; independent of `record-clean.sh`). Terminal `status`: `capped` (cap-out) or `completed` (`done`, on GREEN exit); left `running` only mid-loop |
 | `pr-description.md` | documentation | deployment, gate |
 | `review-manifest.json` | documentation | deployment-gate.sh (currency anchor) |
 | `state.json` | bootstrap / security / debugging | debugging, record-clean.sh |
@@ -149,7 +152,9 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
   can't refill the budget. A tick returning **exit 2 is a CAP HIT: stop the loop and
   escalate to a human** — documentation/deployment do not run, and the orchestrator
   must not auto-clear it.
-- **GREEN → documentation:** only invoke docs once the loop has exited GREEN.
+- **GREEN → documentation:** once the loop exits GREEN, run `loop-guard.sh done`
+  (stamps `loop-state.json` `status="completed"` — the successful counterpart to the
+  cap-out `capped`, so the file never reads `running` after a clean run), then invoke docs.
 - **Documentation → deployment:** the `PreToolUse` gate enforces tests pass,
   security clean, **acceptance criteria fully covered**, `pr-description.md` exists,
   and currency vs `reviewed_change_hash`.

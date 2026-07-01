@@ -561,6 +561,11 @@ that ships with the autonomous loop** (PR C).
 5. `tick` increments `cycles`; if `cycles > max_cycles` **or** elapsed `> max_wall_clock_s`, it marks
    `status:"capped"` and exits **2** (CAP HIT → stop the loop, escalate to a human, do not auto-clear).
    Otherwise exits 0 (continue). `status` prints the current budget read-only.
+6. `done` is the terminal **GREEN-exit** stamp (F6): the orchestrator calls it once after the loop
+   exits GREEN and before documentation, setting `status:"completed"` (+ `completed_at`). It is the
+   successful counterpart to the cap-out `capped`, so `loop-state.json` never reads `running` after a
+   clean run. Idempotent and non-fatal — a missing state file just no-ops (exit 0), never blocking the
+   GREEN→documentation handoff.
 
 **Why a separate file:** `loop-state.json` is owned solely by loop-guard, so the feature-level budget
 is **independent of** the per-cycle `debug_retry_count` that `record-clean.sh` resets on every clean
@@ -693,7 +698,7 @@ commit; until then, all changes live in the working tree.
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |
-| `loop-state.json` | loop-guard.sh (`reset`/`tick`) | loop-guard.sh | Feature-level breaker budget: `{"cycles":N,"max_cycles":5,"started_epoch":...,"max_wall_clock_s":3600,"status":"running\|capped"}`. Independent of `record-clean.sh` resets |
+| `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh | Feature-level breaker budget: `{"cycles":N,"max_cycles":5,"started_epoch":...,"max_wall_clock_s":3600,"status":"running\|capped\|completed"}`. `done` stamps the terminal `completed` on GREEN exit (counterpart to cap-out `capped`); left `running` only mid-loop. Independent of `record-clean.sh` resets |
 | `smoke-status.json` | smoke-check.sh | log-run.sh (implementation status) | `{"status":"pass|fail","ran_at":"..."}` |
 | `smoke.env` | bootstrap-project.sh | smoke-check.sh | Per-project start/health/build commands (gitignored, local only) |
 | `infra-plan.txt` | infra-validate.sh | human review | `terraform plan` output for the human checkpoint |

@@ -265,8 +265,10 @@ When invoked:
    - `status`: set to "issues-found" if any critical findings **remain after
      remediation**; otherwise "clean". A fully remediated run is "clean" even
      if findings were found and fixed. Warnings never affect status.
-   - `ran_at`, `scope` (`diff`|`full`), `since_commit` (the HEAD hash the
-     working-tree diff was measured against, or `null` on a full first scan)
+   - `ran_at` — the real wall-clock time of this scan: capture it with
+     `date -u +%Y-%m-%dT%H:%M:%SZ` (you have Bash) and paste that value; never a
+     placeholder like `...T00:00:00Z`. `scope` (`diff`|`full`), `since_commit` (the
+     HEAD hash the working-tree diff was measured against, or `null` on a full first scan)
    - `critical_count` (remaining after fixes), `warning_count`, `fixed_count`,
      and `total_findings` (every finding surfaced by any source in steps 2–6,
      pre-fix — the count of rows in the Complete findings inventory below)

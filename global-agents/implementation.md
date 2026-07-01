@@ -31,7 +31,9 @@ wrong, stop and say so rather than improvising a different direction.
 touches that area):** `auth-patterns` for auth code, `logging-conventions` for
 logging/observability code, `secrets-management` when the code consumes a runtime
 secret (build the fetch-at-runtime facade, never embed a value),
-`iac-conventions` for `infra/` Terraform. The plan
+`iac-conventions` for `infra/` Terraform; `api-edge-conventions` when the change
+exposes or consumes an HTTP surface (routes, public API, webhooks, outbound calls).
+The plan
 tells you which layers are in scope; load the matching skill before writing that
 code. Default backend code is **Python**, default frontend **JavaScript**.
 
