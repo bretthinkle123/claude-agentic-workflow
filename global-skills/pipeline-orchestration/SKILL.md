@@ -56,10 +56,15 @@ string and those files — never assume it can see the conversation.
 
 5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
 5b. HARD HUMAN DIFF-REVIEW CHECKPOINT (M5) — the deploy-side counterpart to plan-approved:
-     -> (optional) run /code-review so the human reviews an already-triaged diff
-     -> present the diff + security/test/quality reports; the HUMAN reviews, then runs:
+     -> run /code-review on the working diff as a STANDARD automated pre-step (review-only —
+        NOT --fix: applying changes here would alter the tree and force a re-review). Surface its
+        findings so the human reviews an already-triaged diff. Advisory: findings inform, don't gate;
+        a /code-review hiccup never wedges the pipeline — fall back to presenting the raw diff.
+     -> present the diff + the /code-review findings + security/test/quality reports; the HUMAN
+        reviews and runs:
           bash ~/.claude/hooks/approve-diff.sh     # human-only (refuses without a TTY); writes .pipeline/diff-approved
      -> do NOT invoke deployment until .pipeline/diff-approved exists (mirrors the plan-approved gate)
+     -> if the human acts on a finding, the tree changes → re-run documentation + re-approve
 6. Agent(deployment, "Commit the reviewed change and open a PR on GitHub.")  # only after diff-approved
      -> deployment-gate.sh (PreToolUse) blocks the commit unless every gate passes,
         including the human diff approval + that the commit matches the approved hash
@@ -161,11 +166,13 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 - **GREEN → documentation:** once the loop exits GREEN, run `loop-guard.sh done`
   (stamps `loop-state.json` `status="completed"` — the successful counterpart to the
   cap-out `capped`, so the file never reads `running` after a clean run), then invoke docs.
-- **Documentation → human diff-review (M5) → deployment:** after documentation, a
-  **human** reviews the diff + reports and runs `approve-diff.sh` (TTY-only, so a subagent
-  can't approve through the helper; deployment is also forbidden to write `diff-approved`
-  itself — an adversarial deployer fabricating it is a PR K item). The orchestrator does not invoke deployment until
-  `.pipeline/diff-approved` exists — the deploy-side counterpart to `plan-approved`.
+- **Documentation → human diff-review (M5) → deployment:** after documentation, the
+  orchestrator runs **`/code-review` as a standard automated pre-step** (review-only) and
+  surfaces its findings, then a **human** reviews the diff + those findings + the reports and
+  runs `approve-diff.sh` (TTY-only, so a subagent can't approve through the helper; deployment
+  is also forbidden to write `diff-approved` itself — an adversarial deployer fabricating it is
+  a PR K item). The orchestrator does not invoke deployment until `.pipeline/diff-approved`
+  exists — the deploy-side counterpart to `plan-approved`.
 - **Documentation → deployment:** the `PreToolUse` gate enforces tests pass,
   security clean, **acceptance criteria fully covered**, `pr-description.md` exists,
   a **human `diff-approved`** exists, and the commit matches its `approved_change_hash`
