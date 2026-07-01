@@ -19,6 +19,9 @@
 #   loop-guard.sh reset    # once at feature start (after plan-approved), before the loop
 #   loop-guard.sh          # "tick": increment the cycle, check caps; exit 0 = go, 2 = stop
 #   loop-guard.sh status   # print the current budget (read-only); exit 0
+#   loop-guard.sh done     # on GREEN loop-exit: stamp a terminal status="completed"
+#                          # (the counterpart to the cap-out "capped"; without it the
+#                          #  file is left "running" after a successful run — see F6)
 #
 # Config (env override, with defaults). An optional `.pipeline/loop.env` is sourced
 # if present (same pattern as smoke.env):
@@ -55,6 +58,11 @@ init_state() {
 mark_capped() {
   local tmp; tmp=$(mktemp)
   jq '.status="capped"' "$LOOP_STATE" > "$tmp" && mv "$tmp" "$LOOP_STATE"
+}
+
+mark_done() {
+  local tmp; tmp=$(mktemp)
+  jq --arg iso "$NOW_ISO" '.status="completed" | .completed_at=$iso' "$LOOP_STATE" > "$tmp" && mv "$tmp" "$LOOP_STATE"
 }
 
 case "${1:-tick}" in
@@ -109,8 +117,32 @@ case "${1:-tick}" in
     exit 0
     ;;
 
+  done)
+    # Terminal GREEN-exit stamp. The orchestrator calls this ONCE, right after the
+    # run-to-condition loop exits GREEN and before documentation, so loop-state.json
+    # reflects a completed run instead of being left "running" (F6). Idempotent and
+    # non-fatal: a missing state file (no loop was run) just no-ops with exit 0 — it
+    # must never block the GREEN→documentation handoff. Only cap-out (exit 2) is a
+    # hard human-stop; "completed" is the normal successful terminal state.
+    if [ ! -f "$LOOP_STATE" ]; then
+      echo "[loop-guard] no loop state to finalize (nothing to do)"
+      exit 0
+    fi
+    # Never overwrite a terminal cap-out. A `capped` loop is a hard human-stop that
+    # never reaches GREEN, so the orchestrator should not call `done` after one — but
+    # guard anyway so a stray call can't erase the cap-out signal. Non-blocking (exit 0):
+    # `done` must never break the handoff, and the `capped` status already governs.
+    if [ "$(jq -r '.status // "running"' "$LOOP_STATE")" = "capped" ]; then
+      echo "[loop-guard] loop is 'capped' (cap-out human-stop) — leaving it; not stamping completed." >&2
+      exit 0
+    fi
+    mark_done
+    echo "[loop-guard] loop finalized — status=completed"
+    exit 0
+    ;;
+
   *)
-    echo "Usage: loop-guard.sh [reset|tick|status]" >&2
+    echo "Usage: loop-guard.sh [reset|tick|status|done]" >&2
     exit 2
     ;;
 esac

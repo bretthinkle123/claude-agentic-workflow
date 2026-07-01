@@ -2455,6 +2455,8 @@ v1 is driven from an interactive Claude Code session — you are the orchestrato
         # GREEN = exactly the gate's test/security/criteria checks (its other two,
         # pr-description + currency, come from documentation after the loop).
         # planning/plan-audit/implementation/documentation/deployment NEVER run inside the loop.
+4b. bash ~/.claude/hooks/loop-guard.sh done       # GREEN exit: stamp loop-state.json status="completed"
+                                                   # (counterpart to cap-out "capped"; never left "running" after a clean run)
 5.  Agent(documentation,  "Update docs for the diff. Write .pipeline/pr-description.md.")  # only after GREEN
         -> REVIEW POINT: read the finished result (code, tests, docs, pr-description) before deploying
 6.  Agent(deployment,     "Commit the reviewed change and open a PR on GitHub.")

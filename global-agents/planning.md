@@ -29,7 +29,9 @@ the plan adds or changes storage/messaging; `auth-patterns` when it touches
 identity or protected resources; `logging-conventions` when it produces new
 observable events; `secrets-management` when the feature consumes runtime secrets
 or credentials (API keys, DB passwords, tokens); `iac-conventions` when it
-provisions cloud infrastructure;
+provisions cloud infrastructure; `api-edge-conventions` when the feature exposes
+or consumes an HTTP surface (new routes, public API, webhook receiver, outbound
+third-party calls);
 `containerization-conventions` when weighing how the app is packaged and run
 (containerized vs. direct process vs. serverless, and Kubernetes vs. a managed
 container runtime). Invoke the relevant one before you plan that layer; for an

@@ -12,6 +12,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
+          command: "$HOME/.claude/hooks/stamp-ran-at.sh testing"
+        - type: command
           command: "$HOME/.claude/hooks/record-clean.sh"
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh testing"
@@ -162,7 +164,12 @@ When invoked:
    exactly what you tested. (Note: the deployment gate's *currency* check anchors
    to documentation's later `reviewed_change_hash`, not this one, because
    documentation writes README/architecture files after you run; `tested_change_hash`
-   is your tested-scope record, not the deploy gate's reference.):
+   is your tested-scope record, not the deploy gate's reference.)
+   **`ran_at` must be the real wall-clock time of this run — capture it with
+   `date -u +%Y-%m-%dT%H:%M:%SZ` (you have Bash) and paste that value; never a
+   placeholder like `...T00:00:00Z`.** (A `stamp-ran-at.sh` Stop hook also
+   re-stamps `ran_at` to the real UTC time deterministically, so it is guaranteed
+   even if you miss it — but write it correctly anyway.)
    ```json
    {
      "status": "pass|fail",

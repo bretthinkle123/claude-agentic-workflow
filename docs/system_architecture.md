@@ -115,11 +115,12 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Eleven deterministic scripts — zero LLM cost
+├── global-hooks/           Twelve deterministic scripts — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
-│   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle (caps the loop)
+│   ├── stamp-ran-at.sh         stamps real UTC ran_at into test-results/security-status JSON; fires first on testing + security Stop (F6)
+│   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle / done@GREEN-exit (caps the loop)
 │   ├── deployment-gate.sh      blocks git commit unless 5 conditions met; PreToolUse on deployment
 │   ├── write-review-manifest.sh writes reviewed_change_hash anchor; called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
@@ -338,7 +339,7 @@ fixes, not just symptoms. It fires only on failure, so the Opus cost is small in
 | Tools | Read, Edit, Bash, Grep, Write, Skill |
 | Preloaded skills | `semgrep-ruleset-guide`, `diff-scoping-conventions` |
 | On-demand skills | `iac-conventions` (only when `infra/` exists) |
-| Stop hook | `log-run.sh security` |
+| Stop hooks (in order) | `stamp-ran-at.sh security`, `log-run.sh security` |
 
 **Responsibility:** Scan the working-tree change set (tracked diff + untracked files since last
 commit), fix exploitable vulnerabilities (any severity) and critical/high hygiene findings
@@ -385,7 +386,7 @@ not a free upgrade.
 | maxTurns | 30 |
 | Tools | Bash, Read, Write, Edit |
 | Preloaded skills | `test-conventions`, `diff-scoping-conventions` |
-| Stop hooks (in order) | `record-clean.sh`, `log-run.sh testing` |
+| Stop hooks (in order) | `stamp-ran-at.sh testing`, `record-clean.sh`, `log-run.sh testing` |
 
 **Responsibility:** Write missing unit and integration tests for the change set, then run the
 full suite with coverage. Follows the plan's `test_strategy` shape (`pyramid` default, or
@@ -561,6 +562,11 @@ that ships with the autonomous loop** (PR C).
 5. `tick` increments `cycles`; if `cycles > max_cycles` **or** elapsed `> max_wall_clock_s`, it marks
    `status:"capped"` and exits **2** (CAP HIT → stop the loop, escalate to a human, do not auto-clear).
    Otherwise exits 0 (continue). `status` prints the current budget read-only.
+6. `done` is the terminal **GREEN-exit** stamp (F6): the orchestrator calls it once after the loop
+   exits GREEN and before documentation, setting `status:"completed"` (+ `completed_at`). It is the
+   successful counterpart to the cap-out `capped`, so `loop-state.json` never reads `running` after a
+   clean run. Idempotent and non-fatal — a missing state file just no-ops (exit 0), never blocking the
+   GREEN→documentation handoff.
 
 **Why a separate file:** `loop-state.json` is owned solely by loop-guard, so the feature-level budget
 is **independent of** the per-cycle `debug_retry_count` that `record-clean.sh` resets on every clean
@@ -687,13 +693,13 @@ commit; until then, all changes live in the working tree.
 | `surface-delta.md` | implementation agent | security agent (6f STRIDE-delta reconciliation) | Best-effort hint listing new/changed attack surface (entry points, trust boundaries, data flows, privilege surface); non-authoritative — the diff is the source of truth |
 | `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
-| `security-status.json` | security agent | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,...}` |
-| `test-results.json` | testing agent | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
+| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,...}` |
+| `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
 | `test-quality.json` | testing agent | documentation (surfaces in PR description) | **Advisory — no gate/loop-exit reads it.** Mutation over changed core modules (`{tool,scope,score,killed,survived}`) + adversarial `gaps[]` ("what the tests don't catch") + `quality_ok` |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | deployment-gate.sh | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — currency anchor |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |
-| `loop-state.json` | loop-guard.sh (`reset`/`tick`) | loop-guard.sh | Feature-level breaker budget: `{"cycles":N,"max_cycles":5,"started_epoch":...,"max_wall_clock_s":3600,"status":"running\|capped"}`. Independent of `record-clean.sh` resets |
+| `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh | Feature-level breaker budget: `{"cycles":N,"max_cycles":5,"started_epoch":...,"max_wall_clock_s":3600,"status":"running\|capped\|completed"}`. `done` stamps the terminal `completed` on GREEN exit (counterpart to cap-out `capped`); left `running` only mid-loop. Independent of `record-clean.sh` resets |
 | `smoke-status.json` | smoke-check.sh | log-run.sh (implementation status) | `{"status":"pass|fail","ran_at":"..."}` |
 | `smoke.env` | bootstrap-project.sh | smoke-check.sh | Per-project start/health/build commands (gitignored, local only) |
 | `infra-plan.txt` | infra-validate.sh | human review | `terraform plan` output for the human checkpoint |
