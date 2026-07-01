@@ -65,7 +65,7 @@ and every human checkpoint.
 | security | `haiku` → `sonnet` → **`opus`** (overridden), effort `medium` → `high` (originally Sonnet to spare the all-models cap on a re-firing stage; **later moved to Opus** once 6f added independent STRIDE-delta reasoning — deliberate cost/quality trade, see the OVERRIDDEN note above) |
 | testing | `haiku` → `sonnet`, effort `medium` (now real) |
 | documentation | keep `haiku/low`; remove inert `effort:` |
-| deployment | `sonnet` → `haiku`; remove inert `effort:` |
+| deployment | `sonnet` → `haiku` → **`sonnet`** (later moved back): the haiku retune removed the inert `effort:`, but deployment then gained a **read-only pre-commit content inspection** step (secrets/junk/interlock/conflict scan before the single commit) that needs real judgment — so model returned to `sonnet` (maxTurns 8→15) |
 
 **`global-hooks/log-run.sh`:** update the hardcoded arg-2 model literal in each Stop-hook wiring to match; **recommended:** auto-derive the model so it can never desync again. (Note: unlike `notes`, the model is not in any `.pipeline/*` artifact or the hook env — derive it by parsing the invoking agent's frontmatter, e.g. `grep '^model:' "$HOME/.claude/agents/$STAGE.md"`, since `$STAGE` matches the agent filename for all 8.)
 

@@ -196,7 +196,7 @@ documentation** has no effect — it isn't buying the depth it implies. **Implic
 is a real lever only on a stage running **Sonnet 4.6 or the Opus 4.x family**. That is an
 independent reason — beyond raw capability — to move the *reasoning-heavy* Haiku stages up.
 
-**Recommended wiring under Max** *(original analysis — **partly superseded by the SETTLED DECISIONS banner at the top of this doc**: implementation and security ship `sonnet/high`, not Opus; deployment ships `haiku`; net retune ≈ 1.7×, not 2–2.5×. The table is kept as the capability-first reasoning; the settled allocation wins wherever they differ):*
+**Recommended wiring under Max** *(original analysis — **partly superseded by the SETTLED DECISIONS banner at the top of this doc**: implementation ships `sonnet/high`; **security ships `opus/high`** (overridden from sonnet — 6f); **deployment ships `sonnet`** (moved back from haiku for its pre-commit inspection); net retune now runs somewhat above the ≈1.7× estimated here. The table is kept as the capability-first reasoning; the settled + later-overridden allocation wins wherever they differ):*
 
 | Agent | → Model / Effort | Why | Stage-cost multiplier* | Impl. effort | Risk |
 |---|---|---|---|---|---|

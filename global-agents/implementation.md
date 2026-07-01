@@ -2,8 +2,8 @@
 name: implementation
 description: Writes code against an approved plan in .pipeline/plan.md. Use after the planning agent's output has been reviewed and approved.
 tools: Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform
-model: opus
-effort: xhigh
+model: sonnet
+effort: high
 maxTurns: 40
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
 # docs/pipeline-mcp-config.md), not baked into the portable agent. context7 gives

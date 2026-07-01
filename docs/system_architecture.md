@@ -91,7 +91,7 @@ flowchart TD
     GREEN -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 25]
     DOC -->|writes| DOCS[README updates\npr-description.md\nreview-manifest.json]
     DOCS --> SOFTCK{Human pre-deploy review\nsoft checkpoint\nread code + docs}
-    SOFTCK --> DEP[deployment agent\nhaiku · maxTurns 15]
+    SOFTCK --> DEP[deployment agent\nsonnet · maxTurns 15]
     DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n5 conditions checked}
     GATE -->|blocked| DEP
     GATE -->|passed| COMMIT[git commit\ngit push\ngh pr create]
@@ -196,7 +196,7 @@ it, which is why all cross-stage state must travel through `.pipeline/` files.
 
 | Property | Value |
 |---|---|
-| Model | `opus` |
+| Model | `opus` — **planned move to `fable` (Claude Fable 5)**, see note below |
 | Effort | `xhigh` |
 | maxTurns | 30 |
 | Tools | Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform |
@@ -213,6 +213,13 @@ full reasoning, not just the outcome.
 the plan wrong is the most expensive mistake in the pipeline — every downstream agent spends tokens
 on a bad direction. It is also a low-volume stage, so Opus barely dents the weekly cap. Opus at
 xhigh effort is the right investment here.
+
+> **Planned (near future): `opus` → `fable` (Claude Fable 5).** Brett intends to move the planning
+> agent to Fable 5 — Anthropic's most capable model — for its open-ended, long-horizon reasoning
+> strength on exactly the uncertain-requirements work planning does. It fits the same low-volume
+> rationale above: Fable's higher price ($10/$50 vs Opus's $5/$25 per MTok) is affordable on a stage
+> that fires once per feature, and it draws only the shared all-models weekly cap. `effort: xhigh`
+> carries over (Fable supports the effort levels). **Not yet applied** — this note records the intent.
 
 **Human checkpoint:** after planning stops, the plan-audit agent runs automatically (below); if it
 sets `revision_recommended: true`, planning is re-invoked **once** to address the material flags
@@ -427,8 +434,8 @@ committed change. The hash must be recorded *after* those writes, so it captures
 
 | Property | Value |
 |---|---|
-| Model | `haiku` |
-| Effort | *(none — Haiku exposes no effort levels)* |
+| Model | `sonnet` |
+| Effort | *(unset in frontmatter — Sonnet defaults to `high`)* |
 | maxTurns | 15 |
 | Tools | Bash |
 | Preloaded skills | `deployment-checklist-and-rollback` |
@@ -436,12 +443,20 @@ committed change. The hash must be recorded *after* those writes, so it captures
 | Stop hook | `log-run.sh deployment` |
 
 **Responsibility:** The pipeline's only commit point. Creates a feature branch if needed, then
-runs `git add -A && git commit`. Before that command executes, `deployment-gate.sh` fires and
-blocks unless all five conditions hold. After a clean commit, runs `git push` (requires human
-approval — intentionally not in the allow-list) and `gh pr create`. Stops at the PR.
+**inspects the pending change set read-only** (paths + content) against the pre-commit checklist in
+the `deployment-checklist-and-rollback` skill — pipeline interlock files, secrets/credentials,
+build/dependency junk, scratch blobs, and conflict/debug markers — and stops for a human on any hit.
+Only once clean does it run `git add -A && git commit` as a single atomic command. Before that
+command executes, `deployment-gate.sh` fires and blocks unless all five conditions hold. After a
+clean commit, runs `git push` (requires human approval — intentionally not in the allow-list) and
+`gh pr create`. Stops at the PR.
 
-**Why haiku?** Deployment is mechanical — branch, commit, push, PR. It does not reason; it executes
-a short sequence of git commands, so the cheapest model fits (Haiku exposes no effort levels).
+**Why sonnet?** Deployment is no longer purely mechanical — it now performs a **read-only pre-commit
+content inspection** (scan the change set for secrets, junk, interlock files, and conflict markers;
+stop for a human on a hit) before the pipeline's single commit. That inspection is real judgment
+Haiku handles poorly, so the model was moved `haiku` → `sonnet` (maxTurns 8 → 15). It fires once per
+feature and only makes git calls after the gate passes, so absolute cost stays small. *(This
+supersedes the earlier "deployment = haiku" allocation — the inspection capability is worth the bump.)*
 
 **Hard gate:** `git push` and `gh pr create` are deliberately excluded from `settings.json`'s
 allow-list so they each require explicit human approval even after the gate passes. The human
