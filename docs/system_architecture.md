@@ -115,11 +115,12 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Eleven deterministic scripts — zero LLM cost
+├── global-hooks/           Twelve deterministic scripts — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
-│   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle (caps the loop)
+│   ├── stamp-ran-at.sh         stamps real UTC ran_at into test-results/security-status JSON; fires first on testing + security Stop (F6)
+│   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle / done@GREEN-exit (caps the loop)
 │   ├── deployment-gate.sh      blocks git commit unless 5 conditions met; PreToolUse on deployment
 │   ├── write-review-manifest.sh writes reviewed_change_hash anchor; called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
@@ -338,7 +339,7 @@ fixes, not just symptoms. It fires only on failure, so the Opus cost is small in
 | Tools | Read, Edit, Bash, Grep, Write, Skill |
 | Preloaded skills | `semgrep-ruleset-guide`, `diff-scoping-conventions` |
 | On-demand skills | `iac-conventions` (only when `infra/` exists) |
-| Stop hook | `log-run.sh security` |
+| Stop hooks (in order) | `stamp-ran-at.sh security`, `log-run.sh security` |
 
 **Responsibility:** Scan the working-tree change set (tracked diff + untracked files since last
 commit), fix exploitable vulnerabilities (any severity) and critical/high hygiene findings
@@ -385,7 +386,7 @@ not a free upgrade.
 | maxTurns | 30 |
 | Tools | Bash, Read, Write, Edit |
 | Preloaded skills | `test-conventions`, `diff-scoping-conventions` |
-| Stop hooks (in order) | `record-clean.sh`, `log-run.sh testing` |
+| Stop hooks (in order) | `stamp-ran-at.sh testing`, `record-clean.sh`, `log-run.sh testing` |
 
 **Responsibility:** Write missing unit and integration tests for the change set, then run the
 full suite with coverage. Follows the plan's `test_strategy` shape (`pyramid` default, or

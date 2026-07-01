@@ -17,6 +17,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
+          command: "$HOME/.claude/hooks/stamp-ran-at.sh security"
+        - type: command
           command: "$HOME/.claude/hooks/log-run.sh security"
 ---
 
@@ -267,7 +269,9 @@ When invoked:
      if findings were found and fixed. Warnings never affect status.
    - `ran_at` — the real wall-clock time of this scan: capture it with
      `date -u +%Y-%m-%dT%H:%M:%SZ` (you have Bash) and paste that value; never a
-     placeholder like `...T00:00:00Z`. `scope` (`diff`|`full`), `since_commit` (the
+     placeholder like `...T00:00:00Z`. (A `stamp-ran-at.sh` Stop hook also re-stamps
+     `ran_at` deterministically, so it is guaranteed even if you miss it.)
+     `scope` (`diff`|`full`), `since_commit` (the
      HEAD hash the working-tree diff was measured against, or `null` on a full first scan)
    - `critical_count` (remaining after fixes), `warning_count`, `fixed_count`,
      and `total_findings` (every finding surfaced by any source in steps 2–6,
