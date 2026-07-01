@@ -1,6 +1,6 @@
 # Global Skills
 
-This directory is the **source of truth** for all 12 global Claude Code skills used by the pipeline. Skills are not read from here at runtime — they must be installed to `~/.claude/skills/` where Claude Code resolves them.
+This directory is the **source of truth** for all 15 global Claude Code skills used by the pipeline. Skills are not read from here at runtime — they must be installed to `~/.claude/skills/` where Claude Code resolves them.
 
 ## How it works
 

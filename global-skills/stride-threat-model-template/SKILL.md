@@ -18,13 +18,10 @@ app↔datastore, app↔cloud control plane). Threats live at boundaries.
 
 ## Step 2 — Enumerate threats (fill this table)
 
-| Category | Asset / Boundary | Attack vector | Severity (H/M/L) | Mitigation | Concrete mechanism + file |
-|---|---|---|---|---|---|
+| Category | Asset / Boundary | Attack vector | Severity (H/M/L) | Mitigation |
+|---|---|---|---|---|
 
-The **Concrete mechanism + file** column is required by planning: name the specific
-library call / config key / validation class + the file it lives in, not abstract
-advice (security verifies each mechanism after implementation). Use 1–2 trigger
-questions per category:
+Use 1–2 trigger questions per category:
 
 - **Spoofing** — Can an actor pretend to be a user/service? Is every request
   authenticated at the boundary?
