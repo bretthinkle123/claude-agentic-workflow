@@ -108,10 +108,22 @@ When invoked:
    budget for a path — p95 latency or throughput).** Scaffold a smoke-level load
    test with the project's runner (k6 or Locust — see `test-conventions`),
    exercise the budgeted path, and record measured-vs-budget in `perf` (step 7).
-   When the budget is a declared acceptance criterion, map it like any criterion
-   (step 5b) so the gate enforces it; otherwise report the numbers for the human.
-   Keep the load **smoke-sized** (seconds, bounded VUs) — a regression signal, not
-   a full load campaign. Skip when no perf budget is declared.
+   **Populate `perf.budget.*` from the criterion's wording, then actually measure
+   every dimension it names.** If the budget names throughput (e.g. "under 100
+   req/s"), the load test must *drive that rate* and record
+   `perf.measured.throughput_rps` — measuring serial p95 at concurrency 1 does not
+   satisfy a throughput budget. **Criterion-completeness (F1): do NOT mark a
+   perf-backed criterion `covered:true` while any budgeted dimension
+   (`p95_ms`/`throughput_rps`) is left `null` in `perf.measured`.** The deploy gate
+   and the orchestrator loop now block that exact state (a non-null `perf.budget.*`
+   with a null `perf.measured.*`) deterministically, so a partial measurement can no
+   longer score the criterion complete. If you genuinely cannot drive the load,
+   leave the criterion `uncovered` with a reason (step 5b) — it routes to debugging
+   like any gap; never fabricate coverage by pairing a full budget with a partial
+   measurement. When the budget is a declared acceptance criterion, map it like any
+   criterion (step 5b) so the gate enforces it; otherwise report the numbers for the
+   human. Keep the load **smoke-sized** (seconds, bounded VUs) — a regression
+   signal, not a full load campaign. Skip when no perf budget is declared.
 6. Run the full test suite with coverage enabled using the project's configured
    runner (Jest, pytest, go test -cover, etc.) with its coverage flag. The
    **combined** figure is the merge of every suite — a line covered by *any* test
@@ -124,6 +136,25 @@ When invoked:
    `--cov-context=test`), also report per-suite `unit` and `integration` coverage
    as a diagnostic — never summed; a large `combined − unit` gap flags an inverted
    pyramid.
+6b. **Test-quality review (advisory — never gates; produces
+   `.pipeline/test-quality.json`).** Once the suite is green (step 6), assess *how
+   good the tests are*, not just that they run:
+   - **Mutation testing**, scoped to the **changed core modules** (the logic-dense
+     files in the diff — parsers/domain/service/codec, not glue or generated code):
+     run the project's tool (mutmut for Python, Stryker for JS — see
+     `test-conventions`) over just those paths and record
+     `{tool, scope, score, killed, survived, threshold}`. Keep it bounded — scoped,
+     not whole-tree — so it doesn't tax every loop cycle.
+   - **Adversarial "what does this test not catch" review**: for each changed
+     core module (and each acceptance criterion), name the gaps a passing suite
+     still leaves — untested branches, unasserted side effects, a criterion whose
+     test verifies a weaker condition than it claims. Record `gaps[]`, each
+     `{area, gap, severity}` (`low`/`medium`/`high`).
+   - Set `quality_ok` (bool) as an at-a-glance summary. **This artifact is advisory:
+     no gate hook and no loop-exit condition reads it** — it informs the human
+     reviewer (documentation surfaces it in the PR description). Skip mutation (and
+     note why in `test-quality.json`) only if the project has no runnable mutation
+     tool; still produce the adversarial review.
 7. Write structured results to .pipeline/test-results.json. Include
    `tested_change_hash` — a SHA-256 over the current change set, computed with the
    shared `$HOME/.claude/hooks/compute-change-hash.sh` helper (see
@@ -181,11 +212,36 @@ When invoked:
    declared it as an acceptance criterion, in which case it already rides
    `criteria_covered`. (`perf` is added by the performance mode, step 5f, on the
    same reported-unless-an-acceptance-criterion basis.)
+7b. Write the advisory test-quality review (step 6b) to a **separate** file,
+   `.pipeline/test-quality.json`, so `test-results.json`'s gate-critical fields stay
+   stable. **No gate or loop-exit reads this file** — it is advisory context for the
+   human reviewer that documentation surfaces in the PR description:
+   ```json
+   {
+     "quality_ok": true,
+     "ran_at": "<ISO timestamp>",
+     "mutation": {
+       "tool": "mutmut|stryker|none",
+       "scope": ["<changed core module paths>"],
+       "score": null, "killed": 0, "survived": 0, "threshold": null,
+       "note": "<why skipped, if tool=none>"
+     },
+     "adversarial_review": {
+       "gaps": [{ "area": "<module or ACn>", "gap": "", "severity": "low|medium|high" }]
+     }
+   }
+   ```
+   `mutation.score` is the kill ratio (advisory — not a threshold gate here);
+   `adversarial_review.gaps` is what a passing suite still doesn't catch. An empty
+   `gaps` list is a legitimate "no material gap found," not a skipped review.
 8. Report a summary listing:
    - **Passing tests**: count and test suite names
    - **Failing tests**: name and failure reason for each
-   - **Coverage**: combined line, branch, and function percentages (plus per-suite
-     unit and integration when produced)
+   - **Coverage**: combined line, **branch**, and function percentages (call out the
+     branch figure explicitly — it is where logic bugs hide; plus per-suite unit and
+     integration when produced)
+   - **Test quality** (advisory): mutation score over the changed core modules and
+     the top adversarial gaps (`what the tests do not catch`), from `test-quality.json`
    - **Shape**: the `test_strategy` followed and the realized unit/integration/e2e
      counts; flag any divergence from the planned shape
    - **Acceptance criteria**: `criteria_covered.covered / total`, and name any

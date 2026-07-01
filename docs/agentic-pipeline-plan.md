@@ -22,7 +22,13 @@ testing agent gained four conditional modes (steps 5c–5f): **migration up/down
 migration files change), **property-based / fuzz** (parsers/validators), **concurrency / idempotency**
 (declared-idempotent handlers), and **load-vs-perf-budget** (when planning declares a perf budget as
 an acceptance criterion); results land in new `resilience`/`perf` blocks of `test-results.json` and
-only block when the guarantee is a declared acceptance criterion (riding `criteria_covered`). Security
+only block when the guarantee is a declared acceptance criterion (riding `criteria_covered`). A later
+**criterion-completeness pass (PR G, 2026-07-01)** hardened the perf path: when a perf-backed
+criterion's budget names a dimension left unmeasured (`perf.measured.*` null against a non-null
+`perf.budget.*`), the gate **and** the loop-exit block deterministically, so a serial-latency-only
+test can no longer score a throughput criterion complete (M2 finding F1). The same pass added an
+**advisory** `test-quality.json` (mutation over changed core modules + adversarial "what does this
+test not catch" review — read by no gate) and surfaces branch coverage (F5). Security
 gained **Trivy** container-image/Dockerfile scanning via a new `trivy-scan.sh` Docker wrapper (critical
 CVEs fold into `critical_count`, so they block at the existing deploy gate like a Checkov critical),
 closing the `containerization-conventions` image-scanning gap. A new on-demand **`secrets-management`**
@@ -1085,10 +1091,17 @@ your-project/
 }
 ```
 
-`coverage.combined` is the merged, gated figure; the per-suite `unit`/`integration`
-blocks are best-effort diagnostics (a large `combined − unit` gap flags an inverted
-pyramid). `test_strategy` echoes the planned pyramid shape (planning declares it
-in `plan.md`, default `pyramid`); `tests_by_type` is what was actually written.
+`coverage.combined` is the merged, gated figure (lines); `branches` is **surfaced**
+(reported in the run-log + PR description) but not gated. The per-suite
+`unit`/`integration` blocks are best-effort diagnostics (a large `combined − unit`
+gap flags an inverted pyramid). `test_strategy` echoes the planned pyramid shape
+(planning declares it in `plan.md`, default `pyramid`); `tests_by_type` is what was
+actually written. The result file also carries a `perf` block
+(`budget`/`measured`/`status`); **criterion-completeness (PR G)** requires every
+non-null `perf.budget.*` dimension to have a non-null `perf.measured.*` — the gate
+and loop-exit block otherwise. Testing separately writes the advisory
+`.pipeline/test-quality.json` (mutation + adversarial review); **no gate or loop-exit
+reads it** — documentation surfaces it for the human reviewer.
 
 **`.pipeline/security-report.md`** — kept as markdown (human-readable, since you'll read it directly), but starts with a small YAML frontmatter block so hooks can parse status without an LLM call:
 
@@ -1251,7 +1264,7 @@ jq '.debug_retry_count = {"sanity":0,"remediation":0}' "$STATE" > "$tmp" && mv "
 exit 0
 ```
 
-**`.claude/hooks/deployment-gate.sh`** — `PreToolUse` hook on the `deployment` agent's Bash tool; the one hard-enforced gate. Because it fires before *every* Bash command, it guards the agent's first action — the commit. Checks five conditions: tests pass, acceptance criteria fully covered (`criteria_covered`), security clean, documentation produced (`pr-description.md`), and **currency** — the working tree still matches the reviewed state documentation finalized in `review-manifest.json` (nothing slipped in since the human's pre-deploy review). **Currency is enforced on the commit only:** once the reviewed change is committed the working tree is clean, so the later commands in the same run (`git push`, `gh pr create`) pass straight through — they were already cleared when the commit passed. (This is why the anchor is documentation's `reviewed_change_hash`, not testing's `tested_change_hash`: documentation legitimately writes README/architecture files *after* testing runs, so the post-documentation tree — exactly what the human reviews and what gets committed — is the correct reference.) Parses only machine-readable files with `jq`, never markdown:
+**`.claude/hooks/deployment-gate.sh`** — `PreToolUse` hook on the `deployment` agent's Bash tool; the one hard-enforced gate. Because it fires before *every* Bash command, it guards the agent's first action — the commit. Checks: tests pass, acceptance criteria fully covered (`criteria_covered`) — including **perf criterion-completeness** (PR G: a declared `perf.budget.*` dimension must have a non-null `perf.measured.*`, so a partial measurement can't score a criterion complete), security clean, documentation produced (`pr-description.md`), and **currency** — the working tree still matches the reviewed state documentation finalized in `review-manifest.json` (nothing slipped in since the human's pre-deploy review). **Currency is enforced on the commit only:** once the reviewed change is committed the working tree is clean, so the later commands in the same run (`git push`, `gh pr create`) pass straight through — they were already cleared when the commit passed. (This is why the anchor is documentation's `reviewed_change_hash`, not testing's `tested_change_hash`: documentation legitimately writes README/architecture files *after* testing runs, so the post-documentation tree — exactly what the human reviews and what gets committed — is the correct reference.) Parses only machine-readable files with `jq`, never markdown:
 
 ```bash
 #!/bin/bash

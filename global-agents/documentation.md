@@ -48,7 +48,11 @@ When invoked:
    sections.
 6. Write a PR description to .pipeline/pr-description.md, summarizing the
    change and referencing the plan and threat model in .pipeline/plan.md.
-   The deployment gate checks that this file exists before allowing a deploy.
+   In the Testing section, surface the **branch** coverage figure explicitly and,
+   when `.pipeline/test-quality.json` exists, the advisory test-quality signal
+   (mutation score over the changed core modules + notable adversarial gaps) — it
+   is reviewer context, not a gate. The deployment gate checks that this file
+   exists before allowing a deploy.
 7. **Record the reviewed-state hash — do this LAST, after every README,
    system_architecture.md, and source-tree edit is written**, so it captures the
    exact bytes the human will review and the deployment agent will commit. You
