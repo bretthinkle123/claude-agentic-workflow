@@ -317,9 +317,14 @@ hours, **M** ≈ a focused session/day, **L** ≈ multi-session. Status: ✅ don
 - **10/10 *fully-functional pipeline*** (builds *and* safely ships + operates production software for
   live users) = **also PRs L–P done** (the last 40%, §7).
 
-**Critical path:** `M2 ✅ → PR F ✅ → PR G ✅ (M1) → PR H ◐ (M8) → PR I (M5·M6·F3) → PR J (Polish)` →
+**Critical path:** `M2 ✅ → PR F ✅ → PR G ✅ (M1) → PR H ✅ (M8) → PR I ✅ (M5·M6·F3) → PR J ◐ (Polish)` →
 [10/10 scaffolder] → `PR L (CI) → PR M (build) → PR N (envs+load) → PR O (observability) → PR P (scale/DR)`
 → [10/10 fully-functional]. **PR K (M9)** and the **side-tracks** (front-end FE, api-edge AE, parallel-impl PI, doc-consolidation DOC; DB ✅, SEC ✅, and DEP ✅ done) run in parallel — none on the critical path.
+
+> **Status (2026-07-01):** PRs F, G, G6, H, I are all **merged, published to `~/.claude`, and live**
+> (F #7, G #8, G6+AE #9, H #10, I #11). Harness on `main` is **101 assertions green**. **PR J is the
+> last remaining Track-1 item** — after it, the pipeline is a 10/10 scaffolder. Track 2 (L–P) and the
+> side-tracks (K, FE, PI, DOC) are all still ⬜.
 
 ### Done (2026-06-30)
 - ✅ **M2 run #1** — pipeline built + shipped `linkly-pipeline-test` PR #1 end-to-end, independently
@@ -337,11 +342,11 @@ hours, **M** ≈ a focused session/day, **L** ≈ multi-session. Status: ✅ don
 | PR | Item | Effort | Depends on | Closes | Why here |
 |---|---|---|---|---|---|
 | **F** ✅ | M2 fast-fixes (`.gitignore` + `maxTurns`) | S | M2 | F2, F4 | Unblocks a clean second run; **merged as PR #7** (bundled SEC + DEP + the impl revert). Needs publish to go live. |
-| **G** ◐ | **Quality + criterion-completeness gate (M1, retargeted by M2)** — enforce that every *measurable dimension* of an acceptance criterion is actually exercised (fail F1: a perf budget naming `throughput_rps` while the test only measures serial latency). **Decisions (2026-07-01):** the *only* new hard gate check is the **deterministic perf-pairing** (a non-null `perf.budget.*` must have a non-null `perf.measured.*`), folded into the existing `deployment-gate.sh` and mirrored into the loop-exit (loop-exit ≡ gate) — **no new gate hook.** Mutation testing (mutmut/Stryker, **scoped to changed core modules**) + an adversarial "what does this test *not* catch" review land in a new **advisory** `test-quality.json` (**no gate reads it**; documentation surfaces it). Branch coverage (F5) is **surfaced, not gated.** **F6 split out** into its own PR (integrity plumbing, not gate logic). | L | F | F1, F5 | **The #1 gap and the biggest single lever.** M2 proved tests aren't tautological but *can* under-cover a criterion while scoring it complete. Built against the real Linkly artifacts. **Merged as PR #8; published + live.** |
+| **G** ✅ | **Quality + criterion-completeness gate (M1, retargeted by M2)** — enforce that every *measurable dimension* of an acceptance criterion is actually exercised (fail F1: a perf budget naming `throughput_rps` while the test only measures serial latency). **Decisions (2026-07-01):** the *only* new hard gate check is the **deterministic perf-pairing** (a non-null `perf.budget.*` must have a non-null `perf.measured.*`), folded into the existing `deployment-gate.sh` and mirrored into the loop-exit (loop-exit ≡ gate) — **no new gate hook.** Mutation testing (mutmut/Stryker, **scoped to changed core modules**) + an adversarial "what does this test *not* catch" review land in a new **advisory** `test-quality.json` (**no gate reads it**; documentation surfaces it). Branch coverage (F5) is **surfaced, not gated.** **F6 split out** into its own PR (integrity plumbing, not gate logic). | L | F | F1, F5 | **The #1 gap and the biggest single lever.** M2 proved tests aren't tautological but *can* under-cover a criterion while scoring it complete. Built against the real Linkly artifacts. **Merged as PR #8; published + live.** |
 | **G6** ✅ | **Results-file integrity nits (F6)** — a **real** `ran_at`: agents are told to write it via `date -u`, and a deterministic **`stamp-ran-at.sh` Stop hook** (first on testing + security) re-stamps it to real UTC as the enforcement layer (two-layer, like the perf gate — never a placeholder midnight). Plus the orchestrator stamps a **terminal `loop-state`** on GREEN exit (`loop-guard.sh done` → `status:"completed"`, which refuses to overwrite a `capped` cap-out; previously only cap-out wrote a terminal status). Carved out of PR G to keep the gate-logic change isolated (don't-bundle rule). **Shipped with AE** (both cheap non-gate plumbing). **Merged as PR #9; published + live.** | S | G | F6 | Small integrity plumbing; no gate logic, so it ships separately from the PR G gate change. |
-| **H** ◐ | **Pipeline eval/regression harness (M8)** — **built** as `tests/` (hand-rolled bash + jq, zero new deps, **deterministic-only** by decision — no model calls). `bash tests/run-eval.sh` runs 6 suites against a golden Linkly fixture (fixture #1): `static` (hooks parse; every agent-wired hook resolves; predicates compile), `gate` (green pass + each block reason incl. **perf F1**), `loop-guard` (caps → `capped`; `done` → `completed`; won't overwrite `capped`), **`loop-exit-invariant`** (`deployment-gate.sh` verdict ⟺ the canonical loop-exit predicate across a matrix + a SKILL substring drift-guard — the highest-value test), `stamp-ran-at` (placeholder→UTC; no-op paths), `record-clean`. Locks in G's perf-completeness, G6's terminal `completed`, and the enforced `ran_at`. Proven to catch all three regression classes (gate break, SKILL drift, hook rename). Exit-code CI-ready (PR L wires it). Repo tooling — **not** published to `~/.claude`. *Deferred: live LLM golden-runs; gate jq-missing + currency checks (manual).* | M | G | — | You edit agent prompts constantly; nothing catches a regression today except a full manual run. |
+| **H** ✅ | **Pipeline eval/regression harness (M8)** — **built** as `tests/` (hand-rolled bash + jq, zero new deps, **deterministic-only** by decision — no model calls). `bash tests/run-eval.sh` runs 6 suites against a golden Linkly fixture (fixture #1): `static` (hooks parse; every agent-wired hook resolves; predicates compile), `gate` (green pass + each block reason incl. **perf F1**), `loop-guard` (caps → `capped`; `done` → `completed`; won't overwrite `capped`), **`loop-exit-invariant`** (`deployment-gate.sh` verdict ⟺ the canonical loop-exit predicate across a matrix + a SKILL substring drift-guard — the highest-value test), `stamp-ran-at` (placeholder→UTC; no-op paths), `record-clean`. Locks in G's perf-completeness, G6's terminal `completed`, and the enforced `ran_at`. Proven to catch all three regression classes (gate break, SKILL drift, hook rename). Exit-code CI-ready (PR L wires it). Repo tooling — **not** published to `~/.claude`. *Deferred: live LLM golden-runs; gate jq-missing + currency checks (manual).* **Merged as PR #10; extended to 101 assertions by PR I.** | M | G | — | You edit agent prompts constantly; nothing catches a regression today except a full manual run. |
 | **I** ✅ | **Review + supply-chain + data safety (M5 + M6 + F3)** — built as **one PR**, **merged as PR #11** (2026-07-01). **M5+F3:** hard human **diff-review** gate — `approve-diff.sh` (TTY-only, so a subagent can't approve via the helper — direct-fabrication hardening tracked in PR K) writes `diff-approved` carrying the approved change-set hash, which **becomes the deploy gate's currency anchor** (replacing the deployer-regenerable `reviewed_change_hash` → removes the F3 vector); **`/code-review` wired as a standard automated review-only pre-step** so the human reviews an already-triaged diff. **M6 supply-chain:** deterministic `lockfile-check.sh` (manifest-without-lockfile blocks via `critical_count`; unpinned deps warn) + best-effort CycloneDX `generate-sbom.sh` (`sbom.cdx.json`), both run by security; documentation surfaces them. **M6 data-safety:** testing's migration round-trip (5c) elevated to a **prod-shaped seed** (assert seeded rows survive down+up) + a **backup-before-migrate** convention in `deployment-checklist-and-rollback`. Harness extended (`diff-approved`, `lockfile-check` suites; git-backed fixture) — 101 assertions green. | M | G | F3 | Makes a green run *trustworthy* and closes "bad dep / unsafe migration / silent re-anchor." |
-| **J** ⬜ | **Token/altitude polish** — extract the long always-loaded checklist sections of `planning.md` (250 ln) / `plan-audit.md` (223 ln) into on-demand skills. | S | — | Recovers per-invocation tokens; no capability loss. Optional but cheap. |
+| **J** ◐ | **Token/altitude polish** — extract long always-loaded reference blocks out of `planning.md` (254 ln) / `plan-audit.md` (223 ln). **The clean, genuinely-conditional win:** plan-audit's dependency-reality + version-policy detail (steps 4–6, ~70 ln) only matters when the plan introduces third-party deps — extract to an **on-demand** `dependency-audit-policy` skill (invoked only when deps present; a no-new-deps feature skips it entirely). For **planning**, the self-audit rubric (step 8) and threat-model *formatting* detail (step 7's Mermaid-DFD + copy-paste-prompt conventions) run on **every** plan, so full on-demand extraction trades early-turn tokens against a real "agent forgets to invoke the rubric" capability risk — prefer folding the threat-model *format* conventions into the already-preloaded `stride-threat-model-template` skill (de-dupe, no capability risk) over making them on-demand. Net: one new on-demand skill + de-dup, no gate logic. | S | — | Recovers per-invocation tokens; no capability loss. Last Track-1 item → 10/10 scaffolder. |
 
 > **After PRs F–J: 10/10 as a scaffolder.** The pipeline produces PRs whose green state means
 > *correct + criterion-complete + reviewed*, not merely *well-formed*.
@@ -378,49 +383,24 @@ Strictly dependency-ordered; each presupposes the prior.
 > production software for live users — without breaking the fresh-context / file-handoff /
 > deterministic-gate invariants; it extends them rightward across the merge boundary.
 
-### What to do next
-1. **PR F is merged (PR #7).** Re-run `install-global.sh` (+ restart) so the merged agents/skills go live and a second M2 run gets the fixes.
-2. **Build PR G (M1)** — the highest-leverage remaining work; design it against the real Linkly
-   test/results artifacts in `linkly-pipeline-test`, not in the abstract.
-3. Optionally run a **second M2** (e.g. the container/Dockerfile variant) once PR F is live, to feed
-   §8 more data and exercise PR E's Trivy path.
+### What to do next (2026-07-01, post-PR I)
+Track-1 is one PR from complete. PRs F–I are all merged, published, and live (§10 status note above).
 
-### Tomorrow's exact next steps (2026-07-01)
-DB is already done in-repo (`opus`/`xhigh` was live; `maxTurns` bumped 25→30) — it only needs the
-publish in Step 2 below. Do the steps in order.
+1. **PR J (in progress) — the last scaffolder item.** Token/altitude polish (row above). The clean win
+   is extracting plan-audit's dependency/version-policy detail into an on-demand `dependency-audit-policy`
+   skill (only loaded when a plan introduces deps); plus de-duping planning's threat-model *format*
+   conventions into the already-preloaded `stride-threat-model-template` skill. No gate logic, no
+   capability loss. Dogfood it through `tests/run-eval.sh` (the `static` suite verifies every
+   agent-wired hook/skill still resolves) before merging. **After J → 10/10 scaffolder.**
+2. **Then choose the next axis** (all parallel, none blocking):
+   - **PR K (M9)** — threat-model the pipeline-as-target; includes the `diff-approved` fabrication
+     vector (structural hardening of the deployer's `.pipeline/` write access). Natural precursor to
+     [[redteam-app-goal]].
+   - **Track 2 (L→P)** — begin the delivery/ops half, starting with **PR L (CI as the merge gate)**,
+     which also wires `tests/run-eval.sh` as a CI job.
+   - **A second M2 run** (container/Dockerfile variant) to feed §8 more real data now that F–I are live.
+3. **DOC** consolidation is deliberately last — do it once Track-1 churn settles.
 
-**Step 1 — Wire AE (`api-edge-conventions`) as an on-demand skill (~15 min edits).**
-It is NOT added to `skills:` frontmatter (that forces preload). Add its trigger to the *on-demand
-skills* prose paragraph in each agent body — both already carry the `Skill` tool:
-- `global-agents/implementation.md` (the paragraph at ~line 30, after the `iac-conventions` entry):
-  add `` `api-edge-conventions` when the change exposes or consumes an HTTP surface (routes, public
-  API, webhooks, outbound calls). ``
-- `global-agents/planning.md` (the paragraph at ~line 26, in the same list):
-  add `` `api-edge-conventions` when the feature exposes or consumes an HTTP surface (new routes,
-  public API, webhook receiver, outbound third-party calls); ``
-- *(Optional)* draft `global-skills/api-edge-conventions/scaffold/middleware.py` if you want buildable
-  starter code like `auth-patterns`/`logging-conventions` ship.
-
-**Step 2 — Publish the merged PR #7 changes + AE, then restart.**
-```
-bash scripts/list-skills.sh --annotate      # regenerates the loading breadcrumbs (AE → on-demand)
-bash scripts/install-global.sh              # publishes agents+skills to ~/.claude — carries the merged PR #7 (SEC security opus+6f, DEP deployment→sonnet, DB debugging maxTurns, impl surface-delta + sonnet revert) plus AE once wired in Step 1
-# then restart Claude Code / IDE so ~/.claude/agents + skills reload
-```
-
-**Step 3 — Deep-focus block: build PR G (M1) — the highest-leverage work.**
-Design it against the real Linkly artifacts in `linkly-pipeline-test`, not in the abstract:
-- Enforce **criterion-completeness** (fail F1: AC18's perf budget names `throughput_rps` but the test
-  measures serial p95 only → `throughput_rps:null` must not score the AC `covered:true`).
-- **Surface branch coverage** (F5) alongside the gated `combined` line.
-- Add **mutation testing** (mutmut/Stryker) + an **adversarial "what does this test not catch"** review.
-- Fix results-file integrity nits (F6): real `ran_at`, terminal `loop-state` on GREEN exit.
-- Fold into the existing gate via a `quality_ok`/criterion-complete field — **no new gate hook.**
-- New artifact: `test-quality.json`.
-
-**Deferred (don't start tomorrow):** **PI** (a dedicated session — needs planning's `parallel_units`
-+ orchestrator fan-out; design in git history — the doc was removed 2026-07-01). **FE** only if tomorrow
-actually starts a UI build — pair with AE for the red-team app.
-
-**Honest note:** Steps 1–2 (AE/DB) are capability *breadth*; only Step 3 (PR G) moves the scaffolder
-8→10 (correctness *depth*). If you have one focused block tomorrow, spend it on Step 3.
+**Honest note:** PR J is *breadth/polish*, not depth — the depth work (M1) already shipped in PR G.
+J closes the scaffolder milestone cleanly but the higher-leverage next investment is either PR K
+(trust/hardening) or starting Track 2 (the last 40%).

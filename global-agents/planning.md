@@ -144,22 +144,23 @@ When invoked:
    should be immediately followed by its reasoning — not gathered in a separate
    section at the end, but written inline so the logic flows naturally.
 7. As the final task, produce a threat model and append it to
-   .pipeline/plan.md under a ## Threat Model heading. Use the STRIDE
-   methodology from *Threat Modeling* (Shostack):
-   - Identify assets and trust boundaries in the affected feature
-   - Enumerate threats across: Spoofing, Tampering, Repudiation, Information
-     Disclosure, Denial of Service, Elevation of Privilege
-   - For each credible threat: describe the attack vector, rate severity
-     (High / Medium / Low), propose a mitigation, and **map it to a concrete
-     mechanism** — the specific library call, configuration setting, validation
-     class, infrastructure control, or code construct that implements the
-     mitigation, plus the file where it will live. Abstract advice is not
-     acceptable: "use input validation" becomes "`Pydantic BaseModel` schema
-     on all request bodies in `src/routes/user.py`"; "enforce JWT expiry"
-     becomes "`python-jose` `jwt.decode(..., options={'verify_exp': True})` in
-     `src/auth/middleware.py`". The security agent verifies each mechanism is
-     present after implementation — if no mechanism is named, there is nothing
-     to verify and the threat is effectively unmitigated.
+   `.pipeline/plan.md` under a `## Threat Model` heading. Follow the **preloaded
+   `stride-threat-model-template` skill** for the method and output format: assets +
+   trust boundaries, the six STRIDE categories with their trigger questions, the
+   High / Medium / Low severity rubric, the accepted-risks / out-of-scope note, the
+   cloud attack surface when the change includes `infra/`, and the two blocks that
+   follow the STRIDE table — the **Mermaid DFD diagram** and the **copy-paste
+   visualization prompt** (node-shape conventions and the exact prompt spec live in
+   the skill). Two rigor bars this plan enforces **beyond** the generic template:
+   - For each credible threat, **map the mitigation to a concrete mechanism** — the
+     specific library call, configuration setting, validation class, infrastructure
+     control, or code construct that implements it, plus the file where it will live.
+     Abstract advice is not acceptable: "use input validation" becomes "`Pydantic
+     BaseModel` schema on all request bodies in `src/routes/user.py`"; "enforce JWT
+     expiry" becomes "`python-jose` `jwt.decode(..., options={'verify_exp': True})`
+     in `src/auth/middleware.py`". The security agent verifies each mechanism is
+     present after implementation — if no mechanism is named, there is nothing to
+     verify and the threat is effectively unmitigated.
    - **Validation contract per boundary input** — for every external input the
      feature accepts (HTTP path/query param, request-body field, file upload, CLI
      arg, webhook payload), name a concrete validation contract as the
@@ -171,35 +172,6 @@ When invoked:
      user lookup query. An input with no contract is an unmitigated injection/abuse
      vector; security verifies the contract and plan-audit's completeness check
      flags any boundary input that lacks one.
-   - Note threats that are out of scope for this feature (accepted risks)
-
-   After the STRIDE table, append two additional blocks under the same
-   `## Threat Model` heading:
-
-   **Threat model diagram** — a Mermaid `flowchart TD` representing the
-   feature's data flow. Include: external entities (users, third-party
-   services), processes (API endpoints, background jobs), data stores
-   (databases, caches, queues), and trust boundaries between them. Node
-   shape conventions: `[Rectangle]` for external entities, `(Rounded)` for
-   processes, `[(Cylinder)]` for data stores, `subgraph` blocks for trust
-   boundaries. Label each arrow with the data crossing it (e.g.
-   `-- JWT token -->`). Annotate any node or flow that carries a High or
-   critical STRIDE threat with a ⚠ label on or next to it. This renders in
-   GitHub and VS Code markdown preview and gives the human checkpoint a
-   quick visual map of the attack surface without leaving the plan.
-
-   **Copy-paste visualization prompt** — a fenced `text` code block
-   containing a self-contained prompt that anyone can paste into any LLM
-   to get an OWASP Threat Dragon-style visualization. The block must
-   include, verbatim: the full asset and trust-boundary list, and the
-   complete STRIDE table (threat, vector, severity, mitigation, concrete
-   mechanism). Close the block with this exact instruction: *"Render this
-   as an OWASP Threat Dragon diagram. Output either (a) valid Threat Dragon
-   JSON importable at app.threatdragon.com, or (b) a labeled data flow
-   diagram with trust boundaries if JSON is not feasible. No additional
-   context is available beyond what is in this prompt."* Someone who has
-   never read this plan must be able to paste the block and get a useful
-   visual output.
 
 8. **Self-audit before you hand it over.** Re-read your own `plan.md` against
    this rubric and fix any gap *before* reporting it ready — the human should be

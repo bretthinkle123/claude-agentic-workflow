@@ -61,3 +61,32 @@ infrastructure* in the plan):
   resource-level logging, absent backups/retention.
 - **Spoofing / Repudiation** — no CloudTrail/audit logging on provisioned
   resources.
+
+## Output format — two blocks after the STRIDE table
+
+After the STRIDE table, append these two blocks under the same `## Threat Model`
+heading in `plan.md`:
+
+### Threat-model diagram (Mermaid DFD)
+
+A Mermaid `flowchart TD` representing the feature's data flow. Include: external
+entities (users, third-party services), processes (API endpoints, background jobs),
+data stores (databases, caches, queues), and trust boundaries between them. Node
+shape conventions: `[Rectangle]` for external entities, `(Rounded)` for processes,
+`[(Cylinder)]` for data stores, `subgraph` blocks for trust boundaries. Label each
+arrow with the data crossing it (e.g. `-- JWT token -->`). Annotate any node or flow
+that carries a High or critical STRIDE threat with a ⚠ label on or next to it. This
+renders in GitHub and VS Code markdown preview and gives the human checkpoint a quick
+visual map of the attack surface without leaving the plan.
+
+### Copy-paste visualization prompt
+
+A fenced `text` code block containing a self-contained prompt that anyone can paste
+into any LLM to get an OWASP Threat Dragon-style visualization. The block must
+include, verbatim: the full asset and trust-boundary list, and the complete STRIDE
+table (threat, vector, severity, mitigation, concrete mechanism). Close the block
+with this exact instruction: *"Render this as an OWASP Threat Dragon diagram. Output
+either (a) valid Threat Dragon JSON importable at app.threatdragon.com, or (b) a
+labeled data flow diagram with trust boundaries if JSON is not feasible. No additional
+context is available beyond what is in this prompt."* Someone who has never read this
+plan must be able to paste the block and get a useful visual output.

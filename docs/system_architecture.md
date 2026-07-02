@@ -147,7 +147,9 @@ claude-agentic-workflow/
 │   ├── secrets-management/         runtime-secret fetch facade (Secrets Manager/SSM), caching, rotation
 │   ├── iac-conventions/            Terraform infra/ layout, AWS provider, IaC security baseline
 │   ├── ddia-patterns/              storage, replication, consistency trade-offs (from DDIA)
-│   └── containerization-conventions/  Docker vs. serverless decision rubric
+│   ├── containerization-conventions/  Docker vs. serverless decision rubric
+│   ├── api-edge-conventions/        on-demand: rate limiting, CORS, security headers, idempotency (planning + implementation)
+│   └── dependency-audit-policy/     on-demand: plan-audit's dependency reality-check + version policy (loaded only when the plan adds deps)
 │
 ├── global-project-skills/  Per-project skill templates (installed alongside global-skills)
 │   ├── semgrep-ruleset-guide/  which Semgrep rule sets to apply per language/framework (fill <STACK CONFIGS>)
@@ -248,8 +250,8 @@ definition-of-done that implementation builds to and testing maps to tests.
 | Model | `sonnet` |
 | Effort | `medium` |
 | maxTurns | 20 |
-| Tools | Read, Grep, Glob, Bash, Write |
-| Preloaded skills | none (the version policy is inlined in the agent body) |
+| Tools | Read, Grep, Glob, Bash, Write, Skill |
+| Preloaded skills | none — the dependency reality-check + version policy live in the **on-demand** `dependency-audit-policy` skill (invoked only when the plan introduces a new dependency) |
 | Stop hook | `log-run.sh plan-audit` |
 
 **Responsibility:** Runs automatically after planning and **before** the human checkpoint, to
@@ -264,6 +266,9 @@ registry (npm / PyPI) via `curl`, catching hallucinated or slopsquatted names; (
 policy** — pinned versions are checked against a cooldown window (minor/patch 14–30 days old,
 major 30–90, CVE fixes immediate), the obsolescence limit (no more than one major behind latest;
 reject EOL), exact-pin determinism (no `^`/`~`/`*`/ranges), and minimal dependency-footprint fit.
+Flag classes (2) and (3) — the dependency reality-check + version policy — are carried in the
+**on-demand `dependency-audit-policy` skill**, invoked only when the plan introduces a new
+third-party dependency; a no-new-deps plan records "no new dependencies" and never loads it.
 
 Each flag is classified **material vs. advisory**, and the frontmatter carries
 `revision_recommended: true` iff any material flag exists. **Conditional revision loop:** when
@@ -749,7 +754,7 @@ when the feature needs that knowledge.
 | Skill | Preloaded in | Purpose |
 |---|---|---|
 | `pipeline-orchestration` | _(invoked by you, the orchestrator)_ | Stage sequence, interlock contracts, gate semantics, debug-loop routing |
-| `stride-threat-model-template` | planning | STRIDE worksheet for the threat model |
+| `stride-threat-model-template` | planning | STRIDE worksheet + threat-model output format (Mermaid DFD conventions, copy-paste visualization prompt) |
 | `code-standards` | implementation | Naming, SOLID, facade pattern, security invariants |
 | `diff-scoping-conventions` | security, testing | How to compute the change set (shared logic) |
 | `semgrep-ruleset-guide` | security | Which Semgrep rule sets to apply per language |
@@ -762,6 +767,8 @@ when the feature needs that knowledge.
 | `iac-conventions` | on-demand (planning, implementation, security) | Terraform infra/ layout, AWS provider, IaC security baseline |
 | `ddia-patterns` | on-demand (planning) | Storage, replication, consistency trade-offs (from DDIA) |
 | `containerization-conventions` | on-demand (planning) | Docker vs. serverless decision rubric |
+| `api-edge-conventions` | on-demand (planning, implementation) | Rate limiting, CORS, security headers, idempotency, outbound timeouts |
+| `dependency-audit-policy` | on-demand (plan-audit) | Dependency reality-check + version policy — loaded only when the plan adds a new dependency |
 
 ---
 

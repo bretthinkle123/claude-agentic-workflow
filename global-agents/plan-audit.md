@@ -1,7 +1,7 @@
 ---
 name: plan-audit
 description: Audits .pipeline/plan.md after planning and before the human checkpoint. Runs a structural completeness check (layer sections, traced acceptance criteria, named STRIDE mechanisms, validation contracts, test strategy, concrete files), flags ambiguous wording that could mislead later agents, verifies suggested dependencies are real (no slopsquatting), and checks versions against the cooldown/pinning/obsolescence policy. Classifies each flag material vs advisory and recommends a one-shot planning revision when any material flag exists. Advisory only — never edits the plan.
-tools: Read, Grep, Glob, Bash, Write
+tools: Read, Grep, Glob, Bash, Write, Skill
 model: sonnet
 effort: medium
 maxTurns: 20
@@ -97,74 +97,26 @@ When invoked:
    the human can resolve at the checkpoint. Do not invent ambiguity where the plan
    is specific — an empty ambiguity list is a valid, good result.
 
-4. **Extract the dependency set.** Collect every third-party package the plan
-   *introduces or relies on*, across both frontend and backend. They will be named
-   in prose, not a clean manifest — sweep the **Stack notes**, the per-layer
-   sections (Frontend / Backend / Auth / Logging / Infrastructure), and **Files
-   affected** (e.g. a new line in `requirements.txt` or `package.json`). For each,
-   record the package name, the ecosystem (npm for JS/frontend, PyPI for
-   Python/backend), and the version the plan specifies (or "unspecified" if none).
-   Skip standard-library modules and packages already present in an existing
-   manifest at the same version (those are not new supply-chain surface).
+4. **Dependency & version-policy audit (conditional — on-demand skill).** Determine
+   whether the plan introduces any **new** third-party dependency: a package named
+   in **Stack notes**, the per-layer sections (Frontend / Backend / Auth / Logging /
+   Infrastructure), or **Files affected** (e.g. a new line in `requirements.txt` or
+   `package.json`) that is **not** already present in an existing manifest at the same
+   version. Skip standard-library modules and already-present packages — those are not
+   new supply-chain surface.
+   - **If the plan introduces one or more new dependencies:** invoke the
+     **`dependency-audit-policy`** skill (via the Skill tool) and follow its procedure
+     — extract the dependency set, **reality-check** each against its registry with
+     `curl` (anti-slopsquatting; a **404 / nonexistent package is always a critical,
+     material flag**), and evaluate every pin against the **version policy** (cooldown
+     window, obsolescence `n-1`, exact-pin determinism, architectural fit). Record the
+     results into this report's **Dependency reality** and **Version policy** tables,
+     and any **Could not verify** (registry lookup failed on the network).
+   - **If the plan introduces no new dependency:** record "no new dependencies" in
+     those two tables and **do not invoke the skill** (it costs no context). This is
+     the common case for an app-only change.
 
-5. **Reality check each dependency (anti-slopsquatting).** A hallucinated or
-   typosquatted package name is a supply-chain attack vector — the implementation
-   agent would install whatever is named. Verify each package **actually exists**
-   on its registry by querying the registry JSON API with `curl` (deterministic,
-   no LLM guessing). Use a short timeout and treat a network failure as
-   "unverified", not "absent".
-   - **npm:** `curl -fsS --max-time 15 https://registry.npmjs.org/<pkg>`
-     → HTTP 200 with a JSON body = exists; 404 = **does not exist**.
-   - **PyPI:** `curl -fsS --max-time 15 https://pypi.org/pypi/<pkg>/json`
-     → 200 = exists; 404 = **does not exist**.
-   For each package classify:
-   - **Does not exist (404)** → flag **critical**: "`<pkg>` not found on
-     `<registry>` — possible hallucinated or slopsquatted dependency. Do not
-     install until the human confirms the correct package."
-   - **Exists but looks like a typosquat** → flag for human scrutiny when the name
-     is a near-miss of a far more popular package (e.g. a backend asking for
-     `python-jwt` when the ecosystem standard is `PyJWT`, or `djangorestframework`
-     vs `djangorestframework`), or when the package is brand-new / has negligible
-     history relative to what it claims to do. Name the well-known package you
-     suspect was intended.
-   - **Exists and is the expected package** → record ✓.
-
-6. **Version policy check.** For every dependency the plan pins (or recommends),
-   evaluate the planned version against the rules below, pulling release dates from
-   the same registry response (npm: the `.time["<version>"]` map; PyPI: the
-   `upload_time_iso_8601` of the release's files) and computing age in days against
-   today's date. Compare the planned major against `.dist-tags.latest` (npm) /
-   `.info.version` (PyPI) for staleness. The policy:
-
-   1. **Cooldown period** (let new releases be vetted by the community for malware
-      before adopting):
-      - **Minor / patch** updates: the selected stable version should be **14–30
-        days old**. Flag a pin **younger than 14 days** as "inside the cooldown
-        window — too fresh"; suggest the most recent stable that is ≥14 days old.
-      - **Major** updates: target a stable release **1–3 months (30–90 days) old**.
-      - **Critical security patch (a fix for a known CVE)**: immediate adoption
-        (0–7 days) is acceptable — do not flag freshness if the plan states the pin
-        is a CVE fix.
-   2. **Obsolescence limit:** never more than one major version behind the latest
-      stable (max `n-1`). Flag a pin whose major is `< latest_major - 1` as "too
-      stale". Flag any package the plan itself notes as End-of-Life, or whose
-      major is unmaintained, and recommend rejecting it.
-   3. **Deterministic pinning:** every version must be an **exact pin** (`1.4.2`).
-      Flag any semantic range or wildcard — `^1.4.2`, `~1.4`, `1.x`, `*`, `>=`,
-      "latest", or an **unspecified** version — as a determinism violation, and
-      state the exact version that should be pinned instead (the in-cooldown-window
-      stable you identified in the steps above).
-   4. **Architectural fit:** note, qualitatively, any dependency that brings a
-      heavy transitive tree or overlaps a capability the plan already covers with
-      another library (a redundant dependency). This is a flag for the human, not a
-      hard rule — prefer a minimal dependency footprint and libraries that support
-      modular, SOLID design.
-
-   For each dependency give: planned version, age in days (or "unknown"), latest
-   stable, and a verdict — ✓ compliant, or ✗ with the specific rule violated and
-   the **recommended version** to use instead.
-
-7. **Classify every flag — material vs. advisory — then write the report.** A flag
+5. **Classify every flag — material vs. advisory — then write the report.** A flag
    is **material** if a downstream agent would *act wrongly or be unable to act*
    without it resolved: a missing layer section, an untraced acceptance criterion,
    an unnamed STRIDE mechanism, a missing validation contract on a real input, an
@@ -212,7 +164,7 @@ When invoked:
    - **Could not verify** — any package whose registry lookup failed, so the human
      knows to check it by hand rather than assuming it passed.
 
-8. **Self-check, then stop.** Confirm `flags_total`, `material_flags`, and
+6. **Self-check, then stop.** Confirm `flags_total`, `material_flags`, and
    `critical_flags` in the frontmatter match the tagged flags in the body
    (`critical_flags ≤ material_flags ≤ flags_total`), that `revision_recommended`
    is `true` iff `material_flags > 0`, and that every dependency you extracted
