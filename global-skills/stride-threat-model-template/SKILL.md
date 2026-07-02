@@ -8,7 +8,9 @@ description: STRIDE worksheet — trust boundaries, per-category threat prompts,
 
 Append a `## Threat Model` section to `plan.md`, scoped to **this feature** only.
 Method: STRIDE (Shostack, *Threat Modeling*). A worked example for a sample auth
-feature is in `examples.md` (sibling).
+feature is in `examples.md` (sibling). Threats are then mapped to **verifiable
+OWASP ASVS 5.0.0 requirements** (Step 2b) so the security agent can check the
+control actually exists, not just that it was named.
 
 ## Step 1 — Assets and trust boundaries
 
@@ -16,10 +18,28 @@ List the assets the feature introduces or touches (data, tokens, endpoints,
 resources) and the trust boundaries it crosses (client↔server, service↔service,
 app↔datastore, app↔cloud control plane). Threats live at boundaries.
 
+## Step 1b — Select the ASVS verification level
+
+Declare the target OWASP ASVS 5.0.0 level for this feature (the security agent
+verifies against it). Rubric:
+- **L1** — the default baseline for every feature.
+- **L2** — escalate to this when the feature handles authentication/identity,
+  PII/personal data, money/financial records, multi-tenant or owner-scoped data,
+  or anything an attacker would target for gain. The realistic default for most
+  real apps.
+- **L3** — regulated data, high monetary value, or breach-critical systems.
+
+Write it as `**ASVS target level:** L<n>` under the `## Threat Model` heading.
+
 ## Step 2 — Enumerate threats (fill this table)
 
-| Category | Asset / Boundary | Attack vector | Severity (H/M/L) | Mitigation |
-|---|---|---|---|---|
+| Category | Asset / Boundary | Attack vector | Severity (H/M/L) | Mitigation | ASVS req(s) |
+|---|---|---|---|---|---|
+
+The **ASVS req(s)** column cites the specific OWASP ASVS 5.0.0 requirement ID(s)
+the mitigation satisfies (e.g. `8.2.2` for an IDOR fix, `1.2.4` for parameterized
+queries, `9.1.2` for a JWT `alg` allowlist) — see Step 2b. This turns each
+mitigation into something the security agent can deterministically verify.
 
 Use 1–2 trigger questions per category:
 
@@ -35,6 +55,26 @@ Use 1–2 trigger questions per category:
   rate limits, expensive queries)?
 - **Elevation of Privilege** — Can a low-privilege actor gain higher access
   (missing authorization checks, over-permissioned roles)?
+
+## Step 2b — Map each threat to ASVS 5.0.0 requirements
+
+For each threat, cite the ASVS requirement(s) its mitigation satisfies in the
+table's **ASVS req(s)** column. STRIDE categories map to ASVS chapters roughly as:
+
+| STRIDE category | Primary ASVS 5.0.0 chapters |
+|---|---|
+| **Spoofing** | V6 Authentication · V7 Session Management · V9 Self-contained Tokens · V10 OAuth/OIDC |
+| **Tampering** | V1 Encoding & Sanitization · V2 Validation · V5 File Handling · V11 Cryptography · V12 Secure Communication |
+| **Repudiation** | V16 Security Logging & Error Handling |
+| **Information Disclosure** | V14 Data Protection · V13 Configuration · V11 Cryptography · V3 Web Frontend Security |
+| **Denial of Service** | V2 Anti-automation (2.4) · V4 API · V15 Secure Coding (resource exhaustion) |
+| **Elevation of Privilege** | V8 Authorization · V13 Configuration (least-privilege) |
+
+The full per-chapter L1/L2/L3 requirement checklist — with real IDs, applicability
+triggers, and which pipeline skill builds vs. verifies each — is in the sibling file
+**`asvs-5.0-checklist.md`**. Read it to pick the exact requirement IDs for this
+feature at the target level; do not paste the whole catalog into the plan — cite
+only the IDs that apply. A chapter with no matching surface is `n/a`.
 
 ## Step 3 — Severity rubric (impact × likelihood)
 

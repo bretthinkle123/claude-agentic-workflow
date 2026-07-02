@@ -96,3 +96,35 @@ access** — through centralized facade modules, never scattered inline calls.
   MCP/tool result decide a deterministic gate, and never interpolate one unescaped
   into code, SQL, a shell command, or a template. The gates are jq/shell by design;
   this is the discipline that keeps a tool result from silently steering them.
+
+### ASVS 5.0.0 secure coding & architecture (V15)
+
+The invariants above already satisfy the core ASVS chapters — encoding/validation
+(**V1/V2**), row-level authorization (**V8**), secrets/config (**V13**), data
+protection (**V14**), and log safety (**V16**). Build to these **V15** items too;
+the security agent verifies them at step 6g against the plan's declared ASVS level:
+- **Mass assignment (15.3.3)** — bind only an explicit allowlist of fields per
+  endpoint/action; never spread a raw request body into a model (`Model(**body)`,
+  `Object.assign(entity, req.body)`). Accept-list the writable fields.
+- **Minimal response fields (15.3.1)** — return only the fields the caller needs;
+  never serialize a whole ORM row (internal flags, other users' columns, secrets).
+- **Outbound redirects (15.3.2 / SSRF)** — when the backend calls external URLs, do
+  not follow redirects unless intended, and validate outbound targets against an
+  allowlist of protocol/host/port (ties to `api-edge-conventions`).
+- **Strict typing (15.3.5)** — validate variable types and use strict equality
+  (`===`, typed comparisons); avoid loose coercion in security decisions.
+- **Prototype pollution (15.3.6, JS)** — don't merge untrusted objects into
+  prototypes; use `Map`/`Set` or null-prototype objects for untrusted key spaces.
+- **Safe concurrency (15.4)** — guard shared mutable state with the language's
+  thread-safe types/locks, and make check-then-act sequences on a resource
+  **atomic** (a single transaction / `SELECT … FOR UPDATE` / compare-and-set) to
+  prevent TOCTOU races — decisive for money/inventory/idempotency flows.
+- **Dependencies (15.1/15.2)** — add only maintained, pinned dependencies from
+  trusted registries (the plan-audit + `lockfile-check` + SBOM path already enforce
+  this); don't introduce a component past its remediation window.
+
+The full per-chapter checklist (all 17 chapters, L1/L2/L3, with which stage
+builds vs. verifies each) is
+`stride-threat-model-template/asvs-5.0-checklist.md` — consult it when a feature
+triggers a chapter these invariants don't already cover (auth, sessions, tokens,
+OAuth, crypto, TLS, file handling, WebRTC).
