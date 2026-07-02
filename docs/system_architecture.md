@@ -75,7 +75,7 @@ flowchart TD
     HC -->|rejected| P
     HC -->|approved| I[implementation agent — SINGLE-SHOT\nsonnet · effort high · maxTurns 40]
     I -->|Stop hook fires| SC{smoke-check.sh\n+ infra-validate.sh}
-    SC -->|exit 2 = FAIL| DB1[debugging agent — sanity role\nopus · effort xhigh · maxTurns 25]
+    SC -->|exit 2 = FAIL| DB1[debugging agent — sanity role\nopus · effort xhigh · maxTurns 30]
     DB1 -->|fix applied\nretry count++| SC
     DB1 -->|cap hit| HC
     SC -->|exit 0 = PASS\nloop-guard.sh reset| LG{{loop-guard.sh tick\ncycle / wall-clock cap}}
@@ -85,7 +85,7 @@ flowchart TD
     SECREP --> TEST[testing agent\nsonnet · effort medium · maxTurns 30]
     TEST -->|writes| TRES[test-results.json\n+ criteria_covered\n+ test-quality.json advisory]
     TRES --> GREEN{GREEN? deterministic jq\nsecurity=clean · tests=pass\ncriteria_covered complete\n· perf-completeness}
-    GREEN -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 25]
+    GREEN -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 30]
     DB2 -->|fix applied\nretry count++| LG
     DB2 -->|cap hit or unpatchable| HC
     GREEN -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 25]
@@ -317,7 +317,7 @@ Sonnet weekly pool. Sonnet at high effort handles well-specified build tasks eff
 |---|---|
 | Model | `opus` |
 | Effort | `xhigh` |
-| maxTurns | 25 |
+| maxTurns | 30 |
 | Tools | Read, Write, Edit, Bash, Grep |
 | Preloaded skills | `debugging-escalation-protocol` |
 | Stop hook | `log-run.sh debugging` |
