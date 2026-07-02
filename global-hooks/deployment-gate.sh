@@ -83,9 +83,12 @@ fi
 # in its Bash allow-list), but the gate no longer reads it, and any tree change the agent
 # makes shifts the change-set hash away from approved_change_hash → blocked → re-review.
 # approve-diff.sh is human-only (TTY) and the deployment agent is instructed never to
-# write diff-approved itself; the gate can't verify who wrote the file, so a determined/
-# prompt-injected deployer fabricating the marker is a pipeline-threat-model item (PR K),
-# not something this gate fully prevents.
+# write diff-approved itself; the gate can't verify who wrote the file. That fabrication
+# vector is now structurally guarded (PR K): guard-approval-markers.sh (a PreToolUse Bash
+# hook on every Bash agent) blocks commands that write the marker, and a settings
+# Write/Edit deny covers the tool vector. The residual — obfuscated Bash past the string
+# scan — is documented in docs/pipeline-threat-model.md; this gate still doesn't verify
+# authorship, it relies on those two guards + the currency hash below.
 if [ -n "$(git status --porcelain)" ]; then
   if [ ! -f "$DIFF_APPROVED" ]; then
     echo "Blocked: no human diff approval. Review the diff + the security/test/quality reports, then run approve-diff.sh (the M5 diff-review checkpoint)." >&2

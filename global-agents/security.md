@@ -14,6 +14,11 @@ skills:
   - semgrep-ruleset-guide
   - diff-scoping-conventions
 hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$HOME/.claude/hooks/guard-approval-markers.sh"
   Stop:
     - hooks:
         - type: command
