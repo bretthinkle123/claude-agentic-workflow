@@ -14,9 +14,10 @@
 # HUMAN-ONLY BY DESIGN: refuses unless stdin is a TTY. A subagent's Bash tool runs
 # non-interactively (no controlling terminal), so the deployment agent cannot approve
 # *through this helper*. It is also instructed never to write .pipeline/diff-approved by
-# any other means; the gate can't tell who wrote the file, so fully preventing a
-# determined/prompt-injected deployer from fabricating the marker is a pipeline
-# threat-model item (roadmap PR K). Run it yourself from your terminal:
+# any other means, and a structural guard now enforces that (PR K): guard-approval-markers.sh
+# blocks Bash writes to the marker on every subagent, plus a settings Write/Edit deny. The
+# gate still can't tell who wrote the file; the residual obfuscated-Bash risk is documented
+# in docs/pipeline-threat-model.md. Run it yourself from your terminal:
 #     bash ~/.claude/hooks/approve-diff.sh
 set -euo pipefail
 

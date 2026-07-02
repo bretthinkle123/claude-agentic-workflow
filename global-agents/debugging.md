@@ -6,6 +6,11 @@ model: opus
 effort: xhigh
 maxTurns: 30
 hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$HOME/.claude/hooks/guard-approval-markers.sh"
   Stop:
     - hooks:
         - type: command

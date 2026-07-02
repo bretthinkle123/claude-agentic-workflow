@@ -38,7 +38,11 @@
     "deny": [
       "Read(**/.env)",
       "Read(**/*.tfstate)",
-      "Read(**/*.tfvars)"
+      "Read(**/*.tfvars)",
+      "Write(**/.pipeline/diff-approved)",
+      "Write(**/.pipeline/plan-approved)",
+      "Edit(**/.pipeline/diff-approved)",
+      "Edit(**/.pipeline/plan-approved)"
     ]
   }
 }

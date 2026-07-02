@@ -10,6 +10,8 @@ hooks:
       hooks:
         - type: command
           command: "$HOME/.claude/hooks/deployment-gate.sh"
+        - type: command
+          command: "$HOME/.claude/hooks/guard-approval-markers.sh"
   Stop:
     - hooks:
         - type: command
@@ -27,7 +29,11 @@ hook, report why rather than trying to work around it.
 `.pipeline/diff-approved`, written only by a human running `approve-diff.sh` (it
 refuses without a TTY). Never run `approve-diff.sh` and never write or regenerate
 `diff-approved` or `review-manifest.json` — self-approving or re-anchoring the
-currency hash defeats the human diff-review checkpoint (this is finding F3). If the
+currency hash defeats the human diff-review checkpoint (this is finding F3). A
+structural guard now enforces this — the `guard-approval-markers.sh` PreToolUse hook
+blocks any Bash command that writes `diff-approved`/`plan-approved`, and a settings
+`Write`/`Edit` deny covers the tool vector — so an attempt will be blocked, not just
+discouraged (residual obfuscation risk is in `docs/pipeline-threat-model.md`). If the
 gate blocks you because the tree changed after approval (e.g. your pre-commit
 inspection requires a `.gitignore` fix), **stop and report it** — the human makes
 the change and re-runs `approve-diff.sh` to re-approve.
