@@ -116,7 +116,7 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Fifteen deterministic scripts — zero LLM cost
+├── global-hooks/           Sixteen deterministic scripts — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
@@ -124,6 +124,7 @@ claude-agentic-workflow/
 │   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle / done@GREEN-exit (caps the loop)
 │   ├── deployment-gate.sh      blocks git commit unless 5 conditions met (incl. human diff-approval); PreToolUse on deployment
 │   ├── approve-diff.sh         human-only (TTY) M5 checkpoint: writes diff-approved (approved_change_hash); the gate's review + currency anchor
+│   ├── guard-approval-markers.sh  PreToolUse Bash hook on all 7 Bash agents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved (PR K structural guard)
 │   ├── write-review-manifest.sh writes reviewed_change_hash (documentation's record + approve-diff's sanity check); called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
@@ -391,6 +392,13 @@ quality the expanded manual analysis now warrants; see the decision docs for the
 The stage is still the highest-volume re-firing one, so this is the deliberate cost/quality trade,
 not a free upgrade.
 
+> **Two threat-model scopes — don't conflate them.** This agent's step 6f and planning's
+> `stride-threat-model-template` skill threat-model **the application the pipeline builds** (per
+> feature, inside a run). The **pipeline engine itself** — prompt injection via untrusted inputs, a
+> subagent forging an approval marker, etc. — is threat-modeled separately in
+> `docs/pipeline-threat-model.md` (PR K), and hardened by `guard-approval-markers.sh` + the settings
+> deny. App scope = what gets built; engine scope = the tool that builds it.
+
 ---
 
 ### testing
@@ -500,7 +508,8 @@ and are the pipeline's mechanism for deterministic enforcement. Published to `~/
 - **`Stop` (declared in agent frontmatter)** — fires when that agent finishes, as a
   `SubagentStop` event. Used for: smoke check, infra validate, record-clean, log-run.
 - **`PreToolUse` (declared in agent frontmatter)** — fires before a specific tool runs. Used
-  for: deployment gate (blocks the git commit Bash call).
+  for: the deployment gate (blocks the git commit Bash call) and `guard-approval-markers.sh`
+  (on all 7 Bash-carrying agents — blocks a subagent from forging a human approval marker).
 
 **Global safety rule:** every ambient Stop hook (smoke-check, record-clean, infra-validate,
 log-run) — and the orchestrator-invoked `loop-guard.sh` — opens with
@@ -663,10 +672,28 @@ approval. It is **no longer the deploy gate's currency anchor** — the human-ow
 
 **Logic:** Refuses unless stdin is a TTY (a subagent's Bash has no controlling terminal, so it cannot
 approve *through this helper*; deployment is separately instructed never to write the marker directly,
-and fully preventing a fabricated marker is a PR K threat-model item). Computes the change-set hash via `compute-change-hash.sh`, verifies it matches
+and a fabricated marker is now structurally blocked by `guard-approval-markers.sh` + the settings
+`Write`/`Edit` deny — see below). Computes the change-set hash via `compute-change-hash.sh`, verifies it matches
 documentation's `reviewed_change_hash`, prompts for a typed `approve`, then writes
 `.pipeline/diff-approved` = `{approved_change_hash, approved_at, note}`. This is the gate's human
 review + currency anchor.
+
+---
+
+### guard-approval-markers.sh
+
+**Fires:** as a `PreToolUse` Bash hook on **all 7 Bash-carrying subagents** (deployment,
+implementation, security, testing, debugging, documentation, plan-audit).
+
+**Logic:** Reads the PreToolUse event on stdin, extracts `.tool_input.command` (falls back to
+scanning the raw payload if the field is absent — fail toward inspection), and **blocks (exit 2)**
+any command that *writes* a human-owned approval marker — `.pipeline/diff-approved` (M5) or
+`.pipeline/plan-approved` (plan checkpoint). Matches redirection-into / mutating-command-targeting /
+in-place-edit of a marker; **reads pass through** (implementation legitimately runs
+`test -f .pipeline/plan-approved`). `review-manifest.json` is deliberately not matched (documentation
+writes it legitimately, and post-F3 the gate ignores it). This is the PR K structural closure of the
+marker-fabrication vector; paired with a settings `Write`/`Edit` deny on both markers (the non-Bash
+tool vector). Residual obfuscated-Bash risk is documented in `docs/pipeline-threat-model.md`.
 
 ---
 

@@ -7,6 +7,11 @@ skills:
 model: haiku
 maxTurns: 25
 hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "$HOME/.claude/hooks/guard-approval-markers.sh"
   Stop:
     - hooks:
         - type: command

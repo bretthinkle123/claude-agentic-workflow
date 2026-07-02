@@ -319,13 +319,13 @@ hours, **M** ≈ a focused session/day, **L** ≈ multi-session. Status: ✅ don
 
 **Critical path:** `M2 ✅ → PR F ✅ → PR G ✅ (M1) → PR H ✅ (M8) → PR I ✅ (M5·M6·F3) → PR J ✅ (Polish)` →
 **[10/10 scaffolder reached]** → `PR L (CI) → PR M (build) → PR N (envs+load) → PR O (observability) → PR P (scale/DR)`
-→ [10/10 fully-functional]. **PR K (M9)** and the **side-tracks** (front-end FE, api-edge AE, parallel-impl PI, doc-consolidation DOC; DB ✅, SEC ✅, and DEP ✅ done) run in parallel — none on the critical path.
+→ [10/10 fully-functional]. **PR K (M9)** and the **side-tracks** (front-end FE, api-edge AE, parallel-impl PI, doc-consolidation DOC, skill-enrichment SK; DB ✅, SEC ✅, and DEP ✅ done) run in parallel — none on the critical path.
 
 > **Status (2026-07-01):** **Track 1 is COMPLETE — the pipeline is a 10/10 scaffolder.** PRs F, G, G6,
 > H, I, J are all **merged and live** (F #7, G #8, G6+AE #9, H #10, I #11, J #12). Harness on `main` is
 > **101 assertions green**. A green run now means *correct + criterion-complete + reviewed*, with lean
 > authoring agents. Remaining work is all parallel/optional: Track 2 (L–P, the last 40% = delivery +
-> ops) and the side-tracks (K, FE, PI, DOC) — all still ⬜.
+> ops) and the side-tracks (K, FE, PI, DOC, SK) — all still ⬜.
 
 ### Done (2026-06-30)
 - ✅ **M2 run #1** — pipeline built + shipped `linkly-pipeline-test` PR #1 end-to-end, independently
@@ -356,7 +356,7 @@ hours, **M** ≈ a focused session/day, **L** ≈ multi-session. Status: ✅ don
 
 | PR | Item | Effort | Depends on | Why parallel |
 |---|---|---|---|---|
-| **K** ⬜ | **Threat-model the pipeline-as-target (M9)** — STRIDE over untrusted inputs (`PROJECT.md`, cloned repos, dep READMEs, screenshots); harden/confirm the guards. **Includes the `diff-approved` fabrication vector surfaced in PR I's audit:** the deployment agent has `Bash` and could write `.pipeline/diff-approved` directly, bypassing M5 — current defenses are `approve-diff.sh`'s TTY guard (can't approve via the helper), the orchestration ordering (human approves before deployment runs), and the explicit agent prohibition; a *structural* block (restrict the deployer's write access to `.pipeline/`, or a PreToolUse command-inspection) is the hardening to design here. *(A future DAST / red-team *stage* is a later L-effort follow-on, gated on G + K.)* | S–M | — | Precursor to the [[redteam-app-goal]]; hardens the engine before it ingests adversarial input. |
+| **K** ✅ | **Threat-model the pipeline-as-target (M9)** — **DONE (2026-07-01):** engine STRIDE model in `docs/pipeline-threat-model.md` (untrusted inputs: `PROJECT.md`, cloned repos, dep READMEs, screenshots — each threat mapped to a guard or a stated accepted risk). **The `diff-approved`/`plan-approved` fabrication vector from PR I's audit is now structurally blocked:** a PreToolUse command-inspection hook `guard-approval-markers.sh` (on all 7 Bash-carrying subagents) blocks Bash *writes* to either marker (reads pass — implementation still checks `plan-approved`), paired with a settings `Write`/`Edit` deny on both markers (the non-Bash tool vector). Harness `marker-guard` suite (22 assertions); honest-language synced (deployment.md, deployment-gate.sh, approve-diff.sh, orchestration SKILL — no "impossible" overclaim). Residual = obfuscated Bash past the string scan, documented in the threat model. Also added an "untrusted input = data, not instructions" convention to the orchestration skill. *(A future DAST / red-team *stage* is a later L-effort follow-on, gated on G + K.)* | S–M | — | Precursor to the [[redteam-app-goal]]; hardens the engine before it ingests adversarial input. |
 | **FE** ⬜ | **Front-end workstream** — design-spec stage + design-system skill + visual-regression + a11y budget (see [[deferred-frontend-workstream]]). | L | — | A parallel quality axis; does **not** move production-readiness. Slot it when an active build has a UI. |
 | **AE** ✅ | **`api-edge-conventions` skill** (`global-skills/api-edge-conventions/SKILL.md`): rate limiting/throttling, CORS, security headers, error-envelope facade, idempotency, outbound timeouts/retries. **WIRED as on-demand** — trigger added to the *on-demand skills* prose paragraph in the `planning` + `implementation` agent **bodies** (NOT `skills:` frontmatter — that forces preload; both agents already carry the `Skill` tool); folder committed; `list-skills.sh --annotate` registers the breadcrumb. **Shipped with G6.** Optional `scaffold/middleware.py` still deferred. **Merged as PR #9; published + live.** | S | — | Per-project HTTP-hardening axis; the *implementation* counterpart to STRIDE's DoS/Tampering. Just-in-time enabler for the [[redteam-app-goal]] (HTTP surface). Not critical path. |
 | **PI** ⬜ | **Parallel implementation mode (opt-in)** — design removed 2026-07-01 (was `docs/pipeline-parallel-implementation.md`, superseded by `docs/pipeline-code-quality-audit.md`; recoverable from git history): orchestrator fans out implementation across N worktree agents against frozen contracts; planning emits `parallel_units`; per-unit quality gate + serial integration + `/code-review`. | L | planning work-breakdown | Latency optimization for large fan-shaped features, contained in the implementation stage. **Opt-in per run, never default** (trades tokens for wall-clock — against the token-first posture). Non-critical. |
@@ -364,8 +364,84 @@ hours, **M** ≈ a focused session/day, **L** ≈ multi-session. Status: ✅ don
 | **DB** ✅ | **Debugging-agent upgrade** — `opus`/`xhigh` was **already live** (applied in the §3.1 retune); on 2026-07-01 bumped `maxTurns` 25→30 to match the other reasoning stages (planning/testing/security 30, impl 40). Fires only on failure so absolute cost is negligible. **Distinct from PR O** (the production-debugger / Sentry workstream). *Needs `install-global.sh` to publish.* | S | — | Done. Cheap capability parity for an existing stage. |
 | **SEC** ✅ | **Security-agent upgrade (2026-07-01)** — model `sonnet`→**`opus`** (**overrides** the 2026-06-29 `sonnet/high` settled decision — 6f added independent reasoning; knowingly accepts the higher all-models-cap draw, and revert-to-Sonnet stays clean if that cap becomes the bottleneck); new **step 6f — STRIDE delta / attack-surface reconciliation** (reconciles the implemented diff's new/changed surface against the plan's threat model — exploitable-and-fixable gaps patched in place, design-level gaps raised critical → debugging); **Complete findings inventory** (every finding reported regardless of severity/exploitability/remediation) + `total_findings`/`stride_new_threats` status fields; **`surface-delta.md` hybrid** (implementation emits an attack-surface hint, security reconciles it against the diff — diff is the source of truth). Specs (`system_architecture.md`, `agentic-pipeline-plan.md`) + decision docs synced. *Needs `install-global.sh` to publish.* | M | — | New capability (not an M-item): closes "the built app drifts from the planned threat model," strengthens §2. **Distinct from PR K**, which threat-models the *pipeline*, not the built app. |
 | **DEP** ✅ | **Deployment-agent upgrade (2026-07-01)** — model `haiku`→**`sonnet`** (maxTurns 8→15) to support a new **read-only pre-commit content inspection** step: scan the change set for secrets, build/dependency junk, `.pipeline/` interlock files, and conflict/debug markers before the pipeline's single commit, stopping for a human on a hit (pairs with an expanded `deployment-checklist-and-rollback` skill). Overrides the earlier `deployment=haiku` allocation — the inspection is real judgment Haiku handles poorly. Docs synced. *Needs `install-global.sh` to publish.* | S | — | A safety win on the highest-stakes stage: stops secrets/junk landing in the PR at the commit boundary. |
+| **SK** ⬜ | **Skill-file enrichment (mine public skills)** — systematically beef up the agents' backing `SKILL.md` files by mining high-quality public skills (primary source: [anthropics/skills](https://github.com/anthropics/skills), **mixed-license — see caveat in the detail below**; secondary: permissively-licensed community skills) and splicing **only the *additive* techniques/checks** into our local skills, **adapted to pipeline vocabulary** (interlock files, gate semantics, STRIDE-mechanism rigor) — never verbatim copy that drags in foreign concepts. **First-pass order:** `planning` → `implementation` → `security` (rationale + exact skill inventory in the detail below); **remaining agents in a later pass.** **Content-only: no gate logic, no model/frontmatter changes** — does not relitigate the model-allocation notes below. **→ Full plan: "SK — Skill-file enrichment plan (detail)" after the Model-allocation notes.** | M | — | Quality axis on the authoring agents; touches skill *content* only, so it blocks nothing and stays off the critical path. Main risk is preload token tax — bounded by the per-addition bar + an on-demand-first preference. |
 
 > **Model-allocation notes (2026-07-01):** security → `opus` (SEC row) and deployment → `sonnet` (DEP row). **Implementation was evaluated for `opus/xhigh` and deliberately kept on `sonnet/high`** — the plan carries the open-ended reasoning, the Linkly run (§8) produced rigorous output on Sonnet, and it is the highest-volume stage (the largest all-models-cap draw); the quality investment belongs in the audit / M1 layer (PR G), not in maxing the generator. `maxTurns` was bumped repo-wide (planning 30, plan-audit 20, implementation 40, debugging 30, security 30, testing 30, documentation 25, deployment 15).
+
+#### SK — Skill-file enrichment plan (detail)
+
+**Goal.** Raise the ceiling of the *authoring* agents by enriching the `SKILL.md` files they load
+— importing the genuinely-additive techniques, checklists, and framings from mature public skills,
+adapted to this pipeline's vocabulary. This is a **content** axis (better instructions per stage),
+distinct from the SEC/DB/DEP rows (which changed *models/frontmatter*). It never touches gate logic.
+
+**Sources & licensing (check before every import).**
+- **Primary — [anthropics/skills](https://github.com/anthropics/skills): mixed-license.** Most skills
+  are **Apache-2.0** (fine to adapt with attribution), but the document skills (`skills/docx`,
+  `skills/pdf`, `skills/pptx`, `skills/xlsx`) are **source-available, NOT open source — do not import
+  from those.** Confirm the per-skill license at import time; the repo root can change.
+- **Secondary** — permissively-licensed community skills (Agent Skills are an open standard,
+  `agentskills.io`, since Dec 2025). Accept **only** permissive licenses (MIT/Apache/BSD); skip
+  anything unlicensed or copyleft.
+- **Record source URL + license + commit/date per import**, so a future audit can trace provenance.
+  Adapt ideas freely; flag any near-verbatim text with its source.
+
+**Target inventory & first-pass order.** Preloaded skills come first within each agent — they cost
+context on *every* invocation, so they carry both the highest leverage and the strictest token bar;
+on-demand skills are secondary. Several on-demand skills are **shared** across planning +
+implementation (`auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions`,
+`api-edge-conventions`) — enrich each once, both agents benefit.
+1. **planning** — preload: `stride-threat-model-template`. On-demand: `ddia-patterns`,
+   `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions`,
+   `api-edge-conventions`, `containerization-conventions`. *(First: the STRIDE template — richest
+   public prior art and it runs on every plan.)*
+2. **implementation** — preload: `code-standards`. On-demand: `auth-patterns`, `logging-conventions`,
+   `secrets-management`, `iac-conventions`, `api-edge-conventions`. *(First: `code-standards`.)*
+3. **security** — preload: `semgrep-ruleset-guide`, `diff-scoping-conventions`. On-demand:
+   `iac-conventions`.
+
+Order rationale: planning is the highest-leverage authoring stage (its output constrains every
+downstream stage) and its preloaded skill has the most external prior art; security is third only
+because its skills are narrower/more tool-specific, not lower value. **Later pass** covers the
+remaining agents (`plan-audit`, `testing`, `documentation`, `deployment`, `debugging`) and the
+shared/on-demand skills not reached above — this is the "every agent eventually" scope.
+
+**Method per skill (repeat for each).**
+1. Pin source + record license/attribution (per the licensing rules above).
+2. Fetch candidates, diff against our current `SKILL.md`, extract **deltas only** (what ours lacks).
+3. **Token-budget triage** — a *preloaded* skill's addition must clear a "worth paying on every
+   invocation" bar; if it doesn't, fold it into an **on-demand** skill instead. See the
+   preload-vs-on-demand contract in [[testing-coverage-contract]].
+4. Reword into pipeline vocabulary (interlock files, gate semantics, STRIDE-mechanism rigor); no
+   foreign concepts, no contradictions with our gates/conventions.
+5. Propose a **reviewable diff per file** with a one-line "why it earns its place"; Brett approves
+   before it lands.
+6. Dogfood through `bash tests/run-eval.sh` before merge (see the eval-drift caution below).
+
+**Guardrails.**
+- **Preload token tax is the main risk** — every line added to a preloaded skill is paid on every
+  run of that agent. On-demand-first; measure line-count deltas.
+- **Adapt, don't copy** — imports must read as ours; a copy-paste that introduces foreign vocabulary
+  or a convention we don't follow is a defect, not an enrichment.
+- **Eval-drift caution** — the `tests/run-eval.sh` `static` suite asserts every agent-wired skill
+  still resolves, and PR H's `loop-exit-invariant` suite includes a **SKILL substring drift-guard**
+  (it pins an exact substring of a SKILL body). Editing a guarded skill will fail the harness — the
+  drift-guard currently targets the loop-exit text in `pipeline-orchestration` (a *later-pass*
+  target, not one of the first three), but re-run the harness after any SKILL edit and update the
+  guard string deliberately if it legitimately changed.
+- **No scope creep** — content only; no gate logic, no model/frontmatter/`skills:` list changes
+  (those are separate decisions). Enriching a skill's *body* is in scope; moving a skill between
+  preload and on-demand is a frontmatter change → out of scope for SK (raise separately).
+
+**Definition of done (first pass).** For each of planning / implementation / security: every
+preloaded skill has either a merged enrichment diff or a logged "already sufficient" assessment;
+their shared on-demand skills are at least triaged; all imports have source+license recorded;
+`tests/run-eval.sh` is green. Then the side-track continues into the later-pass agents.
+
+**Why it matters.** Better authoring skills compound — planning's threat-model rigor and
+implementation's coding standards gate everything downstream, and richer security skills feed the
+[[redteam-app-goal]]. It is deliberately off the critical path: the pipeline is already a 10/10
+scaffolder without it.
 
 ### Track 2 — extend past the PR → **10/10 fully-functional (the last 40%, §7)**
 
