@@ -27,6 +27,20 @@ Stack-specific additions for this project: `<STACK CONFIGS — e.g. p/python, p/
 Scope is the diff-scoped change set (see `diff-scoping-conventions`), or `.` on a
 full first scan.
 
+## SAST vs. ASVS — what Semgrep covers and what step 6g does
+
+`p/owasp-top-ten` is a **risk-awareness SAST net** for the injection-class ASVS
+5.0.0 chapters it can see statically — much of **V1** (encoding/sanitization, e.g.
+SQLi, command injection, XXE) and **V2** (validation), plus weak-crypto (**V11**)
+and some secrets (**V13**) rules. It does **not** verify the requirement chapters
+that need runtime/semantic reasoning: **V6** authentication, **V7** session, **V8**
+authorization (IDOR/BOLA), **V9** tokens, **V10** OAuth, **V12** communication,
+**V14** data protection, **V16** logging. Those are covered by the security agent's
+**ASVS verification (step 6g)**, which walks
+`stride-threat-model-template/asvs-5.0-checklist.md` at the plan's declared level.
+Semgrep and 6g are complementary — a finding either tool raises folds into the same
+`critical_count` / `warning_count`; record an overlapping finding once.
+
 ## Severity → critical / warning mapping
 
 - Semgrep `ERROR` severity → **critical** (`critical_count`).
