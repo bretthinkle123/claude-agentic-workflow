@@ -38,7 +38,7 @@ For each package classify:
   hallucinated or slopsquatted dependency. Do not install until the human confirms the correct package."
 - **Exists but looks like a typosquat** → flag for human scrutiny when the name is a near-miss of a far
   more popular package (e.g. a backend asking for `python-jwt` when the ecosystem standard is `PyJWT`,
-  or `djangorestframework` vs `djangorestframework`), or when the package is brand-new / has negligible
+  or `python-dateutil` vs `dateutil`), or when the package is brand-new / has negligible
   history relative to what it claims to do. Name the well-known package you suspect was intended.
 - **Exists and is the expected package** → record ✓.
 
