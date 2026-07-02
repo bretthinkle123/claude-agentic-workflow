@@ -50,12 +50,23 @@ fi
 # honest fix is to measure it or mark the criterion uncovered (which then fails the
 # criteria_covered check above). This same predicate is mirrored in the orchestrator's
 # loop-exit (pipeline-orchestration skill), so loop-exit ≡ gate and the two never drift.
+# A declared perf budget must be MEASURED (p95/throughput non-null) AND the measured
+# run must DISCLOSE its scenario (audit WS3-3). In the trial the headline perf number
+# was a best case (webhook disabled, uncontended, amount:1) reported without that
+# context — a true number measured under an unrepresentative scenario overstates. A
+# non-null `.perf.scenario` (the harness records what it actually exercised) is now
+# required when perf ran, so the metric can't silently be a best case. Mirrored in the
+# orchestrator loop-exit (SKILL) + loop-exit-predicate.jq — loop-exit ≡ gate.
 PERF_GAP=$(jq -r '
   if (.perf.status // "n/a") == "n/a" then "ok"
   elif (.perf.budget.p95_ms != null and .perf.measured.p95_ms == null) then "p95_ms"
   elif (.perf.budget.throughput_rps != null and .perf.measured.throughput_rps == null) then "throughput_rps"
+  elif (.perf.scenario == null) then "scenario"
   else "ok" end' "$TEST_RESULTS")
-if [ "$PERF_GAP" != "ok" ]; then
+if [ "$PERF_GAP" = "scenario" ]; then
+  echo "Blocked: perf ran but $TEST_RESULTS .perf.scenario is null — the measured scenario is undisclosed (a best-case number reported as the headline overstates). Record .perf.scenario (what the harness actually exercised: concurrency, workload, webhook on/off, contention)." >&2
+  exit 2
+elif [ "$PERF_GAP" != "ok" ]; then
   echo "Blocked: perf criterion under-covered — budget declares $PERF_GAP but measured is null. Measure it or mark the criterion uncovered. See $TEST_RESULTS .perf." >&2
   exit 2
 fi
@@ -65,9 +76,55 @@ if [ ! -f "$SECURITY_STATUS" ] || [ "$(jq -r '.status' "$SECURITY_STATUS")" != "
   exit 2
 fi
 
+# CVE-severity floor (audit B6). `status:"clean"` is the security agent's judgment; this
+# is a DETERMINISTIC backstop so a High/Critical OSV finding (CVSS >= 7.0) cannot ship as
+# clean without an explicit, recorded `.osv_waiver`. A CVSS 7.5 High shipped green in the
+# audited run precisely because nothing independently checked severity. `.osv_max_cvss`
+# is the max CVSS across remaining (unfixed) OSV findings, written by the security agent;
+# absent ⇒ 0 ⇒ no block. This same predicate is mirrored in the orchestrator's loop-exit
+# security check (pipeline-orchestration SKILL.md) so loop-exit ≡ gate and the two never
+# drift (asserted by tests/suites/loop-exit-invariant.sh).
+CVE_BLOCK=$(jq -r 'if ((.osv_max_cvss // 0) >= 7) and ((.osv_waiver // null) == null) then "block" else "ok" end' "$SECURITY_STATUS")
+if [ "$CVE_BLOCK" = "block" ]; then
+  echo "Blocked: an OSV finding at CVSS >= 7.0 (High/Critical) remains and no .osv_waiver is recorded in $SECURITY_STATUS. Patch the dependency, or record an explicit waiver {id, reason, approved_by} after a human accepts the risk. See .pipeline/security-report.md." >&2
+  exit 2
+fi
+
+# Reverted / do-not-commit source markers (audit E3). A reverted money-path fix once
+# passed build-green and nearly shipped; this makes the signal deterministic. The guard
+# no-ops on a clean change set and self-skips outside a pipeline project.
+if ! "$HOOK_DIR/guard-source-markers.sh"; then
+  exit 2   # guard already printed the offending lines to stderr
+fi
+
 if [ ! -f "$PR_DESCRIPTION" ]; then
   echo "Blocked: documentation has not produced $PR_DESCRIPTION." >&2
   exit 2
+fi
+
+# Mutation scope-pairing (audit WS3-1) — a DEPLOY-ONLY honesty check, deliberately NOT in
+# the loop-exit predicate. Mutation quality is settled-ADVISORY (a low kill score never
+# blocks) and folding it into the per-cycle loop would re-introduce the exact per-loop
+# mutation cost that drives the cap-out problem. But a FALSE completeness claim must not
+# ship: in the trial `quality_ok:true` was written while the mutation scope had silently
+# shrunk from the configured set (stryker.conf `mutate`) to one file — so the security-
+# critical guard shipped mutation-UNMEASURED under a green quality flag. This blocks only
+# that lie: quality_ok=true asserted while `mutation.scope` fails to cover
+# `mutation.configured_scope`, with no recorded `quality_waiver`. An honest quality_ok=false
+# still ships (advisory); running the full scope or recording a waiver clears the block.
+# test-quality.json is optional (projects with no mutation tool omit it) → absent ⇒ no-op.
+TEST_QUALITY=".pipeline/test-quality.json"
+if [ -f "$TEST_QUALITY" ]; then
+  QUAL_BLOCK=$(jq -r '
+    if (.quality_ok == true)
+       and (((.mutation.configured_scope // []) - (.mutation.scope // [])) | length > 0)
+       and ((.quality_waiver // null) == null)
+    then "block" else "ok" end' "$TEST_QUALITY" 2>/dev/null || echo "ok")
+  if [ "$QUAL_BLOCK" = "block" ]; then
+    MISSING=$(jq -rc '((.mutation.configured_scope // []) - (.mutation.scope // []))' "$TEST_QUALITY" 2>/dev/null)
+    echo "Blocked: $TEST_QUALITY claims quality_ok=true but mutation.scope does not cover the configured mutation scope (uncovered: $MISSING). Either run mutation over the full configured scope, set quality_ok=false (honest advisory), or record a quality_waiver {id, reason, approved_by} after a human accepts the gap." >&2
+    exit 2
+  fi
 fi
 
 # Human diff-review checkpoint (M5) + currency, anchored to the HUMAN's approval (F3).

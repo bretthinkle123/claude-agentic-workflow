@@ -7,4 +7,5 @@
 and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))
 and ( ((.perf.status // "n/a") == "n/a")
       or ( (.perf.budget.p95_ms == null         or .perf.measured.p95_ms != null)
-       and (.perf.budget.throughput_rps == null or .perf.measured.throughput_rps != null) ) )
+       and (.perf.budget.throughput_rps == null or .perf.measured.throughput_rps != null)
+       and (.perf.scenario != null) ) )

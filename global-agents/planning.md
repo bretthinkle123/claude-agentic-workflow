@@ -221,6 +221,15 @@ When invoked:
      performance mode (step 5f) measures against it; because it is an acceptance
      criterion it rides `criteria_covered` and the deploy gate. Omit entirely
      when nothing in the feature is perf-sensitive — do not invent a budget.
+   - **Migration-reversibility criterion (only when the feature adds a migration).**
+     State which reversibility kind the criterion asserts (audit E6), because they demand
+     different tests: a **create-migration** (initial schema) is reversible as
+     **schema + constraints** (down drops FK-safe, up recreates, constraints re-enforce) —
+     literal row survival across down is undefined; an **expand/contract** migration on a
+     populated table must **preserve rows**. Phrase the AC so testing asserts the right one
+     (e.g. `AC | migration up→down→up restores schema + all CHECK/FK/UNIQUE (create-migration:
+     no row-survival guarantee) | migrations/ | round-trip test`), not an ambiguous
+     "preserves the data" that stalls when down legitimately drops tables.
    State in your report that the self-audit passed (or what you corrected).
 9. Stop and report the plan is ready for review. Do not proceed to
    implementation yourself — a human reviews the plan and threat model next.

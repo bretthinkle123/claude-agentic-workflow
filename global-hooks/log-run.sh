@@ -25,6 +25,15 @@
 #              testing   → coverage, tests.{total,passed,failed}
 #              security  → critical_findings, warning_findings
 #
+# attempt    — how many times this (feature,stage) has been logged, +1 (audit T2). Makes
+#              resumes/retries distinct instead of collapsing to one line.
+#
+# CAP-OUT BREADCRUMB (audit T1): a Stop hook does NOT fire when an agent hits its maxTurns
+# cap, so a capped stage would otherwise leave NO line at all and the log under-counts the
+# run. When the orchestrator OBSERVES a cap-out, it must call this script explicitly to
+# leave the breadcrumb, e.g.:   log-run.sh testing "" capped
+# The `attempt` field then distinguishes that capped line from the eventual clean resume.
+#
 # Not captured (not exposed to shell hooks by Claude Code):
 #   turns_used, duration_s  — use timestamp deltas between log entries as a proxy
 
@@ -61,6 +70,19 @@ NOTES="${5:-}"
 # guard (|| FEATURE="") so a failure can't append stray output to the value.
 FEATURE=$(git symbolic-ref --short HEAD 2>/dev/null) || FEATURE=""
 [ -n "$FEATURE" ] || FEATURE="unknown"
+
+# Attempt number (audit T2): how many times this (feature, stage) pair has already been
+# logged, +1. A Stop hook CANNOT fire on a maxTurns cap, so cap-outs and resumes are
+# logged by the orchestrator invoking this script explicitly (e.g.
+# `log-run.sh testing "" capped`); numbering the attempts keeps resumes/retries as
+# distinct, countable lines instead of collapsing to one, so the run log stops
+# under-counting invocations (the T1/T2 telemetry gap).
+ATTEMPT=1
+if [ -f .pipeline/run-log.jsonl ]; then
+  PRIOR=$(jq -rs --arg f "$FEATURE" --arg s "$STAGE" \
+    'map(select(.feature==$f and .stage==$s)) | length' .pipeline/run-log.jsonl 2>/dev/null || echo 0)
+  [ -n "$PRIOR" ] && ATTEMPT=$((PRIOR + 1))
+fi
 
 # Retries: sum sanity + remediation counts from state.json
 if [ "$RETRIES" = "auto" ]; then
@@ -117,9 +139,13 @@ EXTRAS='{}'
 case "$STAGE" in
   testing)
     if [ -f .pipeline/test-results.json ]; then
-      # coverage.combined is the merged figure; fall back to the old flat
-      # coverage object so pre-schema result files still log cleanly.
+      # coverage.combined is the merged (gated) figure; fall back to the old flat
+      # coverage object so pre-schema result files still log cleanly. Also record the
+      # best-effort per-tier coverage (audit T4) so the log preserves unit vs
+      # integration coverage instead of only the combined number — otherwise a thin
+      # integration tier hidden behind a healthy combined figure is invisible.
       EXTRAS=$(jq -c '{coverage:(.coverage.combined // .coverage),
+        coverage_by_tier:{unit:(.coverage.unit // null),integration:(.coverage.integration // null)},
         tests:{total:(.total // 0),passed:(.passed // 0),failed:(.failed // 0)},
         tests_by_type:(.tests_by_type // {}),
         test_strategy:(.test_strategy // "pyramid")}' \
@@ -175,11 +201,12 @@ jq -nc \
   --arg  stage         "$STAGE" \
   --arg  status        "$STATUS" \
   --arg  model         "$MODEL" \
+  --argjson attempt    "$ATTEMPT" \
   --argjson retries    "$RETRIES" \
   --argjson files_changed "$FILES_CHANGED" \
   --arg  notes         "$NOTES" \
   --argjson extras     "$EXTRAS" \
-  '{ts:$ts,feature:$feature,stage:$stage,status:$status,model:$model,
+  '{ts:$ts,feature:$feature,stage:$stage,status:$status,model:$model,attempt:$attempt,
     retries:$retries,files_changed:$files_changed,notes:$notes} + $extras' \
   >> .pipeline/run-log.jsonl
 

@@ -41,6 +41,14 @@ baseline Checkov checks against) — it is not preloaded.
 - **Checkov** — infrastructure-as-code scanning (run only when the change includes an `infra/` directory); tfsec/Trivy are drop-in alternatives
 - **Trivy** — container image / Dockerfile CVE + misconfiguration scanning (run only when the change includes a `Dockerfile` or a built image). On this (Windows) machine it runs via the Docker wrapper `$HOME/.claude/hooks/trivy-scan.sh` — call that with the same arguments you would pass to `trivy`. Requires Docker Desktop running.
 
+**Tool output goes to the scratchpad, never the repo tree (audit E4).** Write any raw
+scanner output you need to keep (semgrep JSON, OSV/Trivy JSON, error logs) under the
+session scratchpad or a `.gitignore`d path — NEVER as `scratch_*.json` / `reports/` in the
+project tree. Leaking those into the working tree pollutes the change-set the pipeline
+hashes and scans and confused the trial's hash-stability debugging. Only the curated
+`.pipeline/security-*.{md,json}` artifacts belong in the tree. (Bootstrap also gitignores
+`reports/`/`scratch_*` as a backstop, but route them correctly in the first place.)
+
 When invoked:
 1. Read .pipeline/state.json. If it does not exist, create it with defaults
    (`debug_retry_count: {sanity: 0, remediation: 0}`, `max_retries: 3`).
@@ -332,8 +340,20 @@ When invoked:
      "fixed_count": 3, "total_findings": 4, "ran_at": "<ISO timestamp>",
      "scope": "diff", "since_commit": "<hash|null>",
      "stride_mechanisms_verified": 4, "stride_mechanisms_missing": 0,
-     "stride_new_threats": 0 }
+     "stride_new_threats": 0,
+     "osv_findings": 0, "osv_max_cvss": 0, "osv_waiver": null }
    ```
+   - `osv_max_cvss` (REQUIRED): the maximum CVSS base score across the OSV findings
+     that REMAIN after remediation (0 when none remain). The deploy gate applies a
+     deterministic High/Critical floor: **a finding at CVSS ≥ 7.0 blocks the deploy
+     even when `status:"clean"`** (audit B6 — a CVSS 7.5 High once shipped green
+     because nothing independently checked severity). This is why the score must be
+     recorded honestly, not folded away into a warning count.
+   - `osv_waiver` (OPTIONAL, default `null`): set to `{ "id", "reason", "approved_by" }`
+     ONLY when a human has explicitly accepted a High/Critical that cannot be patched
+     this cycle (e.g. a dev-only transitive dependency proven off the request path).
+     A non-null waiver lifts the CVE floor for that run. Never write a waiver yourself
+     to unblock the gate — it records a human decision.
 10. **Self-audit before writing reports.** Before writing any output file, verify:
     - Every file in the diff-scoped change set appears in the scan results (none silently skipped).
     - The **Complete findings inventory** contains every finding from steps 2–6 — every scanner result (2–5) and every manual finding (6a–6f) — with none omitted on grounds of low severity, non-exploitability, or not being fixed. `total_findings` equals the inventory row count, and every row in the Fixes applied / Could not remediate / Action required sections traces back to exactly one inventory row.

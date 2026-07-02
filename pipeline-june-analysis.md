@@ -265,6 +265,13 @@ the merge boundary.
   the deploy gate** (regenerate the currency anchor). Reproducible for *anyone* who bootstraps into a
   GitHub-created repo. Fix: make `compute-change-hash.sh` / the currency check handle a repo with a
   prior unrelated commit, or have bootstrap detect+absorb the initial commit.
+  - **F2-node (found 2026-07-02, prepping M2 run #2).** PR F's greenfield `.gitignore` fix was
+    **Python-only** — `bootstrap-project.sh` emitted no `node_modules/`, `dist/`, `coverage/`, or
+    `.stryker-tmp/`. Because the change-set is `git ls-files --others --exclude-standard` (honors
+    `.gitignore`), an un-ignored `node_modules/` would flood the change-hash, `lockfile-check.sh`, the
+    SBOM, and the human diff review on any Node run. **Fixed:** bootstrap now emits the Node build
+    ignores **unconditionally** (it runs before any `package.json` exists — implementation creates it
+    mid-run — so stack-detection there would miss it; the entries cost nothing in a Python project).
 - **F3 — deployment self-re-anchored the currency hash post-review (integrity soft spot).** To get
   past F2, the deployment agent modified the working tree (`.gitignore`) *after* documentation wrote
   `review-manifest.json`, then **regenerated `reviewed_change_hash` itself**. Benign here (only junk

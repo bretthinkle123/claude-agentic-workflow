@@ -33,6 +33,11 @@ gate_case 2 "perf F1: measured.throughput_rps=null → block" '.perf.measured.th
 # ...but perf mode off (n/a) short-circuits even with null measured (no false block).
 gate_case 0 "perf status=n/a + null measured → pass" '.perf.status="n/a" | .perf.measured.throughput_rps=null'
 
+# Perf-scenario disclosure (WS3-3): perf ran but scenario undisclosed → block.
+gate_case 2 "perf ran + scenario=null → block (WS3-3)" '.perf.scenario=null'
+# ...but perf off (n/a) never requires a scenario.
+gate_case 0 "perf n/a + scenario=null → pass"          '.perf.status="n/a" | .perf.scenario=null'
+
 # Security not clean — mutate the security artifact directly (not test-results).
 sec_case() {
   local w; w="$(mk_fixture)"
@@ -42,6 +47,39 @@ sec_case() {
 }
 sec_case
 
+# CVE-severity floor (audit B6): a High/Critical OSV finding blocks even when clean,
+# unless an explicit waiver is recorded.
+sec_mut_case() {
+  local want="$1" desc="$2" mut="$3"
+  local w; w="$(mk_fixture)"
+  jq_edit "$w/.pipeline/security-status.json" "$mut"
+  ( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
+  assert_eq "$want" "$?" "$desc"
+}
+sec_mut_case 2 "clean + osv_max_cvss=7.5, no waiver → block (B6)" '.osv_max_cvss=7.5'
+sec_mut_case 0 "clean + osv_max_cvss=6.9 (below floor) → pass"     '.osv_max_cvss=6.9'
+sec_mut_case 0 "clean + osv_max_cvss=7.5 + waiver → pass"          '.osv_max_cvss=7.5 | .osv_waiver={id:"GHSA-x",reason:"dev-only",approved_by:"human"}'
+
+# Source-marker guard (audit E3): a reverted/do-not-commit marker in the change set
+# blocks. The gate runs in a non-git fixture dir, so exercise the guard on an untracked
+# source file by making the workdir a throwaway git repo with the fixture + a marked file.
+marker_case() {
+  local w; w="$(mktemp -d)"; _WORKDIRS+=("$w")
+  ( cd "$w"
+    git init -q; git config user.email a@b.c; git config user.name t
+    printf '.pipeline/\n' > .gitignore; git add .gitignore; git commit -qm base
+    mkdir -p .pipeline && cp "$FIXTURE"/* .pipeline/
+    printf 'function pay(){ /* TEMP-REVERT: restore SAVEPOINT */ return 1; }\n' > pay.js
+  ) >/dev/null 2>&1
+  # Approve the current (marked) tree so the human-approval gate is not what blocks —
+  # we want to prove the MARKER blocks, independently.
+  local h; h="$(cd "$w" && bash "$HOOKS/compute-change-hash.sh")"
+  jq -nc --arg h "$h" '{approved_change_hash:$h}' > "$w/.pipeline/diff-approved"
+  ( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
+  assert_eq 2 "$?" "TEMP-REVERT marker in changed source → block (E3)"
+}
+marker_case
+
 # Documentation missing.
 prdesc_case() {
   local w; w="$(mk_fixture)"
@@ -50,5 +88,27 @@ prdesc_case() {
   assert_eq 2 "$?" "missing pr-description.md → block"
 }
 prdesc_case
+
+# Mutation scope-pairing (WS3-1): a deploy-only honesty check. Write a test-quality.json
+# into the fixture workdir and assert the gate blocks only a FALSE completeness claim.
+qual_case() {
+  local want="$1" desc="$2" tq="$3"
+  local w; w="$(mk_fixture)"
+  printf '%s\n' "$tq" > "$w/.pipeline/test-quality.json"
+  ( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
+  assert_eq "$want" "$?" "$desc"
+}
+qual_case 2 "quality_ok=true + scope⊂configured, no waiver → block (WS3-1)" \
+  '{"quality_ok":true,"mutation":{"configured_scope":["a.ts","b.ts"],"scope":["a.ts"]}}'
+qual_case 0 "quality_ok=true + scope==configured → pass" \
+  '{"quality_ok":true,"mutation":{"configured_scope":["a.ts","b.ts"],"scope":["a.ts","b.ts"]}}'
+qual_case 0 "quality_ok=false + scope⊂configured → pass (honest advisory)" \
+  '{"quality_ok":false,"mutation":{"configured_scope":["a.ts","b.ts"],"scope":["a.ts"]}}'
+qual_case 0 "quality_ok=true + scope⊂configured + waiver → pass" \
+  '{"quality_ok":true,"quality_waiver":{"id":"Q1","reason":"services suite too slow","approved_by":"human"},"mutation":{"configured_scope":["a.ts","b.ts"],"scope":["a.ts"]}}'
+# Green fixture has no test-quality.json at all → the check no-ops (already asserted by
+# the green-fixture pass above); confirm an empty-mutation quality file is also fine.
+qual_case 0 "no configured_scope recorded → pass (backward compatible)" \
+  '{"quality_ok":true,"mutation":{"scope":["a.ts"]}}'
 
 finish gate
