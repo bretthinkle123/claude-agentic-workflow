@@ -10,5 +10,6 @@
   "stride_mechanisms_missing": 0,
   "osv_findings": 0,
   "osv_max_cvss": 0,
-  "osv_waiver": null
+  "osv_waiver": null,
+  "input_surface": { "declared": 3, "implemented": 3, "uncontrolled": [], "reconciled": true }
 }

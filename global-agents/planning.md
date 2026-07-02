@@ -221,6 +221,25 @@ When invoked:
      performance mode (step 5f) measures against it; because it is an acceptance
      criterion it rides `criteria_covered` and the deploy gate. Omit entirely
      when nothing in the feature is perf-sensitive — do not invent a budget.
+   - **Input-surface controls (REQUIRED for every input source the feature exposes** — an
+     HTTP route accepting a body/query/path param, a form, a queue/message consumer, a
+     file/CSV ingest, a webhook receiver). Enumerate each input source in `plan.md` (so
+     security can reconcile the implemented surface against it — input-controls plan), and for
+     **each** emit two acceptance criteria in `acceptance.md`:
+     - a **validation** criterion — the input's contract (types, bounds, allowlists) plus the
+       rejection behavior ("malformed/oversized/wrong-type → 4xx"), and note the
+       output-encoding-at-sink for any value that reaches a SQL/HTML/shell/log sink
+       (`code-standards`). Validation is **not waivable** for an untrusted source.
+     - a **rate-limit** criterion — the throttle policy (which tier per
+       `api-edge-conventions`: anonymous edge = IP-keyed pre-auth; per-owner resource =
+       **principal-keyed post-auth**; state the key dimension, limit, window), **or** an
+       explicit waiver line `rate_limit_waiver: <reason>` (e.g. "internal-only, no untrusted
+       callers"). Name the discriminating test (per-owner ⇒ the two-principals-one-IP shape).
+     Missing either criterion is a **material** plan-audit flag (forces a revision before the
+     human gate), and an implemented input source with no accounted-for control blocks the
+     deploy gate via security's `input_surface` reconciliation. This is the pipeline's
+     universal input-control accountability — every input source is consciously controlled or
+     waived, never silently unguarded.
    - **Migration-reversibility criterion (only when the feature adds a migration).**
      State which reversibility kind the criterion asserts (audit E6), because they demand
      different tests: a **create-migration** (initial schema) is reversible as

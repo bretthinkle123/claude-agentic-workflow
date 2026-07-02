@@ -28,7 +28,7 @@ echo "-- loop-exit ≡ gate --"
 # GREEN := security-status.status=="clean" AND loop-exit-predicate(test-results)==true
 # GREEN security predicate (audit B6): clean AND no High/Critical OSV without a waiver.
 # Kept byte-equivalent to deployment-gate.sh's CVE floor and the SKILL's security jq.
-SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null)'
+SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0)'
 
 pred_green() {
   local w="$1"
@@ -63,6 +63,8 @@ row "security not clean"                     ''                                 
 row "clean + High CVE, no waiver (B6)"        ''                                          '.osv_max_cvss=7.5'
 row "clean + High CVE, waived (B6)"           ''                                          '.osv_max_cvss=7.5 | .osv_waiver={id:"GHSA-x",reason:"dev-only",approved_by:"human"}'
 row "clean + below floor (B6)"                ''                                          '.osv_max_cvss=6.9'
+row "clean + uncontrolled input source"       ''                                          '.input_surface={uncontrolled:["POST /x"]}'
+row "clean + input surface reconciled"        ''                                          '.input_surface={uncontrolled:[]}'
 
 # --- (b) canonical ⟺ SKILL: extract the SKILL's real predicates and compare ---------
 #
@@ -142,6 +144,8 @@ fi
   printf '{"status":"clean","osv_max_cvss":7.5}\n'
   printf '{"status":"clean","osv_max_cvss":7.5,"osv_waiver":{"id":"x"}}\n'
   printf '{"status":"issues-found","osv_max_cvss":7.5}\n'
+  printf '{"status":"clean","input_surface":{"uncontrolled":["POST /x"]}}\n'
+  printf '{"status":"clean","input_surface":{"uncontrolled":[]}}\n'
 } > "$TMP/sec.jsonl"
 jq -c -f "$TMP/skill-sec.jq" "$TMP/sec.jsonl" > "$TMP/sec-skill.out" 2>/dev/null
 jq -c "$SEC_PREDICATE"       "$TMP/sec.jsonl" > "$TMP/sec-ref.out"   2>/dev/null

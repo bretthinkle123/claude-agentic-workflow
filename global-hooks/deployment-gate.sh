@@ -90,6 +90,20 @@ if [ "$CVE_BLOCK" = "block" ]; then
   exit 2
 fi
 
+# Input-surface reconciliation floor (input-controls plan). The security agent reconciles the
+# IMPLEMENTED input surface (routes/consumers that accept untrusted input) against the declared
+# controls, and lists any source it could NOT reconcile to a validation contract + rate-limit
+# policy/waiver in `.input_surface.uncontrolled`. A non-empty list means an input source shipped
+# without an accounted-for input control — block. Absent field ⇒ [] ⇒ no block (backward
+# compatible / features with no input surface). Mirrored in the loop-exit security predicate
+# (SKILL + loop-exit-invariant.sh) so loop-exit == gate.
+SURFACE_UNCONTROLLED=$(jq -r '((.input_surface.uncontrolled // []) | length)' "$SECURITY_STATUS" 2>/dev/null || echo 0)
+if [ "${SURFACE_UNCONTROLLED:-0}" -gt 0 ]; then
+  UNLIST=$(jq -rc '(.input_surface.uncontrolled // [])' "$SECURITY_STATUS" 2>/dev/null)
+  echo "Blocked: $SURFACE_UNCONTROLLED input source(s) shipped without an accounted-for validation contract + rate-limit policy/waiver (uncontrolled: $UNLIST). Add the missing control (or a recorded waiver) and re-scan. See $SECURITY_STATUS .input_surface and .pipeline/surface-delta.md." >&2
+  exit 2
+fi
+
 # Reverted / do-not-commit source markers (audit E3). A reverted money-path fix once
 # passed build-green and nearly shipped; this makes the signal deterministic. The guard
 # no-ops on a clean change set and self-skips outside a pipeline project.
