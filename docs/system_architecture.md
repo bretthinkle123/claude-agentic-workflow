@@ -764,6 +764,7 @@ when the feature needs that knowledge.
 | `deployment-checklist-and-rollback` | deployment | Pre-flight checks, commit/push/PR sequence |
 | `auth-patterns` | on-demand (planning, implementation) | Firebase/Cognito facade, OAuth 2.0, Duo MFA, mfa_verified claim |
 | `logging-conventions` | on-demand (planning, implementation) | structlog/Pino, OTel, CloudWatch/X-Ray, log field schema |
+| `secrets-management` | on-demand (planning, implementation) | Runtime-secret fetch facade (AWS Secrets Manager / SSM), caching, rotation — only when a feature consumes a credential |
 | `iac-conventions` | on-demand (planning, implementation, security) | Terraform infra/ layout, AWS provider, IaC security baseline |
 | `ddia-patterns` | on-demand (planning) | Storage, replication, consistency trade-offs (from DDIA) |
 | `containerization-conventions` | on-demand (planning) | Docker vs. serverless decision rubric |

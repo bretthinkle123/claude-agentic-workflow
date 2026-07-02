@@ -3,17 +3,26 @@
 # condition and deployment-gate.sh. The loop must never exit GREEN on a state the
 # gate would then reject (deadlock before deploy), so the two must be equivalent.
 #
-# Strategy: hold pr-description present + a clean (non-git) tree so the gate's other
-# two checks pass, then vary tests/security/criteria/perf. Assert:
-#     deployment-gate.sh exit==0   ⟺   (security clean) AND (canonical loop-exit predicate)
-# across a matrix. Plus a substring check that the orchestration SKILL still carries
-# the perf-pairing fragments (catches a gate edit not mirrored into the SKILL).
+# There are THREE copies of the GREEN predicate that must agree:
+#   1. deployment-gate.sh          (bash + jq — the deploy gate)
+#   2. pipeline-orchestration/SKILL.md  (inline jq — what the human orchestrator runs)
+#   3. loop-exit-predicate.jq      (this harness's canonical copy)
+# This suite pins all three together, transitively:
+#   (a) gate ⟺ canonical  — run deployment-gate.sh over a fixture matrix and assert
+#       its verdict matches (security-clean AND canonical predicate).
+#   (b) canonical ⟺ SKILL — EXTRACT the SKILL's own jq predicates (not a substring
+#       grep) and assert they produce byte-identical verdicts to the canonical over
+#       an exhaustive battery of boundary inputs.
+# (a) ∧ (b) ⟹ gate ⟺ SKILL. A drift in ANY clause of the SKILL predicate — not just
+# the perf fragments — now breaks this suite.
 set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../helpers/assert.sh"
 
 GATE="$HOOKS/deployment-gate.sh"
 SKILL="$REPO_ROOT/global-skills/pipeline-orchestration/SKILL.md"
 echo "-- loop-exit ≡ gate --"
+
+# --- (a) gate ⟺ canonical over a fixture matrix -----------------------------------
 
 # Evaluate the harness's canonical GREEN predicate for a given workdir.
 # GREEN := security-status.status=="clean" AND loop-exit-predicate(test-results)==true
@@ -42,20 +51,86 @@ row() {
 row "green (all pass)"                       ''                                          ''
 row "tests fail"                             '.status="fail"'                            ''
 row "criteria incomplete"                    '.criteria_covered.covered=(.criteria_covered.total-1)' ''
+row "perf F1 (measured p95 null)"            '.perf.measured.p95_ms=null'                ''
 row "perf F1 (measured tput null)"           '.perf.measured.throughput_rps=null'        ''
 row "perf n/a short-circuit"                 '.perf.status="n/a" | .perf.measured.throughput_rps=null' ''
 row "security not clean"                     ''                                          '.status="issues-found"'
 
-# Drift guard: the orchestration SKILL must still carry the perf-pairing clause.
-if grep -qF 'perf.budget.throughput_rps==null or .perf.measured.throughput_rps!=null' "$SKILL"; then
-  _ok "SKILL carries the perf-pairing throughput fragment"
+# --- (b) canonical ⟺ SKILL: extract the SKILL's real predicates and compare ---------
+#
+# extract_skill_pred <marker> — pull the jq PROGRAM out of the `jq -e '<program>'
+# <marker>` command the SKILL documents (multi-line safe). Captures the block that
+# starts at a `jq -e '` line and ends on the line carrying <marker>; abandons a block
+# that terminates on a different *.json (so the security predicate isn't mistaken for
+# the test one). Emits the raw command block; the caller strips the jq wrapper.
+extract_skill_pred() {
+  awk -v marker="$1" '
+    index($0, "jq -e '\''") > 0 { cap=1; buf="" }
+    cap==1 {
+      buf = (buf=="" ? $0 : buf "\n" $0)
+      if (index($0, marker) > 0) { print buf; exit }
+      else if (index($0, ".json") > 0) { cap=0 }
+    }
+  ' "$SKILL"
+}
+
+TMP="$(mktemp -d)"; _WORKDIRS+=("$TMP")
+
+# test-results GREEN predicate: strip `...jq -e '` prefix and `' test-results.json` suffix.
+raw_test="$(extract_skill_pred test-results.json)"
+skill_test="${raw_test#*jq -e \'}"; skill_test="${skill_test%\'*}"
+# security GREEN predicate.
+raw_sec="$(extract_skill_pred security-status.json)"
+skill_sec="${raw_sec#*jq -e \'}"; skill_sec="${skill_sec%\'*}"
+
+if [ -n "$skill_test" ] && [ "$skill_test" != "$raw_test" ]; then
+  _ok "extracted the SKILL's test-results GREEN predicate"
 else
-  _no "SKILL missing the perf-pairing throughput fragment (gate/loop drift?)"
+  _no "could not extract the SKILL's test-results GREEN predicate (SKILL structure changed?)"
 fi
-if grep -qF 'perf.budget.p95_ms==null' "$SKILL"; then
-  _ok "SKILL carries the perf-pairing p95 fragment"
+if [ -n "$skill_sec" ] && [ "$skill_sec" != "$raw_sec" ]; then
+  _ok "extracted the SKILL's security GREEN predicate"
 else
-  _no "SKILL missing the perf-pairing p95 fragment (gate/loop drift?)"
+  _no "could not extract the SKILL's security GREEN predicate (SKILL structure changed?)"
+fi
+
+printf '%s\n' "$skill_test" > "$TMP/skill-test.jq"
+printf '%s\n' "$skill_sec"  > "$TMP/skill-sec.jq"
+
+# Exhaustive boundary battery for the test-results predicate: every combination of
+# status, the three criteria orderings (<, ==, >), perf mode, and each perf
+# budget/measured null-vs-set pairing — 192 inputs. The SKILL predicate and the
+# canonical predicate must agree on every one.
+jq -nc '
+  ["pass","fail"][] as $s
+  | ({c:1,t:2},{c:2,t:2},{c:3,t:2}) as $cr
+  | ("n/a","measured") as $ps
+  | (null,100) as $bp | (null,90) as $mp
+  | (null,50)  as $bt | (null,45) as $mt
+  | {status:$s,
+     criteria_covered:{covered:$cr.c,total:$cr.t},
+     perf:{status:$ps,
+           budget:{p95_ms:$bp,throughput_rps:$bt},
+           measured:{p95_ms:$mp,throughput_rps:$mt}}}
+' > "$TMP/battery.jsonl"
+
+n_test="$(grep -c '' "$TMP/battery.jsonl")"
+jq -c -f "$LOOP_EXIT_PREDICATE" "$TMP/battery.jsonl" > "$TMP/canon.out" 2>/dev/null
+jq -c -f "$TMP/skill-test.jq"   "$TMP/battery.jsonl" > "$TMP/skill.out" 2>/dev/null
+if [ -s "$TMP/canon.out" ] && diff -q "$TMP/canon.out" "$TMP/skill.out" >/dev/null 2>&1; then
+  _ok "SKILL test-predicate ≡ canonical across $n_test boundary permutations"
+else
+  _no "SKILL test-predicate DIVERGES from canonical — loop-exit ≠ gate. Reconcile SKILL.md with $LOOP_EXIT_PREDICATE"
+fi
+
+# The security predicate is trivial but must not silently drift (e.g. to "pass").
+printf '{"status":"clean"}\n{"status":"issues-found"}\n{"status":"pending"}\n{}\n' > "$TMP/sec.jsonl"
+jq -c -f "$TMP/skill-sec.jq" "$TMP/sec.jsonl" > "$TMP/sec-skill.out" 2>/dev/null
+jq -c '.status=="clean"'     "$TMP/sec.jsonl" > "$TMP/sec-ref.out"   2>/dev/null
+if [ -s "$TMP/sec-ref.out" ] && diff -q "$TMP/sec-ref.out" "$TMP/sec-skill.out" >/dev/null 2>&1; then
+  _ok "SKILL security-predicate ≡ .status==\"clean\""
+else
+  _no "SKILL security-predicate diverges from .status==\"clean\""
 fi
 
 finish loop-exit-invariant
