@@ -65,6 +65,18 @@ to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
   easy vector. Mitigate or consciously accept.
 - **Low** — minor impact or remote likelihood. Note and move on.
 
+## Verification status (both marker-guard vectors)
+
+- **Bash vector** — `guard-approval-markers.sh` is covered by `tests/suites/marker-guard.sh`
+  (29 assertions: write-shapes blocked; reads + real command sets allowed; a wiring check
+  that all 7 Bash agents actually wire it). Green in `tests/run-eval.sh`.
+- **`Write`/`Edit` deny vector** — **verified live** (2026-07-02): a `Write` to
+  `.pipeline/diff-approved` and `.pipeline/plan-approved` is blocked by the permission layer,
+  while a `Write` to a non-marker `.pipeline/` path succeeds — so the deny is **precisely
+  scoped to the two markers** and does not impede legitimate agent artifacts
+  (`test-results.json`, `security-status.json`, `plan.md`, …). Note: settings changes load at
+  session start, so after editing the deny, restart the session for it to take effect.
+
 ## Step 4 — Accepted risks / residual (stated, not hidden)
 
 - **Obfuscated Bash past `guard-approval-markers.sh`.** The hook is a string scanner; a
