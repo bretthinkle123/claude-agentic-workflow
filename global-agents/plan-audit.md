@@ -62,11 +62,20 @@ When invoked:
      **concrete mechanism** (the specific library call / config key / validation
      class + the file it lives in), not abstract advice. A threat with only a
      mitigation description is a flag — security has nothing to verify.
-   - **Validation contracts present** — every boundary input the plan names (HTTP
-     path/query param, request-body field, file upload, CLI arg) has a validation
-     contract: type + length/range bound + (where meaningful) an allowlist
-     charset/format + the sink it protects. A feature that reads external input
-     but declares no validation contract for it is a flag.
+   - **Input-surface controls complete (MATERIAL) — every input source is accounted
+     for.** Enumerate every input source the plan exposes (HTTP route with a
+     body/query/path param, form, queue/message consumer, file/CSV ingest, webhook
+     receiver). Each MUST carry, in `acceptance.md`, BOTH (a) a **validation** criterion
+     — type + length/range bound + (where meaningful) allowlist charset/format + the sink
+     it protects and the output-encoding there — and (b) a **rate-limit** criterion **or**
+     an explicit `rate_limit_waiver: <reason>`. A missing validation criterion on an
+     untrusted source, or a missing rate-limit criterion-or-waiver, is a **material** flag
+     (a downstream gate — security's `input_surface` reconciliation, or the
+     criteria-coverage gate — will otherwise block at deploy, or worse the control ships
+     absent). Validation is **not waivable** for untrusted input. Cross-check the
+     rate-limit tier against `api-edge-conventions`: a per-owner limit must be
+     **principal-keyed post-auth**, not IP-keyed — flag a plan that says "per-owner" but
+     describes an IP key or a pre-auth hook.
    - **Test strategy declared** — `pyramid` or `integration-heavy` (with a
      one-line rationale when not the default). Missing is a flag (also caught in
      the ambiguity audit; report it once).

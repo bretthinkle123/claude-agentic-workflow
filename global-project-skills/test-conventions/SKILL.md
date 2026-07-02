@@ -135,6 +135,12 @@ test that asserts the property must exercise the variable that would actually br
 - **A middleware-ordering property** ("per-owner", "after auth", "before X") → observe it
   through the **full request lifecycle** with the discriminating variable varied (owner vs
   IP). Unit-testing the key-generator function in isolation does not prove the hook order.
+- **A value that reaches a sensitive sink** (SQL, HTML/template, shell, path, outbound URL,
+  log) → a test that feeds an injection payload (`' OR 1=1--`, `<script>`, `../../etc`, a
+  CRLF) and asserts it is **rejected at the boundary OR encoded at the sink** (parameterized
+  query, autoescaped render, no reflected markup) — input validation and output encoding are
+  *distinct* defenses; assert the one the code relies on. This pairs with the security
+  agent's Semgrep injection net, not a substitute for it.
 
 `plan-audit` should flag an acceptance criterion whose only test is the weak form; the
 testing agent should generate the adversarial shape proactively.

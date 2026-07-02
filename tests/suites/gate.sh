@@ -60,6 +60,10 @@ sec_mut_case 2 "clean + osv_max_cvss=7.5, no waiver → block (B6)" '.osv_max_cv
 sec_mut_case 0 "clean + osv_max_cvss=6.9 (below floor) → pass"     '.osv_max_cvss=6.9'
 sec_mut_case 0 "clean + osv_max_cvss=7.5 + waiver → pass"          '.osv_max_cvss=7.5 | .osv_waiver={id:"GHSA-x",reason:"dev-only",approved_by:"human"}'
 
+# Input-surface reconciliation floor (input-controls plan): an uncontrolled input source blocks.
+sec_mut_case 2 "clean + uncontrolled input source → block"         '.input_surface.uncontrolled=["POST /transfers"]'
+sec_mut_case 0 "clean + input_surface reconciled ([]) → pass"      '.input_surface={declared:2,implemented:2,uncontrolled:[],reconciled:true}'
+
 # Source-marker guard (audit E3): a reverted/do-not-commit marker in the change set
 # blocks. The gate runs in a non-git fixture dir, so exercise the guard on an untracked
 # source file by making the workdir a throwaway git repo with the fixture + a marked file.

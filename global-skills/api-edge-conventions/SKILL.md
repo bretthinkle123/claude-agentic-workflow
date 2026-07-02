@@ -36,28 +36,40 @@ Order is a correctness property, not a preference:
 1. **Request-ID / trace** (`logging-conventions`) — so everything below can log with a `requestId`.
 2. **Security headers** — set on every response including errors.
 3. **CORS** — reject disallowed origins before any work.
-4. **Rate limiting** — shed load before authentication spends a token verification.
+4. **Edge throttle (anonymous, IP-keyed)** — shed a flood before auth spends a token
+   verification. Keyed on **IP** (+ route), because there is no identity yet at this hook.
 5. **Auth guards** (`auth-patterns`) — `require_auth` → `require_mfa` → `require_role`.
-6. **Idempotency** — after identity is known (key is scoped per caller).
-7. **Handler**, wrapped by the **error-envelope** boundary (innermost catch).
-
-Rate limiting sits **before** auth deliberately: an unauthenticated flood must be
-cheap to reject. Auth-endpoint limits (below) are the one exception — they key on
-IP/username since there's no authenticated identity yet.
+6. **Per-identity resource throttle (post-auth, principal-keyed)** — the per-owner /
+   per-API-key limit on data-entry & write flows. Runs **after** auth so the
+   authenticated principal exists at key-generation time.
+7. **Idempotency** — after identity is known (key is scoped per caller).
+8. **Handler**, wrapped by the **error-envelope** boundary (innermost catch).
 
 ## Rate limiting / throttling
 
-- **Algorithm:** token bucket or sliding window. Key by **authenticated identity
-  first** (`userId` / API key), falling back to client IP for anonymous routes.
-- **State:** a **shared store (ElastiCache/Redis by default)**, never in-process
-  counters — in-memory limits are per-instance and silently fail open behind a load
-  balancer.
-- **Response:** `429 Too Many Requests` with a `Retry-After` header. Never a bare
-  drop — clients must be able to back off deterministically.
-- **Auth endpoints get a stricter, separate limit** keyed on IP+username (login,
-  password reset, MFA challenge, token refresh). This is the mitigation for the
-  brute-force / credential-stuffing alerts in `logging-conventions`.
-- Emit a `warn` log as the limit is approached and on every `429` (attack signal).
+Rate limiting is **two distinct tiers at two different lifecycle hooks** — do not collapse
+them into one, and do not "key by identity" on a pre-auth hook (the identity is not set yet,
+so the key silently falls back to IP → owners behind one NAT share a bucket **and** one owner
+across many IPs bypasses the cap; this is a real, shipped defect class).
+
+- **Tier 1 — edge/anonymous throttle (pre-auth hook, keyed on IP + route).** Cheap flood
+  defense so an unauthenticated burst can't cost token verifications. This is the *only* tier
+  that legitimately keys on IP. Auth endpoints (login, password reset, MFA challenge, token
+  refresh) get a **stricter** Tier-1 limit keyed on **IP + username** — the brute-force /
+  credential-stuffing mitigation (`logging-conventions`).
+- **Tier 2 — per-identity resource throttle (post-auth hook, keyed on the authenticated
+  principal: `userId` / API key).** This is the limit that protects per-owner data-entry and
+  write flows. It MUST be registered on a hook that runs **after** `require_auth`
+  (e.g. a `preHandler` in Fastify, `depends`/middleware-after-auth in FastAPI) — verify with
+  a **two-principals-one-IP** test (two identities on one client IP get independent buckets;
+  one identity across two IPs shares a bucket). If that test can't distinguish them, the
+  limiter is mis-keyed.
+- **Algorithm:** token bucket or sliding window (both tiers).
+- **State:** a **shared store (ElastiCache/Redis by default)**, never in-process counters —
+  in-memory limits are per-instance and silently fail open behind a load balancer.
+- **Response:** `429 Too Many Requests` with a `Retry-After` header. Never a bare drop —
+  clients must be able to back off deterministically.
+- Emit a `warn` log as a limit is approached and on every `429` (attack signal).
 
 ## CORS
 
