@@ -142,12 +142,21 @@ EOF
 fi
 
 # --- .gitignore (append missing entries) ------------------------------------
+# Covers stack-agnostic + Python (the default backend stack) AND the common Node/JS
+# build artifacts. The Node entries are added unconditionally, not gated on a
+# detected stack: bootstrap runs BEFORE any package.json exists (implementation
+# creates it mid-run), so stack detection here would miss it — and an un-ignored
+# node_modules/ is catastrophic (thousands of files flood the change-set the pipeline
+# hashes and scans, since git ls-files --others --exclude-standard honors .gitignore),
+# while these entries cost nothing in a Python project. (dist/ and build/ are also
+# standard Python packaging ignores.)
 GI="$TARGET/.gitignore"
 touch "$GI"
 added=0
 for line in ".pipeline/" ".env" ".envrc" "__pycache__/" "*.pyc" ".venv/" "venv/" \
             ".pytest_cache/" ".hypothesis/" ".ruff_cache/" ".coverage" "coverage.json" "htmlcov/" \
-            "*.db" "*.sqlite" "*.sqlite3" "*.tfstate" "*.tfvars"; do
+            "*.db" "*.sqlite" "*.sqlite3" "*.tfstate" "*.tfvars" \
+            "node_modules/" "dist/" "build/" "coverage/" ".stryker-tmp/" "*.tsbuildinfo" "npm-debug.log*"; do
   if ! grep -qxF "$line" "$GI" 2>/dev/null; then
     echo "$line" >> "$GI"
     added=$((added + 1))
