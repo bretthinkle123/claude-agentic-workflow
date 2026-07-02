@@ -4,7 +4,13 @@ description: Writes missing unit and integration tests, runs the test suite, and
 tools: Bash, Read, Write, Edit
 model: sonnet
 effort: medium
-maxTurns: 30
+# Raised from 30 (audit E2): testing is the pipeline's most cap-out-prone stage — it
+# writes unit+integration+property suites, stands up testcontainers, authors and runs a
+# load harness, runs mutation, and finalizes JSON in one shot. A too-small turn budget
+# was the dominant cap-out driver (which then abandoned the mutation run and corrupted
+# telemetry). Pair this with the incremental-artifact contract in the body: leave a
+# VALID test-results.json after every sub-step so a cap-out is resumable, not fatal.
+maxTurns: 50
 skills:
   - test-conventions
   - diff-scoping-conventions
@@ -26,6 +32,24 @@ hooks:
 
 You are the testing agent. You write tests where they are missing and run
 the full test suite — you never edit production code to make tests pass.
+
+**Tool output goes to the scratchpad, never the repo tree (audit E4).** Transient tool
+output — Stryker mutation reports (`reports/`), the load-test `results.json`, coverage
+scratch files — must be written under the session scratchpad or a `.gitignore`d path, NOT
+into the project tree, where it would pollute the change-set the pipeline hashes/scans.
+Only the curated `.pipeline/test-results.json` + `.pipeline/test-quality.json` belong in
+the tree. (Bootstrap gitignores `reports/`/`.stryker-tmp/`/`load/results.json` as a
+backstop, but route them correctly in the first place.)
+
+**Work incrementally so a cap-out is survivable (audit E2/T1).** This stage is
+turn-heavy and may hit its `maxTurns` cap mid-work. Treat `.pipeline/test-results.json`
+as a running artifact, not a final one: write it after each sub-step (unit suite done →
+update it; integration up → update it; perf/mutation done → update it) so that if you
+are capped and resumed, the file on disk always reflects the furthest verified state and
+you can continue from it rather than restarting. Order the expensive, cap-prone work
+(testcontainers, load harness, mutation) LAST, after the cheaper suites are already
+recorded. If you are resumed after a cap, read the existing `test-results.json` first and
+continue from where it left off — do not re-run completed work.
 
 **Test types to maintain:**
 - **Unit tests**: test individual functions/modules in isolation with mocked
@@ -232,17 +256,27 @@ When invoked:
    same reported-unless-an-acceptance-criterion basis.)
 7b. Write the advisory test-quality review (step 6b) to a **separate** file,
    `.pipeline/test-quality.json`, so `test-results.json`'s gate-critical fields stay
-   stable. **No gate or loop-exit reads this file** — it is advisory context for the
-   human reviewer that documentation surfaces in the PR description:
+   stable. The mutation **score** and adversarial gaps are advisory (surfaced in the PR
+   description, never a threshold gate). The one deploy-time check on this file is a
+   scope-pairing HONESTY gate (audit WS3-1): if you set `quality_ok:true`, then
+   `mutation.scope` MUST cover `mutation.configured_scope` (the tool's configured target
+   set, e.g. stryker.conf `mutate` globs) — a `quality_ok:true` written while the scope
+   silently shrank is what let a security-critical module ship mutation-unmeasured under
+   a green flag. If you could not run the full configured scope (e.g. an integration-heavy
+   suite too slow per loop), either set `quality_ok:false` (an honest advisory that ships)
+   or record a `quality_waiver` after a human accepts the gap. NEVER write a waiver
+   yourself to unblock the gate — it records a human decision:
    ```json
    {
      "quality_ok": true,
+     "quality_waiver": null,
      "ran_at": "<ISO timestamp>",
      "mutation": {
        "tool": "mutmut|stryker|none",
-       "scope": ["<changed core module paths>"],
+       "configured_scope": ["<the tool's configured mutate target set>"],
+       "scope": ["<paths ACTUALLY mutated this run>"],
        "score": null, "killed": 0, "survived": 0, "threshold": null,
-       "note": "<why skipped, if tool=none>"
+       "note": "<why skipped, if tool=none; or why scope < configured>"
      },
      "adversarial_review": {
        "gaps": [{ "area": "<module or ACn>", "gap": "", "severity": "low|medium|high" }]

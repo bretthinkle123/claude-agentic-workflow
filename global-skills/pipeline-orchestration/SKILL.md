@@ -38,12 +38,14 @@ string and those files — never assume it can see the conversation.
        if jq -r .status test-results.json == "fail":
             Agent(debugging, "<finding>");  continue
      until GREEN (jq on the status files — NEVER LLM-judged):
-       jq -e '.status=="clean"' security-status.json   AND
+       jq -e '.status=="clean"
+              and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null)' security-status.json   AND
        jq -e '.status=="pass"
               and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))
               and ( ((.perf.status // "n/a")=="n/a")
                     or ( (.perf.budget.p95_ms==null         or .perf.measured.p95_ms!=null)
-                     and (.perf.budget.throughput_rps==null or .perf.measured.throughput_rps!=null) ) )' test-results.json
+                     and (.perf.budget.throughput_rps==null or .perf.measured.throughput_rps!=null)
+                     and (.perf.scenario != null) ) )' test-results.json
      # These are EXACTLY the gate's test/security/criteria + perf-completeness (PR G) checks, so the
      # loop never exits green on anything deployment-gate.sh would reject. The perf-completeness clause
      # mirrors the gate byte-for-byte: a declared perf budget dimension with a null measured value keeps
@@ -53,6 +55,11 @@ string and those files — never assume it can see the conversation.
 
 4b. bash ~/.claude/hooks/loop-guard.sh done   # GREEN exit: stamp loop-state.json status="completed"
      # (counterpart to the cap-out "capped"; without it the file is left "running" after a clean run)
+4c. bash ~/.claude/pipeline-templates/run-summary.sh   # emit .pipeline/run-summary.json (audit B7)
+     # A deterministic machine summary (per-stage invocations/attempts/caps/models from the
+     # run log + loop journal). The retrospective MUST quote per-stage model + cost from THIS
+     # file, never hand-write them — the trial's retrospective mis-said implementation ran on
+     # "opus" when the log (auto-derived from frontmatter) said sonnet.
 
 5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
 5b. HARD HUMAN DIFF-REVIEW CHECKPOINT (M5) — the deploy-side counterpart to plan-approved:
@@ -91,11 +98,22 @@ testing/security) coverage and finding counts are captured too. From this log yo
 derive cost-proxy per stage (model + files_changed), first-pass gate rate (features
 reaching documentation with `retries==0`), and debug-retry/escalation rate.
 
-**Caveat:** a `Stop` hook does **not** fire if an agent hits its `maxTurns` cap —
-the session ends first — so a capped-out stage is silently absent from the log.
-A missing stage line is itself a signal (suspect a cap-out). `duration_s` and
-`tokens` are not available to shell hooks; use timestamp deltas between lines as a
-duration proxy.
+**Cap-out breadcrumb (audit T1 — you MUST do this).** A `Stop` hook does **not** fire
+if an agent hits its `maxTurns` cap — the session ends first — so a capped-out stage
+would otherwise be silently absent from the log and the run under-counts its cost. When
+you OBSERVE a subagent cap out (it stops mid-work without finalizing its artifact),
+immediately leave the breadcrumb yourself before resuming it:
+
+```
+$HOME/.claude/hooks/log-run.sh <stage> "" capped   # explicit cap-out line
+```
+
+Each line now carries an `attempt` number (audit T2) — how many times this
+`(feature,stage)` has been logged, +1 — so the capped line and the eventual clean
+resume are distinct, countable entries instead of collapsing into one. A missing stage
+line is still a signal, but with the breadcrumb the cap is recorded, not inferred.
+`duration_s` and `tokens` are not available to shell hooks; use timestamp deltas between
+lines as a duration proxy.
 
 **Digest:** run `bash ~/.claude/pipeline-templates/run-log-digest.sh` for a
 zero-LLM summary of `run-log.jsonl` — per-stage model/status/retries, the
@@ -123,7 +141,7 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 | `debug-notes.md` | debugging | human (root-cause + evidence trail; advisory) |
 | `security-report.md` / `security-status.json` | security | documentation (md), gate hooks (json) |
 | `test-results.json` | testing | record-clean.sh, deployment-gate.sh (incl. perf-completeness), documentation |
-| `test-quality.json` | testing | documentation (surfaces mutation score + adversarial gaps); **advisory — no gate reads it** |
+| `test-quality.json` | testing | documentation (surfaces mutation score + adversarial gaps). Score/gaps advisory; the deploy gate reads it for ONE deploy-only honesty check (WS3-1): `quality_ok:true` must not claim a scope it didn't mutate, absent a `quality_waiver` |
 | `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh (feature-level cycle/wall-clock budget; independent of `record-clean.sh`). Terminal `status`: `capped` (cap-out) or `completed` (`done`, on GREEN exit); left `running` only mid-loop |
 | `pr-description.md` | documentation | deployment, gate |
 | `diff-approved` | human (via `approve-diff.sh`, TTY-only) | deployment-gate.sh (**the M5 human-review gate + F3 currency anchor**: gate requires it + commit-hash == `approved_change_hash`) |

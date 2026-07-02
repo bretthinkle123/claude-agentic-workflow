@@ -14,6 +14,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
+          command: "$HOME/.claude/hooks/guard-source-markers.sh"
+        - type: command
           command: "$HOME/.claude/hooks/log-run.sh debugging"
 skills:
   - debugging-escalation-protocol
@@ -61,6 +63,15 @@ When invoked:
    no flaky-test set to re-sample.)*
 7. **Remove temporary debug probes** — any print/log/breakpoint/scratch code added
    while diagnosing — before finishing. Leave only the fix and any regression test.
+   **The tree you leave IS the deliverable (audit E3).** NEVER leave an experimental
+   revert, a `// TEMP-REVERT`/`XXX-REVERT`/`DO NOT COMMIT` marker, or reverted-to-buggy
+   code in the working tree — not even briefly "to prove the repro." If you need to
+   demonstrate a repro against the original bug, do it in a **scratch copy** outside the
+   tracked tree (the scratchpad), never by reverting the real file. A build-green tree
+   with a reverted money-path fix once nearly shipped in exactly this way; a Stop-hook
+   marker guard now blocks it, but the discipline is yours: restore the real fix before
+   you stop. If you are capped mid-experiment, the tree must still contain the FIX, not
+   the revert.
 8. **Write the hypothesis log** to `.pipeline/debug-notes.md`: root cause, the
    evidence that confirmed it, what you tried (including dead ends), and the fix
    plus how it was proven (the regression test, or the clean smoke re-pass for a

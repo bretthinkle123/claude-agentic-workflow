@@ -153,16 +153,41 @@ fi
 GI="$TARGET/.gitignore"
 touch "$GI"
 added=0
+# The `reports/`, `scratch_*`, `load/results.json` entries (audit E4 / B-N1) keep tool
+# output — Stryker mutation reports, security-scan scratch files, load-test result JSON —
+# out of the change-set the pipeline hashes and scans. Leaking them into the tree
+# previously polluted the review hash and compounded the E1 hash-instability debugging.
 for line in ".pipeline/" ".env" ".envrc" "__pycache__/" "*.pyc" ".venv/" "venv/" \
             ".pytest_cache/" ".hypothesis/" ".ruff_cache/" ".coverage" "coverage.json" "htmlcov/" \
             "*.db" "*.sqlite" "*.sqlite3" "*.tfstate" "*.tfvars" \
-            "node_modules/" "dist/" "build/" "coverage/" ".stryker-tmp/" "*.tsbuildinfo" "npm-debug.log*"; do
+            "node_modules/" "dist/" "build/" "coverage/" ".stryker-tmp/" "*.tsbuildinfo" "npm-debug.log*" \
+            "reports/" "scratch_*" "load/results.json"; do
   if ! grep -qxF "$line" "$GI" 2>/dev/null; then
     echo "$line" >> "$GI"
     added=$((added + 1))
   fi
 done
 note "[gitignore] $added entr$([ "$added" -eq 1 ] && echo y || echo ies) added"
+
+# --- .gitattributes (cross-machine byte stability for the change-set hash) ----
+# Audit E1 completeness: the change-set hash includes `git diff HEAD`, whose bytes
+# depend on line-ending normalization. Without a committed policy, a CRLF-checkout
+# machine (Windows default `core.autocrlf=true`) and an LF machine produce different
+# tracked-file diffs → different hashes → the human approval gate becomes unpassable
+# from a differently-configured shell (exactly the E1 failure, tracked-file half).
+# Pin `eol=lf` for text so every checkout sees identical bytes, and set the repo-local
+# `core.autocrlf=false` as a belt-and-suspenders (guarded: no-op if not yet a git repo).
+GA="$TARGET/.gitattributes"
+if [[ ! -f "$GA" ]]; then
+  printf '* text=auto eol=lf\n' > "$GA"
+  note "[new]  .gitattributes (* text=auto eol=lf — cross-machine hash stability)"
+else
+  note "[skip] .gitattributes already exists"
+fi
+if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1; then
+  git -C "$TARGET" config core.autocrlf false
+  note "[git] core.autocrlf=false (repo-local; keeps tracked-file bytes stable)"
+fi
 
 # --- Claude Code per-project memory ------------------------------------------
 # Encode the absolute project path the same way Claude Code does:

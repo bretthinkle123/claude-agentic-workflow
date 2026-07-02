@@ -61,8 +61,18 @@ These run **only when the change set triggers them** (the testing agent's steps
   command: `<e.g. sqlite in-memory via alembic upgrade head && downgrade base && upgrade head;
   or testcontainers Postgres>`. **Seed a prod-shaped dataset first** (M6 — never
   round-trip an empty schema): representative rows for every touched table (NULLs,
-  a FK graph, dozens of rows) then assert all survive down+up. Seed helper/fixture:
+  a FK graph, dozens of rows). Seed helper/fixture:
   `<e.g. tests/fixtures/seed.py / factory-boy factories>`.
+  **Distinguish the two reversibility kinds (audit E6) — assert the right thing:**
+  - **Create-migration** (initial schema creation; `down` drops the tables): literal row
+    survival across up→down→up is **undefined by definition** — `down` deletes the tables.
+    Assert **schema + constraint reversibility**: `down` drops in FK-safe order, `up`
+    recreates, then re-seed and re-verify **every** CHECK / FK / UNIQUE / NOT NULL and the
+    domain invariant still enforces identically. Data loss on `down` is expected, not a bug.
+  - **Expand/contract migration** (alters an already-populated table): **row preservation
+    IS required** — seed prod-shaped data, round-trip, and assert every row + value survives.
+  Picking the wrong assertion (demanding row survival from a create-migration) stalled the
+  trial; the plan's reversibility criterion should state which kind applies.
 - **Property-based / fuzz** (trigger: parsers/serializers/validation-contract inputs) —
   library + location: `<e.g. Hypothesis (Python) in tests/property/; fast-check (JS)>`.
 - **Concurrency / idempotency** (trigger: idempotent handler / idempotency key /
@@ -78,12 +88,56 @@ These run **only when the change set triggers them** (the testing agent's steps
   gate + loop-exit block a non-null `perf.budget.*` paired with a null
   `perf.measured.*`, so never mark such a criterion covered while a dimension is
   unmeasured (measure it, or leave the criterion uncovered).
+  **True-percentile measurement (audit E5) — do not report the wrong percentile.**
+  Compute the budgeted percentile yourself by **nearest-rank over the captured
+  per-request latencies** (or an explicitly-configured histogram), and assert the
+  percentile you report is the SAME one the budget names. **Never trust a load tool's
+  named-percentile field blindly** — e.g. autocannon exposes a fixed bucket set
+  (p90/p97_5/p99, **no p95**), so reading `result.latency.p95` silently yields
+  `undefined`→a fallback percentile (p97.5), and a "passing p95" is then a different,
+  stricter number (or, on the other side, could pass a budget the true p95 violates).
+  Record `perf.measured.p95_ms` from your own nearest-rank over the sample set, and
+  sanity-check it lies between the tool's bracketing buckets (p90 ≤ p95 ≤ p97.5).
+  **Disclose the scenario (audit WS3-3):** record `perf.scenario` (concurrency, workload,
+  contention, whether optional egress like a webhook was enabled) — the deploy gate blocks
+  a measured perf result with a null `scenario`, so a best-case number can't be the
+  undisclosed headline.
 - **Test quality — mutation + adversarial** (advisory; runs after the suite passes,
   never gates) — mutation tool: `<e.g. mutmut (Python) | Stryker (JS)>`, scoped to
   the **changed core modules** (logic-dense paths): `<e.g. src/domain, src/codec —
   not glue/generated code>`. Command: `<e.g. mutmut run --paths-to-mutate src/domain>`.
   Also record an adversarial "what does this test not catch" review. Written to
   `test-quality.json` (advisory sibling of `test-results.json`).
+
+## Adversarial test shapes (mandatory when the change has the trigger)
+
+A green suite that is *shaped to pass* is worse than no suite — it certifies a defect. The
+M2 audit found real bugs that shipped green because the tests dodged the discriminating
+case. When the change set has the trigger, the suite MUST include the matching shape, and a
+test that asserts the property must exercise the variable that would actually break it:
+
+- **Rate limit / per-principal throttle** → a test with **two principals sharing one client
+  IP**: principal A exhausts its limit (429) while principal B, same IP, still succeeds; and
+  one principal across two IPs still shares a bucket. Asserting "a different owner is
+  unaffected" against an *un-throttled* endpoint proves nothing. (This is the A-N2 bug: the
+  limiter was IP-keyed, and the AC test used the unlimited endpoint for the cross-owner case.)
+- **Any uniqueness/self-reference-bounded resource** (transfer, link, merge, follow) → an
+  **A == A self-reference** case asserting a clean 4xx, not a 5xx. (A-N1: `from==to` hit an
+  unhandled DB CHECK → 500.)
+- **Every DB constraint in a migration** (CHECK / FK / UNIQUE / NOT NULL) → a test that
+  drives a violation and asserts a mapped **4xx envelope, never a 500**. Constraints are
+  enumerable from the migration file — this is mechanical, not judgment. (A-N1/A-N3: only
+  the unique-violation SQLSTATE was handled; the others fell through to 500.)
+- **Concurrency / idempotency** → assert the **loser's** outcome (409 or idempotent replay),
+  not merely "exactly one row exists" — a same-process ordering fluke passes the weak form.
+- **Idempotent endpoint** → a test that pins what a **replayed response body** contains after
+  intervening state changes (at-transfer vs current values), so replay semantics are fixed.
+- **A middleware-ordering property** ("per-owner", "after auth", "before X") → observe it
+  through the **full request lifecycle** with the discriminating variable varied (owner vs
+  IP). Unit-testing the key-generator function in isolation does not prove the hook order.
+
+`plan-audit` should flag an acceptance criterion whose only test is the weak form; the
+testing agent should generate the adversarial shape proactively.
 
 ## Results contract
 
@@ -95,6 +149,13 @@ required `combined { lines, branches, functions }` plus best-effort per-suite
 `unit`/`integration { lines, branches }`.
 
 Also write the advisory `.pipeline/test-quality.json` (mutation + adversarial
-review) as a **separate** file — no gate or loop-exit reads it; documentation
-surfaces it in the PR description. Keeping it out of `test-results.json` leaves the
-gate-critical fields stable.
+review) as a **separate** file — its mutation **score** and gaps are advisory
+(documentation surfaces them in the PR description), which keeps `test-results.json`'s
+gate-critical fields stable. The one deploy-time check on it is a scope-pairing HONESTY
+gate (audit WS3-1): record both `mutation.configured_scope` (the tool's configured
+target set, e.g. Stryker `mutate` globs) and `mutation.scope` (what actually ran); if you
+set `quality_ok:true`, `scope` must cover `configured_scope`, else the deploy gate blocks
+unless a human `quality_waiver` is recorded. An honest `quality_ok:false` still ships.
+This exists because the trial wrote `quality_ok:true` while the mutation scope had silently
+shrunk to one file, so a security-critical module shipped mutation-unmeasured under a green
+flag.

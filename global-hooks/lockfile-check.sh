@@ -20,7 +20,7 @@ set -uo pipefail
 [ -f .pipeline/state.json ] || exit 0
 
 # Change set = tracked diff + untracked files vs HEAD (see diff-scoping-conventions).
-CHANGED="$( { git diff HEAD --name-only 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | sort -u )"
+CHANGED="$( { git diff HEAD --name-only 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | LC_ALL=C sort -u )"
 [ -n "$CHANGED" ] || { echo "[lockfile-check] clean — empty change set."; exit 0; }
 
 changed_has() { printf '%s\n' "$CHANGED" | grep -qiE "(^|/)$1$"; }

@@ -25,6 +25,8 @@ hooks:
         - type: command
           command: "$HOME/.claude/hooks/infra-validate.sh"
         - type: command
+          command: "$HOME/.claude/hooks/guard-source-markers.sh"
+        - type: command
           command: "$HOME/.claude/hooks/log-run.sh implementation"
 ---
 

@@ -145,6 +145,12 @@
       "p95_ms": 3.69,
       "throughput_rps": 100
     },
+    "scenario": {
+      "concurrency": 50,
+      "workload": "GET /{code} redirect hot path",
+      "contention": "uncontended",
+      "note": "warm ASGI transport, real Postgres"
+    },
     "status": "pass"
   },
   "coverage": {
