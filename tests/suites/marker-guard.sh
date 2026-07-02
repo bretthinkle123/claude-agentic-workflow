@@ -45,8 +45,25 @@ assert_exit 0 "allow: write-review-manifest.sh (no false pos)" feed "bash ~/.cla
 assert_exit 0 "allow: compute-change-hash.sh"        feed "bash ~/.claude/hooks/compute-change-hash.sh"
 assert_exit 0 "allow: writes an unrelated file"      feed "printf x > .pipeline/pr-description.md"
 
+# --- Regression: audit findings (redirect shapes + prose-in-commit-message FP) -----
+assert_exit 2 "block: force-clobber >| marker"       feed "printf x >| .pipeline/diff-approved"
+assert_exit 2 "block: &> redirect marker"            feed "cmd &> .pipeline/diff-approved"
+assert_exit 2 "block: mutating verb after || sep"    feed "false || touch .pipeline/plan-approved"
+# The mutating verbs are anchored to a command position: a verb appearing as PROSE in a
+# git commit message (the deployment agent's real command, esp. on approval-system PRs)
+# must NOT be mistaken for a write.
+assert_exit 0 "allow: commit msg says 'touch up …diff-approved'" feed "git commit -m 'touch up .pipeline/diff-approved handling'"
+assert_exit 0 "allow: commit msg says 'cp of …plan-approved'"    feed "git commit -m 'cp of .pipeline/plan-approved semantics'"
+assert_exit 0 "allow: grep the marker path (read)"   feed "grep -r '.pipeline/diff-approved' global-hooks/"
+
 # --- Fallback: field absent ⇒ scan raw payload, still catch a marker write --------
 assert_exit 2 "fallback: marker write in raw payload"  feed_raw '{"weird":"echo x > .pipeline/diff-approved"}'
 assert_exit 0 "fallback: benign raw payload"           feed_raw '{"weird":"git commit -m x"}'
+
+# --- Wiring: the guard is actually a PreToolUse hook on all 7 Bash-carrying agents.
+# (static.sh only checks the hook FILE resolves; this checks it's WIRED — catches a
+# silently-dropped wiring that would leave an agent's marker vector unguarded.)
+WIRED="$(grep -lE 'guard-approval-markers\.sh' "$REPO_ROOT"/global-agents/*.md | wc -l | tr -d ' ')"
+assert_eq 7 "$WIRED" "guard-approval-markers.sh wired on all 7 Bash-carrying agents"
 
 finish marker-guard

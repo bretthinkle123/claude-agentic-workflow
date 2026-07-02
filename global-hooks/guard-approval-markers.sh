@@ -35,12 +35,16 @@ fi
 
 MARK='\.pipeline/(diff|plan)-approved'
 
-# WRITE contexts (block): redirection into a marker; a marker passed to a mutating
-# command; an in-place edit of a marker. READ contexts (test -f / [ -f / ls / cat / stat)
-# match none of these and pass through.
-if printf '%s' "$CMD" | grep -qE ">>?[[:space:]]*[^[:space:]<>|&;]*$MARK" \
- || printf '%s' "$CMD" | grep -qE "\b(tee|cp|mv|install|dd|ln|rsync|touch|truncate)\b[^;|&]*$MARK" \
- || printf '%s' "$CMD" | grep -qE "\b(sed|perl)\b[^;|&]*-i[^;|&]*$MARK"; then
+# WRITE contexts (block): redirection into a marker (>, >>, >|, &>); a marker passed to a
+# mutating command AT A COMMAND POSITION; an in-place edit of a marker. READ contexts
+# (test -f / [ -f / ls / cat / grep / stat) match none of these and pass through.
+#
+# The mutating-command patterns are anchored to a command position (start of string, or
+# after ; | & ( — a command separator) so a mutating verb appearing as prose inside a
+# `git commit -m "touch up .pipeline/diff-approved"` message is NOT mistaken for a write.
+if printf '%s' "$CMD" | grep -qE ">>?[|]?[[:space:]]*[^[:space:]<>|&;]*$MARK" \
+ || printf '%s' "$CMD" | grep -qE "(^|[;&|(])[[:space:]]*(tee|cp|mv|install|dd|ln|rsync|touch|truncate)\b[^;|&]*$MARK" \
+ || printf '%s' "$CMD" | grep -qE "(^|[;&|(])[[:space:]]*(sed|perl)\b[^;|&]*-i[^;|&]*$MARK"; then
   echo "Blocked: this command writes a human-owned approval marker (.pipeline/diff-approved or .pipeline/plan-approved). Those are created only by a human on their own terminal (approve-diff.sh / touch) — a subagent must never forge one. This is the M5 / plan-approval structural guard (PR K). If the tree changed after approval, STOP and report it so the human can re-approve; do not recreate the marker yourself." >&2
   exit 2
 fi
