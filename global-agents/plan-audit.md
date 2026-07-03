@@ -76,6 +76,18 @@ When invoked:
      rate-limit tier against `api-edge-conventions`: a per-owner limit must be
      **principal-keyed post-auth**, not IP-keyed — flag a plan that says "per-owner" but
      describes an IP key or a pre-auth hook.
+   - **Object-level authorization tested (MATERIAL) — every owner/tenant-scoped
+     resource has a cross-owner denial criterion.** For each resource the plan exposes
+     that is read or mutated **by a client-supplied id** and belongs to a user/tenant
+     (`GET/PUT/DELETE /things/{id}`, a record fetched by primary key), confirm
+     `acceptance.md` carries a criterion asserting a **second principal is denied
+     (404/403) another owner's object** — the IDOR/BOLA shape (OWASP API1, ASVS 8.2.2),
+     verified by the cross-owner test in `test-conventions`. A plan whose owner-scoped
+     resource has only a "the owner can read their own object" criterion, with no
+     cross-owner denial, is a **material** flag: object-level authorization is the #1
+     real-world failure and a row-level-security grep alone can miss an ORM `.get(id)`
+     without an owner filter. (Skip for a resource with no per-owner ownership — a public
+     lookup table, a global config read.)
    - **Test strategy declared** — `pyramid` or `integration-heavy` (with a
      one-line rationale when not the default). Missing is a flag (also caught in
      the ambiguity audit; report it once).

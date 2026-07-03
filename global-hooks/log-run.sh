@@ -139,7 +139,7 @@ EXTRAS='{}'
 case "$STAGE" in
   testing)
     if [ -f .pipeline/test-results.json ]; then
-      # coverage.combined is the merged (gated) figure; fall back to the old flat
+      # coverage.combined is the merged (surfaced, not gated) figure; fall back to the old flat
       # coverage object so pre-schema result files still log cleanly. Also record the
       # best-effort per-tier coverage (audit T4) so the log preserves unit vs
       # integration coverage instead of only the combined number — otherwise a thin

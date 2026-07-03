@@ -68,14 +68,29 @@ The policy:
    overlaps a capability the plan already covers with another library (a redundant dependency). This is
    a flag for the human, not a hard rule — prefer a minimal dependency footprint and libraries that
    support modular, SOLID design.
+5. **License compatibility:** read each new dependency's license from the same registry response (npm:
+   `.license` / `.versions["<v>"].license`; PyPI: `.info.license` or the `License ::` trove classifiers).
+   Classify against the project's distribution intent (an app headed for an app store / public release
+   is proprietary distribution):
+   - **Permissive (MIT, BSD-2/3, Apache-2.0, ISC, Unlicense, 0BSD)** → ✓ compatible.
+   - **Weak-copyleft (LGPL, MPL-2.0, EPL)** → advisory: usable when linked/imported unmodified, but note
+     the obligation (dynamic-link / file-level share-back) so the human confirms the usage pattern fits.
+   - **Strong-copyleft (GPL-2.0/3.0, AGPL-3.0)** → **material** flag for a proprietary/app-store build:
+     including it can force source disclosure of the whole app (AGPL even over a network boundary). Name
+     the package + license and recommend a permissively-licensed alternative.
+   - **No license / "UNLICENSED" / unrecognized** → material flag: an unlicensed dependency grants no
+     rights to use it — treat like a 404-adjacent blocker until the human confirms.
+   Record the license per dependency; a strong-copyleft or missing license on a public-distribution build
+   sets `revision_recommended: true` (material). This is a legal/supply-chain gate the version/reality
+   checks don't cover.
 
-For each dependency give: planned version, age in days (or "unknown"), latest stable, and a verdict —
-✓ compliant, or ✗ with the specific rule violated and the **recommended version** to use instead.
+For each dependency give: planned version, age in days (or "unknown"), latest stable, license, and a
+verdict — ✓ compliant, or ✗ with the specific rule violated and the **recommended version** to use instead.
 
 ## Feeding it back to plan-audit
 
 - **Dependency reality** table: Package | Ecosystem | Exists? | Latest stable | Typosquat note.
-- **Version policy** table: Package | Planned version | Age (days) | Verdict | Recommended version.
+- **Version policy** table: Package | Planned version | Age (days) | License | Verdict | Recommended version.
 - **Could not verify**: any package whose registry lookup failed (network) — the human checks it by hand.
 - **Classification:** a **404 / nonexistent dependency is always material (and critical)** → sets
   `revision_recommended: true`. A typosquat-lookalike that *does* resolve, or a cooldown-freshness /

@@ -26,5 +26,7 @@ breadcrumbs that then drift from the agent frontmatter).
 
 **How to apply:** edit agents in `global-agents/*.md` (the `.codex/agents` Codex
 mirror was deleted 2026-06-29 — Anthropic-only environment, no Codex mirror to keep
-in sync); edit project skills in BOTH `global-project-skills/` and `.agents/skills/`.
-Gate only on `coverage.combined`; never sum per-suite coverage. See [[project-context]].
+in sync); edit project skills in `global-project-skills/` only — the `.agents/skills/`
+mirror was deleted 2026-07-03 (a Codex vestige nothing loaded), so no mirror to sync.
+Gate only on `coverage.combined`; never sum per-suite coverage (line/branch % is
+surfaced, not gated). See [[project-context]].
