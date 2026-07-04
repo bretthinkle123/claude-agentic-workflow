@@ -101,8 +101,11 @@ access** — through centralized facade modules, never scattered inline calls.
 
 The invariants above already satisfy the core ASVS chapters — encoding/validation
 (**V1/V2**), row-level authorization (**V8**), secrets/config (**V13**), data
-protection (**V14**), and log safety (**V16**). Build to these **V15** items too;
-the security agent verifies them at step 6g against the plan's declared ASVS level:
+protection (**V14**), and log safety (**V16**). ASVS **L1 + L2 are universal** in
+this pipeline — the security agent (step 6g) treats an unmet L1/L2 code/config item
+as a **critical** finding that blocks the deploy, so build to them like acceptance
+criteria (plus any **in-scope L3** items the plan's `## ASVS Compliance` block
+lists). Build to these **V15** items too:
 - **Mass assignment (15.3.3)** — bind only an explicit allowlist of fields per
   endpoint/action; never spread a raw request body into a model (`Model(**body)`,
   `Object.assign(entity, req.body)`). Accept-list the writable fields.

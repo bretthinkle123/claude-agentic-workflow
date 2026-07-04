@@ -18,18 +18,28 @@ List the assets the feature introduces or touches (data, tokens, endpoints,
 resources) and the trust boundaries it crosses (client↔server, service↔service,
 app↔datastore, app↔cloud control plane). Threats live at boundaries.
 
-## Step 1b — Select the ASVS verification level
+## Step 1b — ASVS 5.0.0 compliance scope (emit a `## ASVS Compliance` block)
 
-Declare the target OWASP ASVS 5.0.0 level for this feature (the security agent
-verifies against it). Rubric:
-- **L1** — the default baseline for every feature.
-- **L2** — escalate to this when the feature handles authentication/identity,
-  PII/personal data, money/financial records, multi-tenant or owner-scoped data,
-  or anything an attacker would target for gain. The realistic default for most
-  real apps.
-- **L3** — regulated data, high monetary value, or breach-critical systems.
+OWASP ASVS is enforced first-class in this pipeline (like STRIDE). **L1 + L2 are
+universal** — every triggered chapter's L1/L2 code/config items must be met (the
+security agent blocks the deploy if not). **L3 is project-specific** — you decide
+which L3 items are in scope. ASVS has only three levels; there is no L4.
 
-Write it as `**ASVS target level:** L<n>` under the `## Threat Model` heading.
+Append a `## ASVS Compliance` block to `plan.md` (right after `## Threat Model`)
+with, based on the deep per-chapter checklist in the sibling
+**`asvs-5.0-checklist.md`**:
+- **Triggered chapters** — which of V1–V17 the feature's surface triggers (mark the
+  rest `n/a`). Use each chapter's applicability line in the checklist.
+- **In-scope L3 items** — review the L3 items of the triggered chapters and list the
+  ones this project warrants (regulated data, high monetary value, breach-critical),
+  each with a one-line justification. If none, say "L3: none in scope for this project."
+- **Waivers** — any L1/L2 code/config item that is genuinely N/A here, as
+  `{id, reason}` (the security agent honors only recorded waivers; an unwaived unmet
+  L1/L2 code/config item blocks). Documentation/org-level ASVS items (the `X.1`
+  sections) are advisory and need no waiver.
+
+Then cite the specific requirement IDs in the threat table's ASVS column (Step 2b),
+so implementation builds to them and security verifies them.
 
 ## Step 2 — Enumerate threats (fill this table)
 
@@ -73,8 +83,9 @@ table's **ASVS req(s)** column. STRIDE categories map to ASVS chapters roughly a
 The full per-chapter L1/L2/L3 requirement checklist — with real IDs, applicability
 triggers, and which pipeline skill builds vs. verifies each — is in the sibling file
 **`asvs-5.0-checklist.md`**. Read it to pick the exact requirement IDs for this
-feature at the target level; do not paste the whole catalog into the plan — cite
-only the IDs that apply. A chapter with no matching surface is `n/a`.
+feature (L1/L2 are universal; add any in-scope L3 — see Step 1b); do not paste the
+whole catalog into the plan — cite only the IDs that apply. A chapter with no
+matching surface is `n/a`.
 
 ## Step 3 — Severity rubric (impact × likelihood)
 

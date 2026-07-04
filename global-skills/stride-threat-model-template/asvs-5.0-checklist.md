@@ -14,21 +14,48 @@ file, not preloaded), so its length costs nothing on a normal run.
   ASVS 6g covers the chapters SAST cannot reach (auth, session, authz, tokens, crypto, comms,
   config, data protection, logging). They are complementary, not redundant.
 
-## Verification levels — pick the target level per feature
+## Verification levels — L1+L2 universal, L3 project-specific
 
-ASVS defines three cumulative levels (L2 includes L1; L3 includes L2). Planning declares the
-target level in the plan's `## Threat Model`; the security agent verifies against it.
+ASVS defines **three** cumulative levels (L2 includes L1; L3 includes L2). *There is no Level 4.*
+This pipeline's policy:
 
-- **L1 (default, every feature)** — the baseline every pipeline-built app must meet.
-- **L2 (escalate to this when the feature handles) —** authentication/identity, PII/personal
-  data, money or financial records, multi-tenant/owner-scoped data, or anything an attacker would
-  target for gain. This is the realistic default for most real apps.
-- **L3 (high-value / high-assurance)** — regulated data, high monetary value, or a system where a
-  breach is critical. Declare explicitly; L3 items are otherwise advisory.
+- **L1 + L2 — UNIVERSAL (mandatory on every project).** Every triggered chapter's L1 and L2 items
+  must be **met, or explicitly waived** with a recorded reason. This is a hard bar, not advice.
+- **L3 — PROJECT-SPECIFIC.** The planning agent reviews the L3 items of the triggered chapters and
+  **selects the ones in scope** for the project's data sensitivity / value (regulated data, high
+  monetary value, breach-critical). In-scope L3 items are then treated exactly like L2 (must be
+  met or waived). Out-of-scope L3 items are advisory — noted, never blocking.
 
 Chapters carry an **applicability trigger** — a chapter with no matching surface in the feature is
 `n/a` (record it as such; do not invent findings). A REST API with bearer auth over TLS typically
 triggers V1, V2, V4, V6, V7/V9, V8, V11, V12, V13, V14, V15, V16.
+
+### Enforcement classification — what blocks vs. what is advisory
+
+Not every ASVS requirement maps to per-feature code. To keep the gate meaningful:
+
+- **Code/config requirements → BLOCKING.** An unmet, unwaived L1/L2 (or in-scope L3) item that
+  maps to code or configuration — authentication, authorization, tokens, crypto, validation,
+  output encoding, security headers, TLS, secrets handling, log-injection encoding, error handling
+  — is a **critical** finding (security step 6g), so it flips `security-status.status` to
+  `issues-found` and **blocks the deploy gate**, regardless of whether it is independently
+  "exploitable." This is how L1/L2 become genuinely mandatory.
+- **Documentation / org-level requirements → ADVISORY.** Each chapter's **`X.1` "… Documentation"
+  section** (e.g. `V2.1`, `V6.1`, `V11.1`, `V13.1`, `V16.1`) and any item whose text is *"document
+  …/ maintain an inventory / define a policy"* describes an organizational artifact, not per-feature
+  code. These are **surfaced as warnings**, never blocking — or satisfied once at the project level.
+- **Classify by this rule, in order — and when unsure, BLOCK (fail-safe):**
+  1. The item is in the chapter's `X.1 … Documentation` section, **or** its verb is *document /
+     inventory / policy / define* → **advisory**.
+  2. Otherwise it constrains code or runtime configuration → **blocking**.
+  3. If an item is genuinely ambiguous between the two → **treat it as blocking.** A false block is
+     a visible waiver conversation (a human decides); a false advisory **silently ships a gap** —
+     the exact failure ASVS enforcement exists to prevent. Mis-classification must never be able to
+     downgrade a real requirement to advisory unnoticed. (Each chapter below already **bolds** its
+     load-bearing blocking items, so the common cases need no judgement.)
+- **Waivers.** A genuinely N/A code/config item may be waived only with a recorded
+  `{ id, reason, approved_by }` (human-owned, like the `osv_waiver`) — never silently. A waived
+  item does not block.
 
 ---
 
@@ -157,15 +184,23 @@ Coverage: security 6g (verify). No WebRTC ⇒ `n/a` (the common case for this pi
 
 ---
 
-## How each stage uses this file
+## How each stage uses this file (first-class, enforced across the pipeline)
 
-- **Planning** (`stride-threat-model-template`): after the STRIDE table, select the target level
-  (rubric above), mark each chapter `applies`/`n/a` for the feature, and cite the specific ASVS
-  requirement ID(s) in each threat's mitigation so the control is *verifiable*, not vague.
-- **Implementation** (`code-standards`): build to the L1/L2 items of the triggered chapters —
-  especially V1/V2 (encoding/validation) and V15 (secure coding).
-- **Security agent** (step 6g): for each triggered chapter at the target level, verify the items
-  are met in the diff-scoped change set; fold any gap into `critical_count`/`warning_count` (an
-  unmet L1/L2 item on triggered surface is a finding — severity per the STRIDE rubric) and record
-  `asvs_level` / `asvs_reqs_verified` / `asvs_reqs_missing` in `security-status.json`. Advisory —
-  it adds no new gate; a critical still blocks via the existing gate.
+- **Planning** (`stride-threat-model-template`): emit a `## ASVS Compliance` block in `plan.md` —
+  acknowledge the L1/L2 universal baseline, list the **triggered chapters** (mark others `n/a`),
+  **select the in-scope L3 items** for this project with a one-line justification, and record any
+  L1/L2 **waivers** (`{id, reason}`) for genuinely N/A code/config items. Cite the specific ASVS
+  requirement ID(s) in each STRIDE threat's mitigation so the control is *verifiable*, not vague.
+- **Implementation** (`code-standards`): build to the L1/L2 items of every triggered chapter, plus
+  the in-scope L3 items — especially V1/V2 (encoding/validation), V6/V7/V8/V9 (auth/session/authz/
+  tokens), V11 (crypto), and V15 (secure coding). Treat them as definition-of-done, like acceptance
+  criteria.
+- **Security agent** (step 6g — ENFORCING): for each triggered chapter, verify its L1/L2 (+ in-scope
+  L3) items against the diff-scoped change set. An unmet, unwaived **code/config** item is a
+  **critical** finding → `security-status.status` becomes `issues-found` → the deploy gate blocks
+  (no new gate hook needed — it rides the existing `status` check). Documentation/org-level items
+  are surfaced as warnings. Security emits an `asvs` reconciliation block in `security-status.json`
+  (level, triggered chapters, `l1_l2_missing`, `l3_in_scope_missing`, `doc_advisory`, `waivers`,
+  `reconciled`) and only writes `status:"clean"` when every triggered code/config L1/L2 and in-scope
+  L3 item is met or waived. This makes L1/L2 as mandatory as the STRIDE-mechanism and input-surface
+  checks.

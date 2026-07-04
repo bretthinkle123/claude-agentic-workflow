@@ -88,6 +88,34 @@ When invoked:
      real-world failure and a row-level-security grep alone can miss an ORM `.get(id)`
      without an owner filter. (Skip for a resource with no per-owner ownership — a public
      lookup table, a global config read.)
+   - **Authentication boundary tested (MATERIAL) — every auth-required endpoint has an
+     unauthenticated-denial criterion (ASVS-DET T2-1).** For each endpoint the plan protects
+     with authentication, confirm `acceptance.md` carries a criterion asserting an
+     **unauthenticated request (no / invalid / expired token) is denied 401/403** — the
+     authentication-boundary shape in `test-conventions` (ASVS 6.2.x / 8.2.1). This is distinct
+     from the cross-owner (8.2.2) criterion, which assumes an authenticated caller; a plan with
+     only "the owner can access it" and no unauthenticated-denial criterion is a **material**
+     flag. (Skip for a feature with no authenticated endpoints.)
+   - **Safe-error handling tested (MATERIAL when the feature has server-side error paths;
+     ASVS-DET T2-2).** When the plan declares an error envelope, or the feature has DB/IO calls
+     or untrusted input that can raise server-side, confirm `acceptance.md` carries a criterion
+     asserting a **forced internal error returns a generic envelope (no stack trace / SQL /
+     secret / internal path) and fails closed** (no partial side effect) — the safe-error shape
+     in `test-conventions` (ASVS 16.5.1 / 16.5.3). A feature that processes untrusted input with
+     no such criterion is a **material** flag: verbose errors and fail-open on the error path are
+     common real leaks. (Skip for a trivial feature with no server-side error surface.)
+   - **ASVS compliance scoped (MATERIAL for a security-surface feature).** The plan
+     carries a **`## ASVS Compliance`** block (per `stride-threat-model-template`)
+     listing the **triggered** ASVS 5.0.0 chapters, the **in-scope L3** items chosen
+     for this project (or an explicit "L3: none in scope"), and any L1/L2 **waivers**
+     with reasons. L1+L2 are the universal baseline the security agent enforces
+     (unmet code/config items block at deploy), so a feature with real security
+     surface (auth, authz, tokens, crypto, PII/money data, an HTTP input surface)
+     whose plan **omits the ASVS Compliance block, or leaves L3 unconsidered**, is a
+     **material** flag — downstream security has no scope to verify against and will
+     fall back to verifying everything, or a warranted L3 item silently ships out of
+     scope. A pure-internal change with no security surface may say "no ASVS-triggered
+     surface"; that is fine.
    - **Test strategy declared** — `pyramid` or `integration-heavy` (with a
      one-line rationale when not the default). Missing is a flag (also caught in
      the ambiguity audit; report it once).

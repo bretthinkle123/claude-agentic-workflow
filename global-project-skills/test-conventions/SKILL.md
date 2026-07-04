@@ -163,6 +163,20 @@ test that asserts the property must exercise the variable that would actually br
   (Row-level-security greps can miss an ORM `.get(id)` that lacks an owner filter — this test
   is what actually proves the scoping predicate is enforced.)
 
+- **Any authentication-required endpoint** (a route the plan protects with auth) → an
+  **unauthenticated-access-denied** test: the same request with **no token / an invalid or
+  expired token** MUST get **401/403**, never the resource or a 200. This is distinct from the
+  cross-owner (8.2.2) shape — that one assumes an authenticated caller; this proves the
+  authentication boundary itself exists (**ASVS 6.2.x / 8.2.1 / 8.3.1**; ASVS-DET T2-1). A suite
+  that only ever authenticates as a valid user never exercises the unauthenticated path.
+- **Any endpoint with server-side error handling** (an error envelope, a DB/IO call that can
+  fail, untrusted input that can trip an exception) → a **safe-error** test: force an internal
+  error (or hit an unhandled path) and assert the response is a **generic** envelope carrying
+  **no stack trace, SQL, secret, token, or internal path**, with a correct status — and that the
+  request **fails closed** (no partial write / side effect on the error path). This is the
+  verbose-error + fail-open shape (**ASVS 16.5.1 / 16.5.3**; ASVS-DET T2-2), the test counterpart
+  to the Tier-1 debug-mode SAST check.
+
 `plan-audit` should flag an acceptance criterion whose only test is the weak form; the
 testing agent should generate the adversarial shape proactively.
 

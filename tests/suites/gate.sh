@@ -50,15 +50,26 @@ sec_case
 # CVE-severity floor (audit B6): a High/Critical OSV finding blocks even when clean,
 # unless an explicit waiver is recorded.
 sec_mut_case() {
-  local want="$1" desc="$2" mut="$3"
+  local want="$1" desc="$2" mut="$3" wj="${4:-}"
   local w; w="$(mk_fixture)"
   jq_edit "$w/.pipeline/security-status.json" "$mut"
+  # Optional human waivers.json (Option B — a claimed osv/asvs waiver is only honored if recorded).
+  [ -n "$wj" ] && printf '%s' "$wj" > "$w/.pipeline/waivers.json"
   ( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
   assert_eq "$want" "$?" "$desc"
 }
 sec_mut_case 2 "clean + osv_max_cvss=7.5, no waiver → block (B6)" '.osv_max_cvss=7.5'
 sec_mut_case 0 "clean + osv_max_cvss=6.9 (below floor) → pass"     '.osv_max_cvss=6.9'
-sec_mut_case 0 "clean + osv_max_cvss=7.5 + waiver → pass"          '.osv_max_cvss=7.5 | .osv_waiver={id:"GHSA-x",reason:"dev-only",approved_by:"human"}'
+
+# ASVS reconciliation floor: status left "clean" but asvs.reconciled=false must still block
+# (the deterministic backstop — an unmet code/config L1/L2 item can't slip past as green).
+sec_mut_case 2 "clean + asvs.reconciled=false → block (ASVS)" '.asvs.reconciled=false'
+sec_mut_case 0 "clean + asvs.reconciled=true → pass"          '.asvs.reconciled=true'
+sec_mut_case 0 "clean + no asvs field → pass (backward compat)" 'del(.asvs)'
+# B6 waiver now requires a human record in waivers.json (Option B): a bare claimed waiver blocks,
+# a human-recorded one lifts the floor.
+sec_mut_case 2 "clean + osv 7.5 + claimed waiver, no human record → block" '.osv_max_cvss=7.5 | .osv_waiver={id:"GHSA-x",reason:"dev-only",approved_by:"human"}'
+sec_mut_case 0 "clean + osv 7.5 + human-recorded waiver → pass"            '.osv_max_cvss=7.5 | .osv_waiver={id:"GHSA-x",reason:"dev-only",approved_by:"human"}' '{"osv":[{"id":"GHSA-x"}],"asvs":[]}'
 
 # Input-surface reconciliation floor (input-controls plan): an uncontrolled input source blocks.
 sec_mut_case 2 "clean + uncontrolled input source → block"         '.input_surface.uncontrolled=["POST /transfers"]'

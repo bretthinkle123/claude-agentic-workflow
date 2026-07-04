@@ -76,6 +76,31 @@ if [ ! -f "$SECURITY_STATUS" ] || [ "$(jq -r '.status' "$SECURITY_STATUS")" != "
   exit 2
 fi
 
+# Waiver authenticity (Option B — waivers are human-owned). A waiver excuses an otherwise-blocking
+# finding (a High/Critical CVE, or an unmet ASVS L1/L2 code/config requirement). Waivers are recorded
+# ONLY by a human via record-waiver.sh (TTY-only) into .pipeline/waivers.json; the security agent may
+# READ and honor them but cannot create them (guard-approval-markers.sh + a settings deny block agent
+# writes). This refuses to trust any waiver the agent CLAIMED in security-status.json unless a human
+# recorded it here — closing the "agent self-writes a waiver to go green" vector. It runs BEFORE the
+# CVE floor so a fabricated osv_waiver cannot lift it. Deploy-only (like the WS3-1 mutation-scope
+# honesty check); NOT in the loop-exit predicate. Absent waivers.json ⇒ empty ⇒ any claim blocks.
+WAIVERS_FILE=".pipeline/waivers.json"
+HUMAN_OSV=$(jq -c '[.osv[]?.id]'  "$WAIVERS_FILE" 2>/dev/null); [ -n "$HUMAN_OSV" ]  || HUMAN_OSV='[]'
+HUMAN_ASVS=$(jq -c '[.asvs[]?.id]' "$WAIVERS_FILE" 2>/dev/null); [ -n "$HUMAN_ASVS" ] || HUMAN_ASVS='[]'
+
+OSV_CLAIM=$(jq -r '(.osv_waiver.id // empty)' "$SECURITY_STATUS" 2>/dev/null)
+if [ -n "$OSV_CLAIM" ] && ! printf '%s' "$HUMAN_OSV" | jq -e --arg id "$OSV_CLAIM" 'index($id) != null' >/dev/null 2>&1; then
+  echo "Blocked: security-status.json claims osv_waiver id='$OSV_CLAIM' but no matching human waiver is recorded in $WAIVERS_FILE. Waivers are recorded only by a human (record-waiver.sh); a subagent cannot self-waive. Record it after accepting the risk, or patch the dependency." >&2
+  exit 2
+fi
+
+CLAIMED_ASVS=$(jq -c '([.asvs.waivers[]?] | map(if type=="object" then .id else . end))' "$SECURITY_STATUS" 2>/dev/null); [ -n "$CLAIMED_ASVS" ] || CLAIMED_ASVS='[]'
+FAB_ASVS=$(jq -cn --argjson c "$CLAIMED_ASVS" --argjson h "$HUMAN_ASVS" '$c - $h' 2>/dev/null); [ -n "$FAB_ASVS" ] || FAB_ASVS='[]'
+if [ "$(printf '%s' "$FAB_ASVS" | jq 'length' 2>/dev/null || echo 0)" -gt 0 ]; then
+  echo "Blocked: security-status.json claims ASVS waiver(s) $FAB_ASVS with no matching human record in $WAIVERS_FILE. Waivers are recorded only by a human (record-waiver.sh); a subagent cannot self-waive. Record them after accepting the risk, or meet the requirement." >&2
+  exit 2
+fi
+
 # CVE-severity floor (audit B6). `status:"clean"` is the security agent's judgment; this
 # is a DETERMINISTIC backstop so a High/Critical OSV finding (CVSS >= 7.0) cannot ship as
 # clean without an explicit, recorded `.osv_waiver`. A CVSS 7.5 High shipped green in the
@@ -101,6 +126,33 @@ SURFACE_UNCONTROLLED=$(jq -r '((.input_surface.uncontrolled // []) | length)' "$
 if [ "${SURFACE_UNCONTROLLED:-0}" -gt 0 ]; then
   UNLIST=$(jq -rc '(.input_surface.uncontrolled // [])' "$SECURITY_STATUS" 2>/dev/null)
   echo "Blocked: $SURFACE_UNCONTROLLED input source(s) shipped without an accounted-for validation contract + rate-limit policy/waiver (uncontrolled: $UNLIST). Add the missing control (or a recorded waiver) and re-scan. See $SECURITY_STATUS .input_surface and .pipeline/surface-delta.md." >&2
+  exit 2
+fi
+
+# ASVS 5.0.0 reconciliation floor (ASVS enforcement). The security agent (step 6g) verifies
+# ASVS 5.0.0 L1/L2 (universal) + in-scope L3 and sets `.asvs.reconciled=false` when an unmet,
+# unwaived code/config requirement remains. Such an item is ALSO a critical (→ status not clean,
+# blocked above), so this is the deterministic backstop: a security-status that claims
+# `status:"clean"` while `.asvs.reconciled` is false cannot slip through. Uses `== "false"` (not
+# `// true`) because jq's `//` treats false like null; absent field ⇒ not "false" ⇒ no block
+# (backward compatible / features with no ASVS surface). Mirrored in the loop-exit security
+# predicate (SKILL + loop-exit-invariant.sh) so loop-exit == gate.
+ASVS_RECONCILED=$(jq -r '(.asvs.reconciled)' "$SECURITY_STATUS" 2>/dev/null || echo null)
+if [ "$ASVS_RECONCILED" = "false" ]; then
+  echo "Blocked: $SECURITY_STATUS .asvs.reconciled is false — an unmet ASVS 5.0.0 L1/L2 (or in-scope L3) code/config requirement remains (see .asvs.l1_l2_missing / .asvs.l3_in_scope_missing and .pipeline/security-report.md). Meet it, or record a human-approved waiver." >&2
+  exit 2
+fi
+
+# ASVS Tier-1 SAST floor (ASVS-DET). asvs-sast.sh (a Stop hook on the security agent, agent-independent)
+# writes .pipeline/asvs-sast.json with a deterministic count of high-precision ASVS violations (JWT
+# alg:none 9.1.2, password fast-hash 11.4.2, non-CSPRNG 11.5.1, insecure cipher 11.3.1). This is the
+# gate-side backstop: even if the agent doesn't fold a Tier-1 finding into critical_count, an unfixed
+# one blocks here. Deploy-only (NOT in the loop-exit predicate); absent file ⇒ 0 ⇒ no-op (a project
+# whose stack the scan doesn't cover, or a pre-scan run).
+ASVS_SAST=".pipeline/asvs-sast.json"
+SAST_CRIT=$(jq -r '(.critical // 0)' "$ASVS_SAST" 2>/dev/null || echo 0)
+if [ "${SAST_CRIT:-0}" -gt 0 ] 2>/dev/null; then
+  echo "Blocked: $ASVS_SAST reports $SAST_CRIT unfixed ASVS Tier-1 finding(s) (JWT alg:none / fast-hash password / non-CSPRNG / insecure cipher). Fix them (see .findings[]) — these are deterministic critical violations, not waivable." >&2
   exit 2
 fi
 

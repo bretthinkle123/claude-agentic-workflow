@@ -3,6 +3,8 @@
 # FABRICATING a human-owned gate marker:
 #   .pipeline/diff-approved  — the M5 human diff-review approval (deployment gate anchor)
 #   .pipeline/plan-approved  — the human plan checkpoint (implementation refuses without it)
+#   .pipeline/waivers.json   — human-recorded security waivers (Option B; record-waiver.sh writes it,
+#                              deployment-gate.sh cross-checks claimed waivers against it)
 #
 # Both markers are created ONLY by the human, on the un-hooked main thread
 # (approve-diff.sh writes diff-approved; a human `touch`es plan-approved). A subagent
@@ -33,7 +35,7 @@ if command -v jq >/dev/null 2>&1; then
 fi
 [ -z "$CMD" ] && CMD="$PAYLOAD"
 
-MARK='\.pipeline/(diff|plan)-approved'
+MARK='\.pipeline/((diff|plan)-approved|waivers\.json)'
 
 # WRITE contexts (block): redirection into a marker (>, >>, >|, &>); a marker passed to a
 # mutating command AT A COMMAND POSITION; an in-place edit of a marker. READ contexts
@@ -45,7 +47,7 @@ MARK='\.pipeline/(diff|plan)-approved'
 if printf '%s' "$CMD" | grep -qE ">>?[|]?[[:space:]]*[^[:space:]<>|&;]*$MARK" \
  || printf '%s' "$CMD" | grep -qE "(^|[;&|(])[[:space:]]*(tee|cp|mv|install|dd|ln|rsync|touch|truncate)\b[^;|&]*$MARK" \
  || printf '%s' "$CMD" | grep -qE "(^|[;&|(])[[:space:]]*(sed|perl)\b[^;|&]*-i[^;|&]*$MARK"; then
-  echo "Blocked: this command writes a human-owned approval marker (.pipeline/diff-approved or .pipeline/plan-approved). Those are created only by a human on their own terminal (approve-diff.sh / touch) — a subagent must never forge one. This is the M5 / plan-approval structural guard (PR K). If the tree changed after approval, STOP and report it so the human can re-approve; do not recreate the marker yourself." >&2
+  echo "Blocked: this command writes a human-owned file (.pipeline/diff-approved, .pipeline/plan-approved, or .pipeline/waivers.json). Those are created only by a human on their own terminal (approve-diff.sh / touch / record-waiver.sh) — a subagent must never forge one. This is the M5 / plan-approval / waiver structural guard (PR K + Option B). If a finding cannot be met, STOP and report it so the human can decide (fix or record a waiver); do not write the file yourself." >&2
   exit 2
 fi
 exit 0

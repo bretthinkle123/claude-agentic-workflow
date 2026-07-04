@@ -22,6 +22,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
+          command: "$HOME/.claude/hooks/asvs-sast.sh"
+        - type: command
           command: "$HOME/.claude/hooks/stamp-ran-at.sh security"
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh security"
@@ -107,6 +109,20 @@ When invoked:
    Note in your report whether the SBOM was produced and its component count;
    documentation surfaces it in the PR description. A missing SBOM (no Docker) never
    blocks — it is a best-effort artifact.
+4e. **ASVS Tier-1 SAST (ASVS-DET)** — run the deterministic Tier-1 ASVS scan over the
+   change set and **fix** every critical it reports:
+   ```
+   $HOME/.claude/hooks/asvs-sast.sh          # writes .pipeline/asvs-sast.json {critical, findings[]}
+   ```
+   It flags high-value, high-precision ASVS 5.0.0 violations: **JWT `alg:none`/verification
+   disabled (9.1.2)**, **passwords stored with a fast hash instead of a slow KDF (11.4.2)**,
+   **non-CSPRNG for a security value (11.5.1)**, and **insecure cipher/mode — ECB/DES/RC4/
+   PKCS1v15 (11.3.1)**. Each finding is a **critical**: fix it in place under step 7 (switch to
+   a signed-alg allowlist, an argon2/bcrypt/scrypt/pbkdf2 KDF, `secrets`/`crypto.randomBytes`,
+   AES-GCM) and fold it into `critical_count`. This scan also runs as your Stop hook, and
+   **`deployment-gate.sh` independently blocks on `asvs-sast.json` `critical > 0`** — so an
+   unfixed Tier-1 finding cannot ship even if it is missed here. (This is the deterministic
+   counterpart to the agent-reasoned ASVS checks in step 6g.)
 5. If the change includes database migration files, scan each one for:
    - **No downgrade path** — a migration with an upgrade but no rollback
      function is flagged critical (it cannot be safely reverted in production).
@@ -244,49 +260,59 @@ When invoked:
    `security-status.json` (step 9). A change set that introduces no new surface
    has `stride_new_threats: 0` and no addendum entries.
 
-   **g. ASVS 5.0.0 requirement verification** — the OWASP Top 10 (Semgrep
-   `p/owasp-top-ten`) is a risk-awareness net for the injection-class chapters;
-   this check adds the **verifiable-requirements** layer for the chapters SAST
-   cannot reach (authentication, session, authorization, tokens, crypto,
-   communication, configuration, data protection, logging). Read the deep
-   checklist at
-   `$HOME/.claude/skills/stride-threat-model-template/asvs-5.0-checklist.md`
-   (the single source of the ASVS content) and:
-   - Read `.pipeline/plan.md`'s `## Threat Model` for the declared **ASVS target
-     level** (`L1` default, `L2` for auth/PII/money/multi-tenant features, `L3`
-     high-value). If planning declared none, default to **L1**, and to **L2** if
-     the diff-scoped change set touches authentication, sessions, owner/tenant-
-     scoped data, money, or PII.
+   **g. ASVS 5.0.0 requirement verification (ENFORCING)** — the verifiable-requirements
+   layer for the chapters SAST cannot reach (auth, session, authz, tokens, crypto,
+   communication, config, data protection, logging). The deep per-chapter checklist —
+   including the **enforcement classification** (which items block vs. are advisory) — is
+   `$HOME/.claude/skills/stride-threat-model-template/asvs-5.0-checklist.md` (the single
+   source; read and apply it, don't restate it here). Then:
+   - Read `.pipeline/plan.md`'s **`## ASVS Compliance`** block for the **triggered
+     chapters**, the **in-scope L3 items** planning selected, and any recorded
+     **L1/L2 waivers** (`{id, reason}`). **L1 + L2 are universal** — verified on
+     every triggered chapter regardless of what planning wrote. If the block is
+     missing, derive the triggered chapters yourself from the diff (fail safe: verify
+     L1+L2 on everything the surface triggers) and note in the report that the plan
+     lacked an `## ASVS Compliance` block (a plan-audit miss worth flagging).
    - Determine which chapters the change set **triggers** using each chapter's
      applicability line in the checklist (a REST + bearer-auth API typically
      triggers V1, V2, V4, V6, V7/V9, V8, V11, V12, V13, V14, V15, V16). A chapter
      with no matching surface in the diff is `n/a` — record it, do not invent a
      finding for it.
-   - For each triggered chapter, verify its **L1 and (if the target is L2/L3) L2**
-     items against the diff-scoped change set. Prefer concrete evidence (a grep
-     for the parameterized-query call, the `HttpOnly`/`Secure` cookie flags, the
-     JWT `alg` allowlist, the password-hash KDF, the least-privilege predicate).
+   - For each triggered chapter, verify its **L1 and L2 items** (universal), plus the
+     **in-scope L3 items** from the ASVS Compliance block, against the diff-scoped
+     change set. Prefer concrete evidence (a grep for the parameterized-query call,
+     the `HttpOnly`/`Secure` cookie flags, the JWT `alg` allowlist, the password-hash
+     KDF, the least-privilege predicate).
    - Also verify every **ASVS requirement ID that planning cited** in a threat's
      mitigation (Step 2b of the plan) is actually implemented — the ASVS analog of
      the 6d STRIDE-mechanism check. A cited requirement with no implementation is a
      gap.
-   - **Disposition (advisory — no new gate):** an unmet **L1 or L2** item on
-     triggered surface is a **finding**; assign severity via the same
-     impact×likelihood rubric the other manual checks use. An exploitable unmet
-     item — e.g. missing authorization on owner-scoped data (8.2.2), a JWT `none`
-     algorithm accepted (9.1.2), a password stored without a slow KDF (11.4.2) — is
-     **critical** and is fixed in place under step 7's exploitable rule; a
-     non-exploitable best-practice gap is a **warning**. Fold all findings into the
-     same `critical_count` / `warning_count` totals. This check adds **no new gate
-     hook** — a critical still blocks via the existing deploy gate; warnings are
-     advisory. Many ASVS items overlap the existing manual checks (6b↔V8, 6c↔V1/V2,
-     6e↔V16, 6a↔V13/V14); when they do, record the finding **once** and cite the
-     ASVS ID — do not double-count.
-   - Record in `security-status.json` (step 9): `asvs_level` (the level verified
-     against), `asvs_reqs_verified` (count met), and `asvs_reqs_missing` (count of
-     unmet triggered items, any severity). Every unmet item also gets a row in the
-     Complete findings inventory with `source: manual-6g` and its ASVS requirement
-     ID in the `id` column.
+   - **Disposition** (apply the checklist's *enforcement classification*; when an item is
+     genuinely ambiguous between code/config and documentation, treat it as **blocking** —
+     fail-safe, so a mis-classification can't silently downgrade a real requirement): an
+     unmet, **unwaived code/config** item at **L1, L2, or in-scope L3** is a **critical**
+     finding — **regardless of whether it is independently exploitable** — so `status`
+     flips to `issues-found` and the deploy gate blocks. This is what makes L1/L2 mandatory.
+     Fix it in place under step 7 where feasible; if it needs a design change, raise it
+     as a critical "could not remediate" for the debugging role. **Documentation/org-
+     level** items (each chapter's `X.1` section) are **warnings**; **out-of-scope L3**
+     is advisory; a genuinely N/A code/config item still blocks unless it is **waived by a
+     human**. Waivers live in **`.pipeline/waivers.json`**, written only by a human via
+     `record-waiver.sh` — you may **read and honor** them but **cannot create** one (a Bash
+     guard + a settings deny block agent writes). Honor only ids present in that file, and
+     list each honored id in `asvs.waivers` so the deploy gate can verify it against the human
+     record (a claimed waiver with no human record blocks). Where an item overlaps an existing
+     manual check (6b↔V8,
+     6c↔V1/V2, 6e↔V16, 6a↔V13/V14), record it **once** and cite the ASVS ID — don't
+     double-count.
+   - Record the **`asvs`** reconciliation object in `security-status.json` (full schema
+     in step 9): set `reconciled` **true iff `l1_l2_missing` and `l3_in_scope_missing`
+     are both empty**, and do **not** write top-level `status:"clean"` unless
+     `asvs.reconciled == true`. Enforced two ways: an unmet code/config item is a critical
+     (→ `status` not clean), **and** `deployment-gate.sh` + the loop-exit predicate block
+     deterministically on `.asvs.reconciled == false` — so a `status:"clean"` that
+     contradicts an unreconciled ASVS state cannot ship. Every unmet item also gets a
+     Complete-findings-inventory row with `source: manual-6g` and its ASVS requirement ID.
 
 7. **Remediation** — work through every finding from steps 2–6 and act:
 
@@ -386,7 +412,9 @@ When invoked:
      "scope": "diff", "since_commit": "<hash|null>",
      "stride_mechanisms_verified": 4, "stride_mechanisms_missing": 0,
      "stride_new_threats": 0,
-     "asvs_level": "L1", "asvs_reqs_verified": 12, "asvs_reqs_missing": 0,
+     "asvs": { "l1_l2_universal": true, "in_scope_l3": [], "triggered_chapters": ["V1","V2","V8","V13"],
+               "reqs_verified": 12, "l1_l2_missing": [], "l3_in_scope_missing": [],
+               "doc_advisory": [], "waivers": [], "reconciled": true },
      "osv_findings": 0, "osv_max_cvss": 0, "osv_waiver": null,
      "input_surface": { "declared": 0, "implemented": 0, "uncontrolled": [], "reconciled": true } }
    ```
@@ -404,14 +432,23 @@ When invoked:
      any input source is uncontrolled — fix the app (add the control) or record the waiver;
      never empty the list to go green. This is deterministic accountability, not a proof that
      every byte is sanitized (Semgrep SAST remains the injection-sink net underneath).
-   - `asvs_level` / `asvs_reqs_verified` / `asvs_reqs_missing` (REQUIRED — from
-     step 6g): the ASVS 5.0.0 level verified against, the count of triggered
-     requirement items confirmed met, and the count left unmet. **Advisory** — no
-     gate reads these; unmet items already flow into `critical_count` /
-     `warning_count` per 6g's disposition, so an exploitable ASVS gap still blocks
-     through the existing gate. Never set `asvs_reqs_missing` to hide a real gap —
-     an unmet exploitable item must appear as a critical finding, not just a
-     decremented count.
+   - `asvs` (REQUIRED — from step 6g): the ASVS 5.0.0 reconciliation object.
+     `l1_l2_universal` is always `true` (the mandatory baseline); `in_scope_l3`
+     lists the L3 requirement IDs planning selected; `triggered_chapters` names the
+     chapters the diff triggers; `reqs_verified` counts items confirmed met;
+     `l1_l2_missing` and `l3_in_scope_missing` list the **code/config** items still
+     unmet and unwaived; `doc_advisory` lists surfaced documentation-section items;
+     `waivers` lists waived IDs; `reconciled` is `true` **iff `l1_l2_missing` and
+     `l3_in_scope_missing` are both empty**. **Enforcing, not advisory:** every item
+     in `l1_l2_missing`/`l3_in_scope_missing` is also a **critical** finding, so
+     `status` is already `issues-found` and the deploy gate blocks. In addition,
+     `deployment-gate.sh` and the loop-exit predicate **independently block on
+     `.asvs.reconciled == false`** (a deterministic backstop, CVSS-floor-style), so do
+     **not** write `status:"clean"` unless `asvs.reconciled == true` — a contradiction
+     between them cannot ship. Never empty these lists to go green. A genuinely N/A item
+     needs a **human-recorded** waiver in `.pipeline/waivers.json` (`.asvs[].id`, written by
+     `record-waiver.sh` — you cannot create it); reflect each honored id into `asvs.waivers`.
+     The deploy gate blocks any claimed waiver that has no matching human record.
    - `osv_max_cvss` (REQUIRED): the maximum CVSS base score across the OSV findings
      that REMAIN after remediation (0 when none remain). The deploy gate applies a
      deterministic High/Critical floor: **a finding at CVSS ≥ 7.0 blocks the deploy
@@ -419,10 +456,12 @@ When invoked:
      because nothing independently checked severity). This is why the score must be
      recorded honestly, not folded away into a warning count.
    - `osv_waiver` (OPTIONAL, default `null`): set to `{ "id", "reason", "approved_by" }`
-     ONLY when a human has explicitly accepted a High/Critical that cannot be patched
-     this cycle (e.g. a dev-only transitive dependency proven off the request path).
-     A non-null waiver lifts the CVE floor for that run. Never write a waiver yourself
-     to unblock the gate — it records a human decision.
+     ONLY from a CVE id a human has recorded in **`.pipeline/waivers.json`** (`.osv[].id`,
+     written via `record-waiver.sh` after accepting a High/Critical that cannot be patched
+     this cycle — e.g. a dev-only transitive dependency proven off the request path). A
+     non-null, human-backed waiver lifts the CVE floor for that run. You **cannot create** a
+     waiver (a Bash guard + settings deny block it), and the deploy gate **blocks** an
+     `osv_waiver` claim whose id is not in `waivers.json` — so never self-write one.
 10. **Self-audit before writing reports.** Before writing any output file, verify:
     - Every file in the diff-scoped change set appears in the scan results (none silently skipped).
     - The **Complete findings inventory** contains every finding from steps 2–6 — every scanner result (2–5) and every manual finding (6a–6g) — with none omitted on grounds of low severity, non-exploitability, or not being fixed. `total_findings` equals the inventory row count, and every row in the Fixes applied / Could not remediate / Action required sections traces back to exactly one inventory row.
@@ -431,7 +470,7 @@ When invoked:
     - `security-status.json` counts (`critical_count`, `warning_count`, `fixed_count`) exactly match the totals in `security-report.md`.
     - `status` in both files is "issues-found" if and only if `critical_count > 0` **after remediation**.
     - Every STRIDE threat from plan.md with a named mechanism has a ✓ or a critical finding in the report — none silently skipped. `stride_mechanisms_verified + stride_mechanisms_missing` equals the total number of non-accepted-risk STRIDE threats in plan.md.
-    - Every ASVS chapter triggered by the change set (step 6g) was verified at the declared level: `asvs_reqs_missing` equals the number of unmet triggered L1/L2 items, every unmet item has a `manual-6g` row in the Complete findings inventory with its ASVS requirement ID, and any ASVS requirement ID planning cited in a threat mitigation was checked. `n/a` chapters (no matching surface) are not counted as missing.
+    - Every ASVS chapter triggered by the change set (step 6g) was verified: **L1 and L2 universally**, plus the in-scope L3 items from the plan's `## ASVS Compliance` block. Every code/config item in `asvs.l1_l2_missing`/`asvs.l3_in_scope_missing` is unwaived and appears as a **critical** `manual-6g` row in the Complete findings inventory with its ASVS requirement ID; documentation-section items are in `asvs.doc_advisory` (warnings, not blocking); `asvs.reconciled` is `true` iff both missing-lists are empty; and `status:"clean"` is written only when `asvs.reconciled` is `true`. Any ASVS ID planning cited in a threat mitigation was checked. `n/a` chapters are not counted as missing.
     - Every finding in the **Fixes applied** section was confirmed gone by a re-scan.
     If any check fails, re-scan or correct the output before proceeding.
 11. Report a one-line summary (tools used, scope, found/fixed/remaining counts) and stop.

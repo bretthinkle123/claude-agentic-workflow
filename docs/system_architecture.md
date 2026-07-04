@@ -124,6 +124,8 @@ claude-agentic-workflow/
 │   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle / done@GREEN-exit (caps the loop)
 │   ├── deployment-gate.sh      blocks git commit unless 5 conditions met (incl. human diff-approval); PreToolUse on deployment
 │   ├── approve-diff.sh         human-only (TTY) M5 checkpoint: writes diff-approved (approved_change_hash); the gate's review + currency anchor
+│   ├── record-waiver.sh        human-only (TTY) waiver recorder: writes .pipeline/waivers.json (osv/asvs); the gate honors only human-recorded waivers (Option B)
+│   ├── asvs-sast.sh            security Stop hook: deterministic ASVS Tier-1 SAST (JWT-none/pw-KDF/CSPRNG/cipher) → asvs-sast.json; gate blocks on critical>0 (ASVS-DET)
 │   ├── guard-approval-markers.sh  PreToolUse Bash hook on all 7 Bash agents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved (PR K structural guard)
 │   ├── write-review-manifest.sh writes reviewed_change_hash (documentation's record + approve-diff's sanity check); called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
@@ -137,7 +139,7 @@ claude-agentic-workflow/
 ├── global-skills/          Reference knowledge preloaded into agents that need it
 │   └── README.md           How to install, update, and add global skills
 │   ├── pipeline-orchestration/     stage sequence, interlock contracts, gate semantics
-│   ├── stride-threat-model-template/  STRIDE worksheet for planning's threat model
+│   ├── stride-threat-model-template/  STRIDE worksheet + ASVS 5.0.0 scope (sibling asvs-5.0-checklist.md)
 │   ├── code-standards/             naming, SOLID, facade pattern, security invariants
 │   ├── diff-scoping-conventions/   how to compute the change set (shared by security + testing)
 │   ├── doc-conventions/            README structure, Mermaid rules, PR description format
@@ -366,6 +368,7 @@ directly, and report remaining findings. Runs:
 3. **Checkov** — IaC scanning (only when `infra/` is in the change set)
 3b. **Trivy** via `trivy-scan.sh` Docker wrapper — container image / Dockerfile CVE + misconfig scanning (only when a `Dockerfile`/image is in the change set); critical CVEs fold into `critical_count` and block at the deploy gate
 3c. **Supply-chain (M6)** — `lockfile-check.sh`: a manifest changed without its lockfile blocks (folds into `critical_count`); unpinned/floating deps and bare re-locks warn. Plus `generate-sbom.sh` writes a CycloneDX `.pipeline/sbom.cdx.json` (best-effort, non-gating)
+3d. **ASVS Tier-1 SAST (ASVS-DET)** — `asvs-sast.sh`: a deterministic, high-precision grep scan over the change set for four high-value ASVS 5.0.0 violations — JWT `alg:none` (9.1.2), password fast-hash instead of a slow KDF (11.4.2), non-CSPRNG for a security value (11.5.1), insecure cipher/mode (11.3.1). Writes `.pipeline/asvs-sast.json`; runs as a security **Stop hook** (agent-independent) and the deploy gate blocks on `critical > 0`. This is the deterministic counterpart to the agent-reasoned ASVS check (step 6g)
 4. **Manual checks** — secrets grep, row-level security audit, input sanitization, context-specific
    output encoding (HTML body/attribute, JavaScript, URL sinks), log-sink safety (log forging,
    secrets/PII in logs), STRIDE-mechanism verification, and **STRIDE delta / attack-surface
@@ -374,12 +377,30 @@ directly, and report remaining findings. Runs:
    what was planned (uses the implementation agent's `.pipeline/surface-delta.md` hint, but the diff
    is the source of truth). Newly-discovered exploitable gaps that are minimally fixable are patched
    in place; design-level gaps are raised as critical findings that route to debugging.
+5. **ASVS 5.0.0 verification (step 6g) — enforcing.** Against the deep per-chapter checklist
+   (`asvs-5.0-checklist.md`, a sibling of the `stride-threat-model-template` skill), verify the OWASP
+   ASVS 5.0.0 requirements for every triggered chapter (V1–V17). **L1 + L2 are universal** (mandatory
+   on every project); **L3 is project-specific** (planning selects in-scope items in the plan's
+   `## ASVS Compliance` block). An unmet, unwaived **code/config** L1/L2 (or in-scope L3) item —
+   auth, authz, tokens, crypto, validation, encoding, headers, TLS, secrets, logging, error handling
+   — is a **critical** finding regardless of independent exploitability, so it blocks via the existing
+   `status` gate (no new gate hook). Documentation/org-level items (each chapter's `X.1` section) are
+   surfaced as warnings. This makes ASVS as first-class as STRIDE and the Top 10 (Semgrep
+   `p/owasp-top-ten`): the Top 10 is the SAST net for injection-class chapters, ASVS 6g covers the
+   chapters SAST cannot reach.
 
 Writes two output files: `security-report.md` (human-readable — including a **Complete findings
 inventory** listing every finding regardless of severity/exploitability/remediation, plus a STRIDE
 delta addendum) and `security-status.json` (machine-readable, parsed by gate hooks; carries
-`critical_count`, `warning_count`, `fixed_count`, `total_findings`, and `stride_new_threats`).
-Status is `clean` unless `critical_count > 0` — warnings are surfaced but do not block.
+`critical_count`, `warning_count`, `fixed_count`, `total_findings`, `stride_new_threats`, the
+`osv_max_cvss` CVE-severity floor, the `input_surface` reconciliation, and the **`asvs`**
+reconciliation object — `{l1_l2_universal, in_scope_l3, triggered_chapters, l1_l2_missing,
+l3_in_scope_missing, doc_advisory, waivers, reconciled}`). Status is `clean` unless `critical_count
+> 0` — and the agent writes `clean` only when `asvs.reconciled` and `input_surface.reconciled` are
+both true. An unmet ASVS L1/L2 code/config item is itself a critical (→ status not clean), **and**
+`deployment-gate.sh` + the loop-exit predicate independently block on `.asvs.reconciled == false`
+(a deterministic backstop, CVSS-floor-style) — so a `clean` status that contradicts an unreconciled
+ASVS state cannot ship. Warnings are surfaced but do not block.
 
 **Why opus + high effort?** The scanners (Semgrep/OSV/Checkov/Trivy) are deterministic and
 model-independent, but triage, the manual IDOR/RLS/validation checks, STRIDE-mechanism verification,
@@ -628,7 +649,20 @@ pass. That independence is what lets the breaker bound a thrashing loop the per-
    omit a budget field you won't measure (leave it `null`), or set `perf.status:"n/a"` when
    perf mode genuinely didn't run. Nulling a budget dimension that the AC *names* is not an
    escape — that hides the criterion and fails the `criteria_covered` check above instead.
-4. `security-status.json` exists and `status == "clean"`.
+4. `security-status.json` exists and `status == "clean"`. Three deterministic floors ride this
+   file even when `status` is `clean`: the **B6 CVE floor** (`osv_max_cvss >= 7.0` without an
+   `osv_waiver` → block), the **input-surface floor** (`input_surface.uncontrolled` non-empty →
+   block), and the **ASVS floor** (`asvs.reconciled == false` → block — an unmet ASVS 5.0.0 L1/L2
+   or in-scope-L3 code/config requirement remains). All three are mirrored in the loop-exit
+   predicate so `loop-exit ≡ gate` (asserted by `loop-exit-invariant.sh`). A fourth,
+   **deploy-only** check (like the M5 diff-approval and the WS3-1 mutation-scope check, and
+   therefore *not* in the loop-exit predicate) is **waiver authenticity (Option B):** any
+   `osv_waiver` or `asvs.waivers` the security agent *claimed* in `security-status.json` must have
+   a matching human record in `.pipeline/waivers.json` (written only by `record-waiver.sh`, TTY-only)
+   — a fabricated waiver blocks, closing the "agent self-waives to go green" vector. A second
+   deploy-only floor is **ASVS Tier-1 SAST (ASVS-DET):** `.pipeline/asvs-sast.json` `critical > 0`
+   → block (an unfixed JWT-none / fast-hash-password / non-CSPRNG / insecure-cipher finding);
+   also not in the loop-exit predicate (absent file ⇒ 0 ⇒ no-op).
 5. `pr-description.md` exists.
 6. **Human diff approval + currency (M5 + F3).** If the working tree is dirty (change not yet
    committed): `.pipeline/diff-approved` must exist (a human ran `approve-diff.sh`, which refuses
@@ -754,12 +788,14 @@ commit; until then, all changes live in the working tree.
 | `surface-delta.md` | implementation agent | security agent (6f STRIDE-delta reconciliation) | Best-effort hint listing new/changed attack surface (entry points, trust boundaries, data flows, privilege surface); non-authoritative — the diff is the source of truth |
 | `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
-| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`) |
+| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,"osv_max_cvss":0,"input_surface":{...,"reconciled":true},"asvs":{"l1_l2_universal":true,"in_scope_l3":[],"triggered_chapters":[...],"l1_l2_missing":[],"l3_in_scope_missing":[],"reconciled":true},...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`); the `asvs` object (ASVS 5.0.0 6g — L1/L2 universal, in-scope L3) is a deterministic floor: `deployment-gate.sh` + loop-exit block on `asvs.reconciled==false` |
 | `sbom.cdx.json` | `generate-sbom.sh` (via security) | documentation (surfaces component count in the PR) | CycloneDX SBOM (M6); **best-effort, non-gating** — absent when Docker is unavailable |
+| `asvs-sast.json` | `asvs-sast.sh` (security Stop hook) | deployment-gate.sh (blocks on `critical>0`), security agent (fixes findings) | `{"critical":N,"warning":M,"findings":[{rule,asvs,severity,file,line,match}]}` — deterministic ASVS Tier-1 SAST (ASVS-DET); absent ⇒ 0 ⇒ no-op |
 | `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
 | `test-quality.json` | testing agent | documentation (surfaces in PR description) | **Advisory — no gate/loop-exit reads it.** Mutation over changed core modules (`{tool,scope,score,killed,survived}`) + adversarial `gaps[]` ("what the tests don't catch") + `quality_ok` |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
 | `diff-approved` | **human** via `approve-diff.sh` (TTY-only) | deployment-gate.sh | `{"approved_change_hash":"<sha256>","approved_at":"...","note":"..."}` — the **M5 human-review gate + F3 currency anchor**: gate requires it and that the commit hash equals `approved_change_hash` |
+| `waivers.json` | **human** via `record-waiver.sh` (TTY-only) | security agent (reads/honors), deployment-gate.sh (authenticity cross-check) | `{"osv":[{id,reason,approved_by}],"asvs":[{...}]}` — **human-owned security waivers (Option B)**. The security agent may honor a waiver but cannot create one (marker-guard + settings deny); the gate blocks any `osv_waiver`/`asvs.waivers` the agent *claimed* that has no matching human record here |
 | `review-manifest.json` | write-review-manifest.sh (via documentation) | approve-diff.sh (sanity: tree == reviewed hash) | `{"reviewed_change_hash":"<sha256>","ran_at":"..."}` — documentation's record; **no longer the gate's anchor** (F3) |
 | `state.json` | bootstrap / security / debugging | debugging agent, record-clean.sh, log-run.sh | `{"debug_retry_count":{"sanity":0,"remediation":0},"max_retries":3}` |
 | `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh | Feature-level breaker budget: `{"cycles":N,"max_cycles":5,"started_epoch":...,"max_wall_clock_s":3600,"status":"running\|capped\|completed"}`. `done` stamps the terminal `completed` on GREEN exit (counterpart to cap-out `capped`); left `running` only mid-loop. Independent of `record-clean.sh` resets |
@@ -781,7 +817,7 @@ when the feature needs that knowledge.
 | Skill | Preloaded in | Purpose |
 |---|---|---|
 | `pipeline-orchestration` | _(invoked by you, the orchestrator)_ | Stage sequence, interlock contracts, gate semantics, debug-loop routing |
-| `stride-threat-model-template` | planning | STRIDE worksheet + threat-model output format (Mermaid DFD conventions, copy-paste visualization prompt) |
+| `stride-threat-model-template` | planning | STRIDE worksheet + threat-model output format (Mermaid DFD conventions, copy-paste visualization prompt) + the **ASVS 5.0.0 compliance scope** (`## ASVS Compliance` block: triggered chapters, in-scope L3, waivers) and the STRIDE→ASVS map. Sibling `asvs-5.0-checklist.md` holds the deep per-chapter L1/L2/L3 checklist (security 6g reads it) |
 | `code-standards` | implementation | Naming, SOLID, facade pattern, security invariants |
 | `diff-scoping-conventions` | security, testing | How to compute the change set (shared logic) |
 | `semgrep-ruleset-guide` | security | Which Semgrep rule sets to apply per language |

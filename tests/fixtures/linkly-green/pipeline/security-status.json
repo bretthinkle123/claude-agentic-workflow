@@ -11,5 +11,8 @@
   "osv_findings": 0,
   "osv_max_cvss": 0,
   "osv_waiver": null,
+  "asvs": { "l1_l2_universal": true, "in_scope_l3": [], "triggered_chapters": ["V1","V2","V4","V8","V13","V14","V16"],
+            "reqs_verified": 18, "l1_l2_missing": [], "l3_in_scope_missing": [],
+            "doc_advisory": ["V16.1.1"], "waivers": [], "reconciled": true },
   "input_surface": { "declared": 3, "implemented": 3, "uncontrolled": [], "reconciled": true }
 }
