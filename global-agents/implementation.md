@@ -40,9 +40,18 @@ logging/observability code, `secrets-management` when the code consumes a runtim
 secret (build the fetch-at-runtime facade, never embed a value),
 `iac-conventions` for `infra/` Terraform; `api-edge-conventions` when the change
 exposes or consumes an HTTP surface (routes, public API, webhooks, outbound calls).
+When the plan's frontend target is a **native iOS app (SwiftUI)**:
+`swift-conventions` for idiomatic Swift/SwiftUI (architecture, `@Observable` state,
+Swift 6 concurrency, XCTest/Swift Testing), `apple-hig-compliance` for platform-fit,
+`app-store-submission-requirements` when implementing the privacy manifest, permission
+usage strings, or account-deletion flow, and **`claude-design-to-swiftui`** when
+translating a Claude Design (or other HTML/CSS/JS) export into SwiftUI views — follow its
+token-extraction step and the CSS→modifier map so the build matches the design faithfully
+rather than porting markup literally.
 The plan
 tells you which layers are in scope; load the matching skill before writing that
-code. Default backend code is **Python**, default frontend **JavaScript**.
+code. Default backend code is **Python**, default frontend **JavaScript** — unless the
+plan records an alternative (e.g. a native iOS/SwiftUI frontend) under `## Stack notes`.
 
 **Coding standards — apply to every file you touch:**
 
