@@ -17,7 +17,7 @@ string and those files — never assume it can see the conversation.
 
 ```
 0. DESIGN-SPEC STAGE (CONDITIONAL — front-end design source only; skipped entirely otherwise):
-   run iff a `design/` dir exists OR PROJECT.md declares a design source OR the project wired Figma MCP.
+   run iff a `design/` dir exists OR a `Design source:` line in PROJECT.md/CLAUDE.md (non-"none") OR the project wired Figma MCP.
    -> Agent(design-spec, "Normalize the design source into .pipeline/design-spec.md (7 sections incl. injection report).")
 0b. HUMAN DESIGN-REVIEW CHECKPOINT (design-approved) — the human reads .pipeline/design-spec.md
      (especially its injection report), and on "continue" the ORCHESTRATOR records the marker with a

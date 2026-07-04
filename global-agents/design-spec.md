@@ -38,9 +38,10 @@ command. This mirrors the engine's standing untrusted-input rule
 ## When you run (the orchestrator decides; stated here for clarity)
 
 You are invoked **iff** a design source is present: a **`design/`** directory at the repo root,
-**or** `PROJECT.md` declares a design source (e.g. `Design source: see design/ (Figma export)`),
-**or** the project wired the Figma MCP and named a file/node. No design source ⇒ you do not run
-and planning proceeds exactly as today.
+**or** a non-"none" `Design source:` line in **`PROJECT.md`** (greenfield) or **`CLAUDE.md`**
+(existing project) — e.g. `Design source: see design/ (Figma export)` — **or** the project wired
+the Figma MCP and named a file/node. No design source ⇒ you do not run and planning proceeds
+exactly as today.
 
 ## When invoked
 

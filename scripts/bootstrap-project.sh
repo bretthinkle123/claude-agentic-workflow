@@ -133,12 +133,20 @@ else
 ## Stack
 <language/runtime, framework, key libs; cloud/auth or "app-only">
 
+## Frontend design source
+<!-- OPTIONAL — delete if there is no provided UI design. If you have a Claude Design
+     export, a Figma export, or reference screenshots, drop them in a design/ folder and
+     fill the line below. The design-spec stage then normalizes it into a human-approved
+     .pipeline/design-spec.md and planning REPLICATES the design (as close to 1:1 as the
+     platform allows) instead of inventing the UI. No design/ + "none" ⇒ stage skipped. -->
+- Design source: <"see design/ (Claude Design export)" | "see design/ (Figma export)" | "see design/screens/ (screenshots)" | "Figma MCP (file <KEY>)" | "none">
+
 ## What "done" means
 - Smoke check passes; the feature returns correct output for a sample input.
 - Input validation in place; security report clean.
 - Tests pass at >= <N>% coverage; docs updated; PR description written.
 EOF
-  note "[new]  PROJECT.md (stub — describe the first feature here)"
+  note "[new]  PROJECT.md (stub — describe the first feature; set Design source if UI-driven)"
 fi
 
 # --- .gitignore (append missing entries) ------------------------------------
@@ -271,6 +279,9 @@ fi
 echo ""
 echo "Done. Next:"
 echo "  1. Write PROJECT.md (the first feature) and fill any <placeholders> in CLAUDE.md."
-echo "  2. Start a Claude Code session in this repo and tell it to run the pipeline"
+echo "  2. Building a UI from a design? Put the Claude Design / Figma export or screenshots"
+echo "     in a design/ folder and set 'Design source:' in PROJECT.md — the design-spec stage"
+echo "     then replicates it. (Live Figma instead of an export: see docs/pipeline-mcp-config.md.)"
+echo "  3. Start a Claude Code session in this repo and tell it to run the pipeline"
 echo "     from planning (it loads the pipeline-orchestration skill)."
 echo "  Note: nothing here was committed — the deployment agent makes the first commit."
