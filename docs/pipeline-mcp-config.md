@@ -196,8 +196,8 @@ The live allow-lists (matching the *Current wiring decision* box — the three
 project-scoped servers only):
 
 ```yaml
-# design-spec.md   — figma (only when the design source is a live Figma file); nothing else
-tools: Read, Write, Skill, mcp__figma
+# design-spec.md   — figma (only when the design source is a live Figma file); read-only discovery otherwise
+tools: Read, Glob, Grep, Write, Skill, mcp__figma
 
 # planning.md      — aws-knowledge + terraform (infra design); NO context7
 tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform

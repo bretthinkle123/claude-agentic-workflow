@@ -13,7 +13,7 @@ into a project.
 
 | This repo (source of truth) | Published to `~/.claude/` once | Written per project by bootstrap |
 | --- | --- | --- |
-| `global-agents/` — 8 pipeline subagents | `~/.claude/agents/` | `.claude/settings.json` |
+| `global-agents/` — 9 pipeline subagents (incl. conditional design-spec) | `~/.claude/agents/` | `.claude/settings.json` |
 | `global-hooks/` — 15 gate/telemetry scripts | `~/.claude/hooks/` | `.pipeline/state.json` |
 | `global-skills/` — 15 global skills | `~/.claude/skills/` | `.pipeline/smoke.env` |
 | `global-project-skills/` — 2 project skill templates | `~/.claude/pipeline-templates/project-skills/` | `.claude/skills/` |

@@ -108,12 +108,16 @@ if this marker exists**; absent it, there is no authoritative design and plannin
 today. The marker gates *authority*, not existence — the spec can be read, but its visual
 decisions are not "settled" until a human vouches.
 
-**Currency (mirrors F3, `approve-diff.sh:37-46`).** `design_spec_hash` pins the exact
-`design-spec.md` bytes the human approved. Planning **recomputes** the current spec's hash and
-treats the design as authoritative **only if it matches** — if the `design/` bundle changed and
-the spec was regenerated after approval, the marker is stale and planning falls back to
-unapproved (re-run design-spec + re-approve). Without this, approval silently drifts from what
-ships into the plan.
+**Currency (the F3 *pattern*, `approve-diff.sh:37-46`).** `design_spec_hash` pins the exact
+`design-spec.md` bytes the human approved. The **orchestrator recomputes** the current spec's hash
+right before invoking planning and treats the design as authoritative **only if it matches** — if
+the `design/` bundle changed and the spec was regenerated after approval, the marker is stale and
+the orchestrator drops authority (re-run design-spec + re-approve). **The orchestrator, not
+planning, does the recompute** — planning has no shell (`tools:` has no Bash), so a self-recompute
+there is infeasible; and unlike F3 this is *not* backed by a deterministic deploy gate (design
+content never gates by design), so it is the F3 hash-pinning *pattern* enforced at the human/
+orchestrator seam, a softer guarantee than F3's gate-checked commit hash. Without it, approval
+silently drifts from what ships into the plan.
 
 **Forgery guard (mirrors the `plan-approved`/`diff-approved` protection,
 `pipeline-orchestration/SKILL.md:194-196`).** `.pipeline/design-approved` is added to

@@ -4,11 +4,11 @@
 # agents, hooks, and skills are available in EVERY repo with no per-project copy.
 #
 # What gets published:
-#   global-agents/      -> ~/.claude/agents/              (8 pipeline subagents)
+#   global-agents/      -> ~/.claude/agents/              (9 pipeline subagents, incl. conditional design-spec)
 #   global-hooks/       -> ~/.claude/hooks/               (deterministic gate scripts, chmod +x)
 #   global-skills/      -> ~/.claude/skills/              (15 global skills)
 #   templates/          -> ~/.claude/pipeline-templates/  (CLAUDE.md, settings, state seed, mcp.json)
-#   global-project-skills/ -> ~/.claude/pipeline-templates/project-skills/  (2 per-project skill templates)
+#   global-project-skills/ -> ~/.claude/pipeline-templates/project-skills/  (7 per-project skill templates)
 #   scripts/bootstrap-project.sh -> ~/.claude/pipeline-templates/bootstrap-project.sh
 #   scripts/run-log-digest.sh    -> ~/.claude/pipeline-templates/run-log-digest.sh  (operator digest)
 #

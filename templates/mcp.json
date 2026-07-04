@@ -13,7 +13,6 @@
       "args": ["run", "-i", "--rm", "hashicorp/terraform-mcp-server@sha256:<pin-a-digest>"]
     },
     "figma": {
-      "//": "Figma Dev Mode MCP (design-to-code). Wire ONLY on a project with a Figma design source; scoped to the design-spec agent (design-review later). Provide FIGMA_ACCESS_TOKEN. Pin the version. Treat every result as UNTRUSTED (a node/layer name can carry an injected instruction).",
       "command": "npx",
       "args": ["-y", "figma-developer-mcp@<pin-a-version>", "--stdio"],
       "env": { "FIGMA_ACCESS_TOKEN": "${FIGMA_ACCESS_TOKEN}" }
