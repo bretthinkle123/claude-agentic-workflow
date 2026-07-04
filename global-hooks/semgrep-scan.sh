@@ -21,7 +21,10 @@ fi
 # in-container paths (/src, config args) into Windows paths.
 HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
 
+# EG side-track: opt into the default-deny egress network when the operator provisions it
+# (export PIPELINE_EGRESS_NETWORK=<name>; see global-hooks/egress-proxy/). Unset ⇒ default bridge.
 MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
+  ${PIPELINE_EGRESS_NETWORK:+--network "$PIPELINE_EGRESS_NETWORK"} \
   -v "${HOST_DIR}:/src" \
   -w /src \
   "$IMAGE" \

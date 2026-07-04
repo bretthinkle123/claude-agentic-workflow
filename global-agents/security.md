@@ -24,6 +24,8 @@ hooks:
         - type: command
           command: "$HOME/.claude/hooks/asvs-sast.sh"
         - type: command
+          command: "$HOME/.claude/hooks/egress-check.sh"
+        - type: command
           command: "$HOME/.claude/hooks/stamp-ran-at.sh security"
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh security"
@@ -123,6 +125,15 @@ When invoked:
    **`deployment-gate.sh` independently blocks on `asvs-sast.json` `critical > 0`** — so an
    unfixed Tier-1 finding cannot ship even if it is missed here. (This is the deterministic
    counterpart to the agent-reasoned ASVS checks in step 6g.)
+4f. **Egress detection (EG side-track)** — your Stop hook `egress-check.sh` reads the default-deny
+   proxy's decision log (`.pipeline/egress-log.jsonl`, present only when the operator has
+   provisioned the Layer-2 egress proxy — see `global-hooks/egress-proxy/`) and writes
+   `.pipeline/egress-findings.json {denied_hosts, denied[]}`. If `denied_hosts > 0`, a pipeline
+   tool attempted to reach a **non-allow-listed host** (a possible injection phone-home the proxy
+   blocked): **surface each denied host in `security-report.md` as a warning** (fold into
+   `warning_count`), and if the pattern is repeated or exfil-shaped, call it out prominently for
+   the human. This is a **signal, not a gate** — the proxy already denied the traffic; absent the
+   log (no proxy provisioned) it is a silent no-op.
 5. If the change includes database migration files, scan each one for:
    - **No downgrade path** — a migration with an upgrade but no rollback
      function is flagged critical (it cannot be safely reverted in production).

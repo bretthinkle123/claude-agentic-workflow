@@ -1,10 +1,17 @@
 # Plan — default-deny egress control for the pipeline engine (EG side-track)
 
-> **Status: spec, awaiting approval.** Forward-looking design; nothing here is built yet.
-> Companion to `docs/pipeline-threat-model.md` (this *upgrades* one of its stated accepted
-> residuals). Scope is the **pipeline engine as target** — NOT the built app's SSRF/outbound
-> controls, which `api-edge-conventions` + `code-standards` already own. Keep the two scopes
-> distinct (same discipline as PR K).
+> **Status: deterministic slices BUILT (2026-07-04, roadmap row EG); Layer-2 proxy is
+> operator-provisioned (Docker/WSL2-bound).** Built + harness-tested: the enumerated
+> `global-hooks/egress-allowlist.txt`, the Layer-3 detection hook `egress-check.sh` (security Stop
+> hook + `tests/suites/egress.sh`), the scanner-container network opt-in (`PIPELINE_EGRESS_NETWORK`),
+> and `build-filter.sh` (allow-list → tinyproxy ACL). **Operator-provisioned, not run-verified on
+> the Windows host:** the Layer-2 default-deny **proxy** (`global-hooks/egress-proxy/` recipe),
+> plus Layer 0 (the empirical enumeration run) and Layer 1 (curl host-scoping — documented as
+> prefix-match-infeasible, so the proxy is the boundary). Companion to `docs/pipeline-threat-model.md`
+> (this *upgrades* one of its stated accepted residuals — §4 now reflects the control). Scope is the
+> **pipeline engine as target** — NOT the built app's SSRF/outbound controls, which
+> `api-edge-conventions` + `code-standards` already own. Keep the two scopes distinct (same
+> discipline as PR K).
 
 ## Goal & honest scope
 
