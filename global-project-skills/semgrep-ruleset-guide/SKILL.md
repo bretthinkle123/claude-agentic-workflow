@@ -22,7 +22,29 @@ semgrep scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]
 > `$HOME/.claude/hooks/semgrep-scan.sh scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]`
 > (requires Docker Desktop running). On Linux/WSL, call `semgrep` directly.
 
-Stack-specific additions for this project: `<STACK CONFIGS — e.g. p/python, p/django, p/react, p/dockerfile>`
+**Stack-specific additions (SB).** Beyond the always-on defaults, add the `--config` rows that
+match this project's actual stack so language/framework depth isn't left unscanned. Pick from the
+menu (add the ones that apply; delete the rest), then record the final list on the project line:
+
+| Stack element | Add `--config` |
+|---|---|
+| Python | `p/python` |
+| Django / Flask | `p/django` · `p/flask` |
+| JavaScript / TypeScript | `p/javascript` · `p/typescript` |
+| React | `p/react` |
+| Node / Express | `p/nodejs` · `p/express` |
+| Go | `p/golang` |
+| Java / Spring | `p/java` · `p/spring` |
+| Ruby / Rails | `p/ruby` · `p/rails` |
+| Dockerfile | `p/dockerfile` |
+| Kubernetes / Terraform | `p/kubernetes` · `p/terraform` (Checkov remains the primary IaC gate) |
+| JWT / secrets-heavy | `p/jwt` · `p/secrets` (secrets already in defaults) |
+| CI configs | `p/github-actions` |
+
+> **Swift / iOS** is **not** covered here — a Semgrep-Swift ruleset + SwiftLint is the deferred
+> **SB slice 4** (macOS/iOS-bound; see the **iOS** roadmap row + `docs/ios-swiftui-target-plan.md`).
+
+**Selected for this project:** `<STACK CONFIGS — fill from the menu above, e.g. p/python p/django p/react p/dockerfile>`
 
 Scope is the diff-scoped change set (see `diff-scoping-conventions`), or `.` on a
 full first scan.

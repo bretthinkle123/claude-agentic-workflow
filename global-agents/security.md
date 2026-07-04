@@ -70,6 +70,15 @@ When invoked:
    Adjust rule sets to the project's language and framework (see the
    semgrep-ruleset-guide skill). If the wrapper reports Docker is not running,
    surface that in your summary rather than skipping the scan silently.
+2b. **Gitleaks — dedicated secrets scan (SB)** — a second, independent secrets opinion beyond the
+   regex-grep (step 6a) and Semgrep `p/secrets`, purpose-built for credential detection:
+   ```
+   $HOME/.claude/hooks/gitleaks-scan.sh dir --report-format json --report-path .pipeline/gitleaks.json .
+   ```
+   Fold each finding into `critical_count` (a committed secret is a hard block — fix by removing
+   the secret and moving it to runtime fetch per `secrets-management`, then re-scan). If the
+   wrapper reports no engine (no native binary, Docker down), **surface that** — do not report
+   secrets-clean without the scan.
 3. Run OSV Scanner against the project's dependency manifest(s):
    ```
    osv-scanner scan --format json .
@@ -93,6 +102,15 @@ When invoked:
    section (like an OSV CVE), but do not auto-bump base images. If the wrapper
    reports Docker is not running, surface that in your summary rather than skipping
    the scan silently.
+4c. **Trivy filesystem scan — broad multi-ecosystem SCA (SB)** — a second, independent SCA
+   opinion alongside OSV that also catches secrets + misconfig in one pass, over the whole
+   dependency surface (not just a Dockerfile). Reuses the same Docker wrapper:
+   ```
+   $HOME/.claude/hooks/trivy-scan.sh fs --scanners vuln,secret,misconfig --severity CRITICAL,HIGH --format json .
+   ```
+   Fold **critical** results into `critical_count`, high into `warning_count`, and reconcile
+   against OSV (the same CVE surfaced by both is one finding, not two). Belt-and-suspenders over
+   OSV's per-ecosystem coverage. Docker-down ⇒ surface it, don't skip silently.
 4c. **Supply-chain integrity (M6)** — run the deterministic lockfile check over the
    change set and fold its result into your finding counts:
    ```
