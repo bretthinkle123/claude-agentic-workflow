@@ -41,9 +41,11 @@
       "Read(**/*.tfvars)",
       "Write(**/.pipeline/diff-approved)",
       "Write(**/.pipeline/plan-approved)",
+      "Write(**/.pipeline/design-approved)",
       "Write(**/.pipeline/waivers.json)",
       "Edit(**/.pipeline/diff-approved)",
       "Edit(**/.pipeline/plan-approved)",
+      "Edit(**/.pipeline/design-approved)",
       "Edit(**/.pipeline/waivers.json)"
     ]
   }

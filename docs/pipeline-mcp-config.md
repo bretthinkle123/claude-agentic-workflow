@@ -20,6 +20,7 @@ allow-list entries; those resolve to nothing unless the project opts in.
 | **Context7** | implementation only | Current library APIs — avoids wrong-API write/fail/rewrite. Not on planning (no benefit for architecture reasoning). |
 | **AWS Knowledge** | planning, implementation | Only on AWS-infra projects (replaces huge `WebFetch` doc dumps). |
 | **Terraform** | planning, implementation | Only on `infra/` projects (exact provider args → fewer plan failures). |
+| **Figma (Dev Mode MCP)** | **design-spec only** | Only on a project whose design source is a live Figma file — streams component/layout/token metadata for the design-spec normalization instead of eyeballing a static export. Off (zero schema) on any project that ships a `design/` folder or screenshots instead. **Its results are untrusted** (a layer/node name can be an injected instruction) — they flow into `design-spec.md`'s injection report, never into a gate. **Two server options + a real tradeoff — see the Figma note below; static exports need NO MCP.** |
 
 **Security gets no MCP.** Its work is deterministic — it runs Semgrep/OSV/Checkov
 (shell) and reports the counts; it doesn't research provider docs, so loading
@@ -32,6 +33,41 @@ Sentry (the pipeline fixes *local* failures pre-merge — no prod issues in the 
 Firebase MCP (30+ tool schemas; the `auth-patterns` skill already covers the code
 side), Playwright MCP (a11y snapshots are 2k–10k tokens/step — a budget hazard;
 specs are authored from reading code). SAST stays a deterministic shell hook, never MCP.
+
+### Figma MCP — two server options, and how to wire it (read before enabling)
+
+`templates/mcp.json` ships the **official Figma Dev Mode MCP** entry (first-party — the choice
+this pipeline's security bar prefers). It is **local, not remote**: the Figma **desktop app**
+runs the server and Claude Code connects to it over a loopback endpoint. So:
+
+```json
+"figma": { "type": "sse", "url": "http://127.0.0.1:3845/sse" }
+```
+
+- **Setup:** install Figma **desktop**, open the file, enable the Dev Mode MCP server in
+  Preferences, then keep the app running during the pipeline run. No token lives in the config
+  (auth is the running app). **Verify the current host/port/path in Figma's docs before relying
+  on it** — the endpoint (and whether it is `type:"sse"` vs `type:"http"` at `/mcp`) has changed
+  across Figma releases and may differ from the value above; treat it like the pinned versions
+  elsewhere in this file.
+- **Operational cost (be honest):** it needs the desktop app open with the right file selected —
+  awkward for an unattended/automated pipeline run. That is the price of the first-party option.
+
+**Headless alternative (operator's call, weigh the trust bar).** A community server —
+Framelink `figma-developer-mcp` (npx stdio) — talks to Figma's **REST API** with a
+`FIGMA_ACCESS_TOKEN`, so it runs **headless** (no desktop app), which fits an automated pipeline
+better. It is **third-party**, which fails this doc's "first-party servers only" checklist item —
+enable it only if you accept that and pin the version:
+
+```json
+"figma": { "command": "npx", "args": ["-y", "figma-developer-mcp@<pin-a-version>", "--stdio"],
+           "env": { "FIGMA_ACCESS_TOKEN": "${FIGMA_ACCESS_TOKEN}" } }
+```
+
+**Either way:** scope it to the `design-spec` agent only, and treat **every result as untrusted**
+(a node/layer name can carry an injected instruction) — it feeds `design-spec.md`'s injection
+report, never a gate. **You do not need any of this for a static Figma/Claude Design *export* or
+screenshots** — drop those in `design/` and the design-spec agent reads them directly.
 
 Sections §2–§4 below retain the full roster and rationale as background; where they
 disagree with this box, **this box is authoritative.**
@@ -195,6 +231,9 @@ The live allow-lists (matching the *Current wiring decision* box — the three
 project-scoped servers only):
 
 ```yaml
+# design-spec.md   — figma (only when the design source is a live Figma file); read-only discovery otherwise
+tools: Read, Glob, Grep, Write, Skill, mcp__figma
+
 # planning.md      — aws-knowledge + terraform (infra design); NO context7
 tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform
 

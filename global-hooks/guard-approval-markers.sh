@@ -1,10 +1,13 @@
 #!/bin/bash
 # guard-approval-markers.sh — structural block (PR K, M9) against a subagent
 # FABRICATING a human-owned gate marker:
-#   .pipeline/diff-approved  — the M5 human diff-review approval (deployment gate anchor)
-#   .pipeline/plan-approved  — the human plan checkpoint (implementation refuses without it)
-#   .pipeline/waivers.json   — human-recorded security waivers (Option B; record-waiver.sh writes it,
-#                              deployment-gate.sh cross-checks claimed waivers against it)
+#   .pipeline/diff-approved   — the M5 human diff-review approval (deployment gate anchor)
+#   .pipeline/plan-approved   — the human plan checkpoint (implementation refuses without it)
+#   .pipeline/design-approved — the human design-spec checkpoint (planning treats visual intent as
+#                               authoritative only if it exists + the currency hash matches). The
+#                               design-spec agent holds Write, so guarding this stops it self-approving.
+#   .pipeline/waivers.json    — human-recorded security waivers (Option B; record-waiver.sh writes it,
+#                               deployment-gate.sh cross-checks claimed waivers against it)
 #
 # Both markers are created ONLY by the human, on the un-hooked main thread
 # (approve-diff.sh writes diff-approved; a human `touch`es plan-approved). A subagent
@@ -35,7 +38,7 @@ if command -v jq >/dev/null 2>&1; then
 fi
 [ -z "$CMD" ] && CMD="$PAYLOAD"
 
-MARK='\.pipeline/((diff|plan)-approved|waivers\.json)'
+MARK='\.pipeline/((diff|plan|design)-approved|waivers\.json)'
 
 # WRITE contexts (block): redirection into a marker (>, >>, >|, &>); a marker passed to a
 # mutating command AT A COMMAND POSITION; an in-place edit of a marker. READ contexts
@@ -47,7 +50,7 @@ MARK='\.pipeline/((diff|plan)-approved|waivers\.json)'
 if printf '%s' "$CMD" | grep -qE ">>?[|]?[[:space:]]*[^[:space:]<>|&;]*$MARK" \
  || printf '%s' "$CMD" | grep -qE "(^|[;&|(])[[:space:]]*(tee|cp|mv|install|dd|ln|rsync|touch|truncate)\b[^;|&]*$MARK" \
  || printf '%s' "$CMD" | grep -qE "(^|[;&|(])[[:space:]]*(sed|perl)\b[^;|&]*-i[^;|&]*$MARK"; then
-  echo "Blocked: this command writes a human-owned file (.pipeline/diff-approved, .pipeline/plan-approved, or .pipeline/waivers.json). Those are created only by a human on their own terminal (approve-diff.sh / touch / record-waiver.sh) — a subagent must never forge one. This is the M5 / plan-approval / waiver structural guard (PR K + Option B). If a finding cannot be met, STOP and report it so the human can decide (fix or record a waiver); do not write the file yourself." >&2
+  echo "Blocked: this command writes a human-owned file (.pipeline/diff-approved, .pipeline/plan-approved, .pipeline/design-approved, or .pipeline/waivers.json). Those are created only by a human on the main thread (approve-diff.sh / touch / the orchestrator recording design-approved / record-waiver.sh) — a subagent must never forge one. This is the M5 / plan-approval / design-approval / waiver structural guard (PR K + Option B + DS). If a finding cannot be met, STOP and report it so the human can decide (fix or record a waiver); do not write the file yourself." >&2
   exit 2
 fi
 exit 0

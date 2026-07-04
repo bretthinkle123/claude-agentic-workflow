@@ -24,9 +24,11 @@ and the [Anthropic Claude Code docs](https://code.claude.com/docs/en/overview).
 
 ## The mental model in one paragraph
 
-Eight specialized Claude Code subagents handle one stage each (planning → plan-audit →
-implementation → security → testing → documentation → deployment, with a debugging agent
-invoked on failures).
+Nine specialized Claude Code subagents handle one stage each (an optional design-spec stage →
+planning → plan-audit → implementation → security → testing → documentation → deployment, with a
+debugging agent invoked on failures). The **design-spec** stage runs only when the project
+provides a front-end design source; it normalizes that (untrusted) design into a human-vouched
+`.pipeline/design-spec.md` before planning. The other eight always apply.
 They share no conversation context — each starts blank. All cross-stage state travels through files
 under `.pipeline/`. Shell scripts (hooks) enforce every deterministic gate at zero LLM cost. Skills
 preload reference knowledge into agents that need it. The whole pipeline is installed once globally
@@ -64,7 +66,13 @@ then run `./scripts/install-global.sh` and restart Claude Code. The repo is the 
 
 ```mermaid
 flowchart TD
-    START([Feature request]) --> P[planning agent\nopus · effort xhigh · maxTurns 30]
+    START([Feature request]) --> DSRC{Design source?\ndesign/ · PROJECT.md · Figma MCP}
+    DSRC -->|yes| DS[design-spec agent\nopus · effort high · maxTurns 20\nnormalize untrusted bundle]
+    DS -->|writes| DSPEC[.pipeline/design-spec.md\n+ injection report]
+    DSPEC --> DHC{Human design checkpoint\nread spec + injection report\nrecord design-approved + hash}
+    DHC -->|approved| P
+    DSRC -->|no design source| P
+    P[planning agent\nopus · effort xhigh · maxTurns 30]
     P -->|writes| PLAN[.pipeline/plan.md\n+ STRIDE threat model]
     PLAN --> PA[plan-audit agent\nsonnet · effort medium · maxTurns 20]
     PA -->|writes advisory| PAUDIT[.pipeline/plan-audit.md\nambiguity · dep-reality · version-policy flags]
