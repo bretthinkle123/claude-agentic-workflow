@@ -129,6 +129,21 @@ if [ "${SURFACE_UNCONTROLLED:-0}" -gt 0 ]; then
   exit 2
 fi
 
+# Data-surface reconciliation floor (data-protection plan, DP). The security agent reconciles the
+# IMPLEMENTED storage surface (stored fields carrying user data) against the declared classification,
+# and lists any SENSITIVE field it could NOT reconcile to a named at-rest mechanism (KDF / KMS
+# field-encryption / SSE) or a recorded waiver in `.data_surface.unprotected`. A non-empty list means
+# a sensitive field shipped without its declared protection — block, regardless of exploitability
+# (this is what converts the old non-exploitable warning into a block). Absent field ⇒ [] ⇒ no block
+# (backward compatible / features that store no user data). Mirrored in the loop-exit security
+# predicate (SKILL + loop-exit-invariant.sh) so loop-exit == gate.
+DATA_UNPROTECTED=$(jq -r '((.data_surface.unprotected // []) | length)' "$SECURITY_STATUS" 2>/dev/null || echo 0)
+if [ "${DATA_UNPROTECTED:-0}" -gt 0 ]; then
+  DLIST=$(jq -rc '(.data_surface.unprotected // [])' "$SECURITY_STATUS" 2>/dev/null)
+  echo "Blocked: $DATA_UNPROTECTED sensitive stored field(s) shipped without a declared at-rest mechanism or recorded waiver (unprotected: $DLIST). Add the field-level control through the crypto facade (KDF / KMS field-encryption / SSE) or record a data_protection_waiver, then re-scan. See $SECURITY_STATUS .data_surface and .pipeline/surface-delta.md." >&2
+  exit 2
+fi
+
 # ASVS 5.0.0 reconciliation floor (ASVS enforcement). The security agent (step 6g) verifies
 # ASVS 5.0.0 L1/L2 (universal) + in-scope L3 and sets `.asvs.reconciled=false` when an unmet,
 # unwaived code/config requirement remains. Such an item is ALSO a critical (→ status not clean,

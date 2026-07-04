@@ -28,7 +28,7 @@ echo "-- loop-exit ≡ gate --"
 # GREEN := security-status.status=="clean" AND loop-exit-predicate(test-results)==true
 # GREEN security predicate (audit B6): clean AND no High/Critical OSV without a waiver.
 # Kept byte-equivalent to deployment-gate.sh's CVE floor and the SKILL's security jq.
-SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0) and (.asvs.reconciled != false)'
+SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0) and ((.data_surface.unprotected // []) | length == 0) and (.asvs.reconciled != false)'
 
 pred_green() {
   local w="$1"
@@ -69,6 +69,8 @@ row "clean + High CVE, waived (B6)"           ''                                
 row "clean + below floor (B6)"                ''                                          '.osv_max_cvss=6.9'
 row "clean + uncontrolled input source"       ''                                          '.input_surface={uncontrolled:["POST /x"]}'
 row "clean + input surface reconciled"        ''                                          '.input_surface={uncontrolled:[]}'
+row "clean + unprotected sensitive field"     ''                                          '.data_surface={unprotected:["users.ssn"]}'
+row "clean + data surface reconciled"         ''                                          '.data_surface={unprotected:[]}'
 row "clean + asvs unreconciled"               ''                                          '.asvs={reconciled:false}'
 row "clean + asvs reconciled"                 ''                                          '.asvs={reconciled:true}'
 
@@ -152,6 +154,8 @@ fi
   printf '{"status":"issues-found","osv_max_cvss":7.5}\n'
   printf '{"status":"clean","input_surface":{"uncontrolled":["POST /x"]}}\n'
   printf '{"status":"clean","input_surface":{"uncontrolled":[]}}\n'
+  printf '{"status":"clean","data_surface":{"unprotected":["users.ssn"]}}\n'
+  printf '{"status":"clean","data_surface":{"unprotected":[]}}\n'
   printf '{"status":"clean","asvs":{"reconciled":false}}\n'
   printf '{"status":"clean","asvs":{"reconciled":true}}\n'
 } > "$TMP/sec.jsonl"

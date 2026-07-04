@@ -38,6 +38,9 @@ wrong, stop and say so rather than improvising a different direction.
 touches that area):** `auth-patterns` for auth code, `logging-conventions` for
 logging/observability code, `secrets-management` when the code consumes a runtime
 secret (build the fetch-at-runtime facade, never embed a value),
+`data-protection-conventions` when the code **stores** user data — build each field's
+declared at-rest control (password → slow KDF; sensitive PII → KMS envelope
+field-encryption; personal → SSE) through **one crypto facade, never inline crypto**;
 `iac-conventions` for `infra/` Terraform; `api-edge-conventions` when the change
 exposes or consumes an HTTP surface (routes, public API, webhooks, outbound calls).
 When the plan's frontend target is a **native iOS app (SwiftUI)**:
@@ -152,7 +155,10 @@ When invoked:
      SSRF-capable fetches
    - **New data flows / sinks** — DB tables/queries, file read/write paths,
      caches, queues, deserialization/parsing of external input, new categories of
-     logged data
+     logged data. **For each new stored field carrying user data, note its class
+     (credential | sensitive-PII | personal | non-sensitive) and the at-rest mechanism
+     you built** (KDF | KMS field-encryption | SSE) — this is what security's
+     `data_surface` reconciliation checks against the declared plan.
    - **New privilege / authz surface** — authenticated routes, role checks, token
      issuance, anything widening what a caller can reach
    Write only what this change actually adds; mark an empty category "none". If

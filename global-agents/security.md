@@ -416,7 +416,8 @@ When invoked:
                "reqs_verified": 12, "l1_l2_missing": [], "l3_in_scope_missing": [],
                "doc_advisory": [], "waivers": [], "reconciled": true },
      "osv_findings": 0, "osv_max_cvss": 0, "osv_waiver": null,
-     "input_surface": { "declared": 0, "implemented": 0, "uncontrolled": [], "reconciled": true } }
+     "input_surface": { "declared": 0, "implemented": 0, "uncontrolled": [], "reconciled": true },
+     "data_surface": { "classified": 0, "sensitive": 0, "unprotected": [], "reconciled": true } }
    ```
    - `input_surface` (REQUIRED when the change exposes any input source — an HTTP route that
      accepts a body/query/path param, a form, a queue/message consumer, a file/CSV ingest, or
@@ -432,6 +433,23 @@ When invoked:
      any input source is uncontrolled — fix the app (add the control) or record the waiver;
      never empty the list to go green. This is deterministic accountability, not a proof that
      every byte is sanitized (Semgrep SAST remains the injection-sink net underneath).
+   - `data_surface` (REQUIRED when the change **stores** user data — a new/changed DB
+     table/column, file write, cache entry, or exported blob): reconcile the **implemented**
+     storage surface against the **declared** classification (see `data-protection-conventions`).
+     Enumerate every implemented stored field carrying user data (read the ORM models/columns,
+     file writes, cache puts — the diff's data sinks, cross-checked with `surface-delta.md`), and
+     for each field classified **sensitive** (credential / sensitive-PII / personal) confirm its
+     **declared at-rest mechanism is actually present in the diff**: a slow-KDF call (or the auth
+     provider) for a password, a KMS `encrypt`/envelope call for sensitive PII, SSE in `infra/`
+     for personal data — each traceable to a `data_protection` criterion in `acceptance.md`. List
+     any sensitive field you cannot reconcile to a mechanism **or** a recorded
+     `data_protection_waiver` in `unprotected` (e.g. `"users.ssn"`). `reconciled` is true iff
+     `unprotected == []`. **The deploy gate + loop-exit block a non-empty `unprotected`** (DP
+     plan), so `status` must not be `clean` while any sensitive field is unprotected — fix the app
+     (add the at-rest control through the crypto facade) or record the waiver; never empty the
+     list to go green. This converts the old **non-exploitable warning** (an unencrypted PII/health
+     column behind auth) into a **block**, regardless of exploitability. Checkov's infra-layer
+     SSE/TLS criticals stay the floor underneath; this adds the per-field application-layer teeth.
    - `asvs` (REQUIRED — from step 6g): the ASVS 5.0.0 reconciliation object.
      `l1_l2_universal` is always `true` (the mandatory baseline); `in_scope_l3`
      lists the L3 requirement IDs planning selected; `triggered_chapters` names the

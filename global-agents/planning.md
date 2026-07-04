@@ -28,7 +28,9 @@ feature needs them, which keeps your base context lean):** `ddia-patterns` when
 the plan adds or changes storage/messaging; `auth-patterns` when it touches
 identity or protected resources; `logging-conventions` when it produces new
 observable events; `secrets-management` when the feature consumes runtime secrets
-or credentials (API keys, DB passwords, tokens); `iac-conventions` when it
+or credentials (API keys, DB passwords, tokens); `data-protection-conventions` when the
+feature **stores** user data (classify each stored field → named at-rest control);
+`iac-conventions` when it
 provisions cloud infrastructure; `api-edge-conventions` when the feature exposes
 or consumes an HTTP surface (new routes, public API, webhook receiver, outbound
 third-party calls);
@@ -302,6 +304,19 @@ When invoked:
      deploy gate via security's `input_surface` reconciliation. This is the pipeline's
      universal input-control accountability — every input source is consciously controlled or
      waived, never silently unguarded.
+   - **Data-protection criteria (only when the feature STORES user data).** Invoke
+     `data-protection-conventions` and, in `plan.md`'s Data section, record every stored
+     field/table's **class** (credential | sensitive-PII | personal | non-sensitive). For every
+     field classified **sensitive** (credential / sensitive-PII / personal), emit a
+     `data_protection` criterion in `acceptance.md`: the class + the named at-rest mechanism
+     (**KDF** for a password | **KMS field-encryption** for sensitive PII | **SSE** for personal)
+     + "persisted form is not plaintext", **or** an explicit `data_protection_waiver: <reason>`
+     (e.g. "pseudonymous analytics id, no PII linkage"). A sensitive field with no named mechanism
+     is a **material** plan-audit flag (forces a revision before the human gate), and an
+     implemented sensitive field with no accounted-for mechanism blocks the deploy gate via
+     security's `data_surface` reconciliation — closing the "unencrypted non-exploitable sensitive
+     column ships as a warning" hole, regardless of exploitability. Route all crypto through one
+     facade (never inline). Non-sensitive fields need no criterion.
    - **Migration-reversibility criterion (only when the feature adds a migration).**
      State which reversibility kind the criterion asserts (audit E6), because they demand
      different tests: a **create-migration** (initial schema) is reversible as

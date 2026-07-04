@@ -176,6 +176,15 @@ test that asserts the property must exercise the variable that would actually br
   request **fails closed** (no partial write / side effect on the error path). This is the
   verbose-error + fail-open shape (**ASVS 16.5.1 / 16.5.3**; ASVS-DET T2-2), the test counterpart
   to the Tier-1 debug-mode SAST check.
+- **Any `data_protection` criterion** (a stored field classified credential / sensitive-PII /
+  personal — see `data-protection-conventions`) → a **persisted-form** test: write the value
+  through the repository, then **read the RAW stored column/blob** (bypass the app's decrypt/verify
+  path) and assert it is **not the plaintext** — a KDF hash for a password, ciphertext for
+  KMS-field-encrypted PII — while the app's **normal read still round-trips** (decrypt returns the
+  value, or `verify(password)` succeeds). For a password: the stored column is a slow-KDF hash and
+  the plaintext never appears in storage. This proves the declared at-rest mechanism is actually in
+  the persisted form, not just named (**ASVS V14 / 11.4.2**; the test half of security's
+  `data_surface` reconciliation). A field with a `data_protection_waiver` needs no such test.
 
 `plan-audit` should flag an acceptance criterion whose only test is the weak form; the
 testing agent should generate the adversarial shape proactively.
