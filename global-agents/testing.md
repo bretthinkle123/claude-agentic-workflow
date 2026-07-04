@@ -161,6 +161,13 @@ When invoked:
    criterion (step 5b) so the gate enforces it; otherwise report the numbers for the
    human. Keep the load **smoke-sized** (seconds, bounded VUs) — a regression
    signal, not a full load campaign. Skip when no perf budget is declared.
+   **Record `perf.scenario` whenever perf ran (audit WS3-3) — this is REQUIRED, not
+   optional.** It is a non-null object describing what the harness actually exercised
+   (concurrency, workload, contention, whether optional egress like a webhook was
+   on/off), so a best-case number can't be reported as the undisclosed headline. The
+   deploy gate + loop-exit **block a measured perf result whose `.perf.scenario` is
+   null**, so a perf run that leaves it null is treated as under-covered. See the
+   `test-conventions` skill for the exact field.
 6. Run the full test suite with coverage enabled using the project's configured
    runner (Jest, pytest, go test -cover, etc.) with its coverage flag. The
    **combined** figure is the merge of every suite — a line covered by *any* test
@@ -228,6 +235,7 @@ When invoked:
      "perf": {
        "budget":   { "p95_ms": null, "throughput_rps": null },
        "measured": { "p95_ms": null, "throughput_rps": null },
+       "scenario": null,
        "status": "pass|fail|n/a"
      },
      "coverage": {

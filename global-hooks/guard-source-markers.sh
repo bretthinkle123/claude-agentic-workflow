@@ -36,8 +36,14 @@ EXCLUDE='(^|/)(tests/|.*\.pipeline/|global-hooks/guard-source-markers\.sh)'
 
 hits=""
 
-# 1. Added lines in the tracked diff.
-added="$(git diff HEAD 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+# 1. Added lines in the tracked diff — restricted to non-excluded paths, so a marker
+#    string that legitimately lives in tests/, .pipeline/, or this hook's own test data
+#    doesn't false-block a deploy. This mirrors the EXCLUDE the untracked scan (2) already
+#    applies; previously the tracked scan ran over the whole `git diff HEAD` unfiltered.
+#    NUL-delimited end-to-end (name-only -z | grep -z | xargs -0) so odd filenames and the
+#    NUL-stripping of $() capture can't corrupt the file list.
+added="$(git diff HEAD --name-only -z 2>/dev/null | grep -zvE "$EXCLUDE" \
+         | xargs -0 -r git diff HEAD -- 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
 if [ -n "$added" ]; then
   m="$(printf '%s\n' "$added" | grep -inE "$MARKERS" || true)"
   [ -n "$m" ] && hits="$hits"$'\n'"tracked diff:"$'\n'"$m"

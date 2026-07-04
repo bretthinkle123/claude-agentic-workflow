@@ -81,7 +81,14 @@ When invoked:
    each row (`AC1`, `AC2`, …) is your **definition-of-done**: build until every
    criterion is satisfied in the file/layer it names. The validation contracts in
    the plan's threat model are non-negotiable — implement each named schema/pattern
-   exactly where the plan places it.
+   exactly where the plan places it. The plan's **`## ASVS Compliance`** block is
+   **also definition-of-done**: build to the OWASP ASVS 5.0.0 **L1 + L2** items of
+   every triggered chapter (universal), plus the **in-scope L3** items it lists. The
+   `code-standards` skill carries the concrete build-time items (encoding/validation
+   V1/V2, authz V8, tokens V9, crypto V11, secure-coding V15); the full per-chapter
+   list is `asvs-5.0-checklist.md`. An unmet L1/L2 code/config item will be a
+   **critical** security finding that blocks the deploy — treat these as required,
+   not optional.
 3. Implement the change, following the coding standards above and the
    conventions in CLAUDE.md. **Greenfield bootstrap:** if this is the first
    build of a new project (no runnable app yet), include a minimal `/health`

@@ -28,7 +28,7 @@ echo "-- loop-exit ≡ gate --"
 # GREEN := security-status.status=="clean" AND loop-exit-predicate(test-results)==true
 # GREEN security predicate (audit B6): clean AND no High/Critical OSV without a waiver.
 # Kept byte-equivalent to deployment-gate.sh's CVE floor and the SKILL's security jq.
-SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0)'
+SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0) and (.asvs.reconciled != false)'
 
 pred_green() {
   local w="$1"
@@ -39,10 +39,14 @@ pred_green() {
 # One matrix row: apply a test-results mutation ('' = none) and/or a security
 # mutation, then assert gate verdict == predicate verdict.
 row() {
-  local desc="$1" tmut="${2:-}" smut="${3:-}"
+  local desc="$1" tmut="${2:-}" smut="${3:-}" wj="${4:-}"
   local w; w="$(mk_fixture)"
   [ -n "$tmut" ] && jq_edit "$w/.pipeline/test-results.json" "$tmut"
   [ -n "$smut" ] && jq_edit "$w/.pipeline/security-status.json" "$smut"
+  # Optional human waivers.json — the deploy gate's waiver-authenticity check (Option B) is
+  # deploy-only (like diff-approval, NOT in the loop-exit predicate); a legitimately-waived
+  # state needs the human record present for gate and predicate to agree GREEN.
+  [ -n "$wj" ] && printf '%s' "$wj" > "$w/.pipeline/waivers.json"
 
   ( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
   local rc=$?
@@ -61,10 +65,12 @@ row "perf ran, scenario null (WS3-3)"        '.perf.scenario=null'              
 row "perf n/a, scenario null → ok"           '.perf.status="n/a" | .perf.scenario=null'  ''
 row "security not clean"                     ''                                          '.status="issues-found"'
 row "clean + High CVE, no waiver (B6)"        ''                                          '.osv_max_cvss=7.5'
-row "clean + High CVE, waived (B6)"           ''                                          '.osv_max_cvss=7.5 | .osv_waiver={id:"GHSA-x",reason:"dev-only",approved_by:"human"}'
+row "clean + High CVE, waived (B6)"           ''                                          '.osv_max_cvss=7.5 | .osv_waiver={id:"GHSA-x",reason:"dev-only",approved_by:"human"}' '{"osv":[{"id":"GHSA-x"}],"asvs":[]}'
 row "clean + below floor (B6)"                ''                                          '.osv_max_cvss=6.9'
 row "clean + uncontrolled input source"       ''                                          '.input_surface={uncontrolled:["POST /x"]}'
 row "clean + input surface reconciled"        ''                                          '.input_surface={uncontrolled:[]}'
+row "clean + asvs unreconciled"               ''                                          '.asvs={reconciled:false}'
+row "clean + asvs reconciled"                 ''                                          '.asvs={reconciled:true}'
 
 # --- (b) canonical ⟺ SKILL: extract the SKILL's real predicates and compare ---------
 #
@@ -146,6 +152,8 @@ fi
   printf '{"status":"issues-found","osv_max_cvss":7.5}\n'
   printf '{"status":"clean","input_surface":{"uncontrolled":["POST /x"]}}\n'
   printf '{"status":"clean","input_surface":{"uncontrolled":[]}}\n'
+  printf '{"status":"clean","asvs":{"reconciled":false}}\n'
+  printf '{"status":"clean","asvs":{"reconciled":true}}\n'
 } > "$TMP/sec.jsonl"
 jq -c -f "$TMP/skill-sec.jq" "$TMP/sec.jsonl" > "$TMP/sec-skill.out" 2>/dev/null
 jq -c "$SEC_PREDICATE"       "$TMP/sec.jsonl" > "$TMP/sec-ref.out"   2>/dev/null

@@ -40,7 +40,8 @@ string and those files — never assume it can see the conversation.
      until GREEN (jq on the status files — NEVER LLM-judged):
        jq -e '.status=="clean"
               and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null)
-              and ((.input_surface.uncontrolled // []) | length == 0)' security-status.json   AND
+              and ((.input_surface.uncontrolled // []) | length == 0)
+              and (.asvs.reconciled != false)' security-status.json   AND
        jq -e '.status=="pass"
               and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))
               and ( ((.perf.status // "n/a")=="n/a")
