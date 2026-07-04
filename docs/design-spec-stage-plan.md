@@ -1,9 +1,13 @@
 # Plan — design-spec stage: an authoritative-but-untrusted design bundle as pipeline input (DS side-track)
 
-> **Status: spec, awaiting approval.** Forward-looking design; nothing here is built yet.
+> **Status: Layers 0–3 BUILT (2026-07-04, roadmap row DS). Layer 4 remains ⬜.** The `design-spec`
+> agent, the `design-system-conventions` skill, the `design-approved` checkpoint + currency/forgery
+> guard, the orchestration wiring, and planning's authoritative third branch are implemented and
+> harness-tested (`tests/suites/design-spec.sh`). What is NOT built is **Layer 4** — the post-build
+> visual-regression design-review (brittle, advisory, deliberately a later slice).
 > Scope is the **engine** (a new pre-planning stage + a human checkpoint), NOT any built app.
-> This is Layer 2 of the deferred front-end workstream (`[[deferred-frontend-workstream]]`);
-> it is the prerequisite that makes Section 1 of the Claude-Design evaluation real. Companion:
+> This is Layer 2 of the front-end workstream (`[[deferred-frontend-workstream]]`); it is the
+> prerequisite that makes Section 1 of the Claude-Design evaluation real. Companion:
 > `docs/ios-swiftui-target-plan.md` (consumes the artifact this stage produces).
 
 ## Goal & honest scope
@@ -177,7 +181,10 @@ last; the first three layers deliver the Section-1 capability without it.
 
 ## Sequencing (each slice independent; none on the critical path)
 
-1. **Layer 0–1** — input convention + the `design-spec` agent writing `design-spec.md`. **S–M.**
-2. **Layer 2** — the `design-approved` in-session marker + orchestrator wiring. **S.**
-3. **Layer 3** — planning's third input branch + design→AC tracing. **M** (the real behavior change).
-4. **Layer 4** — post-build design-review (advisory). **M**, later.
+1. **Layer 0–1** ✅ — input convention + the `design-spec` agent writing `design-spec.md`. **Built.**
+2. **Layer 2** ✅ — the `design-approved` in-session marker + orchestrator wiring + currency hash +
+   forgery guard (`guard-approval-markers.sh` + settings deny). **Built.**
+3. **Layer 3** ✅ — planning's third input branch (currency-checked) + design→AC tracing. **Built.**
+4. **Layer 4** ⬜ — post-build design-review (advisory visual-regression). **Deferred** — brittle,
+   advisory-only, and best paired with the visual-regression/a11y tooling (FE row); not required
+   for the Section-1 capability, which Layers 0–3 already deliver.

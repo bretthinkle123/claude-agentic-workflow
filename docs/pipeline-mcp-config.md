@@ -20,6 +20,7 @@ allow-list entries; those resolve to nothing unless the project opts in.
 | **Context7** | implementation only | Current library APIs — avoids wrong-API write/fail/rewrite. Not on planning (no benefit for architecture reasoning). |
 | **AWS Knowledge** | planning, implementation | Only on AWS-infra projects (replaces huge `WebFetch` doc dumps). |
 | **Terraform** | planning, implementation | Only on `infra/` projects (exact provider args → fewer plan failures). |
+| **Figma (Dev Mode MCP)** | **design-spec only** | Only on a project whose design source is a live Figma file — streams component/layout/token metadata for the design-spec normalization instead of eyeballing a static export. Off (zero schema) on any project that ships a `design/` folder or screenshots instead. **Its results are untrusted** (a layer/node name can be an injected instruction) — they flow into `design-spec.md`'s injection report, never into a gate. |
 
 **Security gets no MCP.** Its work is deterministic — it runs Semgrep/OSV/Checkov
 (shell) and reports the counts; it doesn't research provider docs, so loading
@@ -195,6 +196,9 @@ The live allow-lists (matching the *Current wiring decision* box — the three
 project-scoped servers only):
 
 ```yaml
+# design-spec.md   — figma (only when the design source is a live Figma file); nothing else
+tools: Read, Write, Skill, mcp__figma
+
 # planning.md      — aws-knowledge + terraform (infra design); NO context7
 tools: Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform
 
