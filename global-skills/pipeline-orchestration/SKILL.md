@@ -94,7 +94,8 @@ string and those files — never assume it can see the conversation.
 
 ## Telemetry — logged automatically on every stage
 
-`log-run.sh` is wired as a **`Stop` hook on all eight agents**, so one line is
+`log-run.sh` is wired as a **`Stop` hook on all nine agents** (the eight core stages
+plus the conditional `design-spec` stage), so one line is
 appended to `.pipeline/run-log.jsonl` automatically when each agent finishes — the
 orchestrator does **not** call it. The hook signature is:
 
