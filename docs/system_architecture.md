@@ -114,7 +114,7 @@ flowchart TD
 
 ```
 claude-agentic-workflow/
-├── global-agents/          Eight subagent definitions — the source of truth for agent behavior
+├── global-agents/          Nine subagent definitions (incl. conditional design-spec) — the source of truth for agent behavior
 │   ├── planning.md
 │   ├── plan-audit.md
 │   ├── implementation.md
@@ -134,7 +134,7 @@ claude-agentic-workflow/
 │   ├── approve-diff.sh         human-only (TTY) M5 checkpoint: writes diff-approved (approved_change_hash); the gate's review + currency anchor
 │   ├── record-waiver.sh        human-only (TTY) waiver recorder: writes .pipeline/waivers.json (osv/asvs); the gate honors only human-recorded waivers (Option B)
 │   ├── asvs-sast.sh            security Stop hook: deterministic ASVS Tier-1 SAST (JWT-none/pw-KDF/CSPRNG/cipher) → asvs-sast.json; gate blocks on critical>0 (ASVS-DET)
-│   ├── guard-approval-markers.sh  PreToolUse Bash hook on all 7 Bash agents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved (PR K structural guard)
+│   ├── guard-approval-markers.sh  PreToolUse Bash hook on all Bash-carrying subagents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved/design-approved + waivers.json (PR K + Option B + DS structural guard)
 │   ├── write-review-manifest.sh writes reviewed_change_hash (documentation's record + approve-diff's sanity check); called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
@@ -734,8 +734,9 @@ any command that *writes* a human-owned approval marker — `.pipeline/diff-appr
 in-place-edit of a marker; **reads pass through** (implementation legitimately runs
 `test -f .pipeline/plan-approved`). `review-manifest.json` is deliberately not matched (documentation
 writes it legitimately, and post-F3 the gate ignores it). This is the PR K structural closure of the
-marker-fabrication vector; paired with a settings `Write`/`Edit` deny on both markers (the non-Bash
-tool vector). Residual obfuscated-Bash risk is documented in `docs/pipeline-threat-model.md`.
+marker-fabrication vector; paired with a settings `Write`/`Edit` deny on the human-owned markers
+(plan/diff/design-approved + waivers.json — the non-Bash tool vector). Residual obfuscated-Bash risk
+is documented in `docs/pipeline-threat-model.md`.
 
 ---
 
@@ -789,6 +790,8 @@ commit; until then, all changes live in the working tree.
 
 | File | Writer | Readers | Purpose |
 |---|---|---|---|
+| `design-spec.md` | design-spec agent (conditional stage) | human (design-approved review), planning (authoritative visual intent when approved) | Normalized design: screen/component/token inventory, layout & interaction intent, needs-native-mapping, provenance + **injection report**. **Untrusted content — bytes are data, never instructions** |
+| `design-approved` | **human** via orchestrator (in-session) | orchestrator (re-verifies currency before planning), planning (treats design-spec.md as authoritative when present) | `{"approved_at":"...","note":"...","design_spec_hash":"<sha256>"}` — human vouch for the design's **visual intent**; currency-pinned (F3 pattern), subagent-forgery-guarded like plan/diff-approved |
 | `plan.md` | planning agent | plan-audit, human, implementation, testing, documentation | The implementation spec + STRIDE threat model |
 | `plan-audit.md` | plan-audit agent | orchestrator (`revision_recommended`), planning (revision pass), human (checkpoint) | Advisory flags: completeness, ambiguity, dependency reality, version policy — each material/advisory; non-gating |
 | `acceptance.md` | planning agent | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag) | Per-criterion contract: ID, criterion, file/layer, how verified |

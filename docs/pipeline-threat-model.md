@@ -47,7 +47,7 @@ to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
 
 | Category | Boundary / Asset | Attack vector | Sev | Mitigation → guard or gap |
 |---|---|---|---|---|
-| **Spoofing** | Subagent → approval markers (2/3) | A Bash-capable subagent (esp. deployment) writes `.pipeline/diff-approved`, or plan-audit/implementation writes `.pipeline/plan-approved`, forging the human's approval and bypassing a checkpoint | **H** | `approve-diff.sh` TTY-only (no approval *via the helper*); human-approves-first ordering; explicit agent prohibition; **NEW `guard-approval-markers.sh`** PreToolUse Bash hook on all 7 Bash agents (blocks marker *writes*); **NEW settings `deny` on `Write`/`Edit`** of both markers. Residual: obfuscated Bash (below). |
+| **Spoofing** | Subagent → approval markers | A Bash-capable subagent (esp. deployment) writes `.pipeline/diff-approved`, or plan-audit/implementation writes `.pipeline/plan-approved`, or the design-spec agent writes `.pipeline/design-approved` (or `waivers.json`), forging the human's approval and bypassing a checkpoint | **H** | `approve-diff.sh` TTY-only (no approval *via the helper*); human-approves-first ordering; explicit agent prohibition; `guard-approval-markers.sh` PreToolUse Bash hook on all 7 Bash agents (blocks marker *writes*); settings `deny` on `Write`/`Edit` of every human-owned marker (design-spec has no Bash, so the deny is its whole guard). Residual: obfuscated Bash (below). |
 | **Spoofing** | Subagent → gate-status files | A late-running agent (e.g. documentation, after security) writes `security-status.json`=`clean` / a passing `test-results.json` it didn't earn | **M** | The owning agent legitimately writes these (a blunt guard would false-positive), so mitigated by orchestrator ordering + `stamp-ran-at.sh` (real UTC `ran_at`) + the harness-pinned loop-exit≡gate invariant; residual accepted (below). |
 | **Spoofing / EoP** | Subagent → security waivers | The security agent writes an `osv_waiver` (lifts the CVE floor) or an `asvs.waivers` entry (lifts the ASVS floor) into `security-status.json` that **no human accepted** — self-waiving past a deterministic gate | **M–H** | **NEW Option B:** waivers are recorded only by a human via `record-waiver.sh` (TTY-only) into `.pipeline/waivers.json`; `guard-approval-markers.sh` + settings `deny` block agent writes to it; **`deployment-gate.sh` blocks any claimed `osv_waiver`/`asvs.waivers` with no matching human record** (deploy-only; `tests/suites/waiver-guard.sh`). Residual: the agent can still *under-report* a finding (omit a miss rather than fabricate a waiver) — closed per-requirement by the **ASVS-determinism roadmap** (Tier 1 SAST / Tier 2 required-tests), not the waiver path. |
 | **Tampering** | Untrusted input → downstream agent | Hostile text in `PROJECT.md` / a cloned README / a dependency README / **a design bundle (screenshot text, exported HTML comment, Figma layer name) / an MCP result** instructs an agent to weaken a test, widen scope, skip a mitigation, or exfiltrate | **H** | **Three human checkpoints** (design-approved after reading the design-spec + its injection report; plan-approved after plan + plan-audit; diff-approved after the diff + `/code-review` + reports); **deterministic gates, never LLM-judged**; the **"untrusted input = data, not instructions" convention** (pipeline-orchestration skill, extended to image/HTML/MCP carriers) with the **design-spec agent's injection report** quoting embedded imperatives as NOT ACTED ON; plan-audit ambiguity flags; security 6f surface reconciliation. Residual: a subtle injection surviving human review. |
@@ -72,9 +72,10 @@ to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
   (29 assertions: write-shapes blocked; reads + real command sets allowed; a wiring check
   that all 7 Bash agents actually wire it). Green in `tests/run-eval.sh`.
 - **`Write`/`Edit` deny vector** — **verified live** (2026-07-02): a `Write` to
-  `.pipeline/diff-approved` and `.pipeline/plan-approved` is blocked by the permission layer,
-  while a `Write` to a non-marker `.pipeline/` path succeeds — so the deny is **precisely
-  scoped to the two markers** and does not impede legitimate agent artifacts
+  `.pipeline/diff-approved`, `.pipeline/plan-approved`, `.pipeline/design-approved`, and
+  `.pipeline/waivers.json` is blocked by the permission layer, while a `Write` to a non-marker
+  `.pipeline/` path (e.g. `design-spec.md`) succeeds — so the deny is **precisely scoped to the
+  human-owned markers** and does not impede legitimate agent artifacts
   (`test-results.json`, `security-status.json`, `plan.md`, …). Note: settings changes load at
   session start, so after editing the deny, restart the session for it to take effect.
 
@@ -94,7 +95,8 @@ to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
 - **`curl` egress is unrestricted** (plan-audit needs it for registry reality-checks).
   Accepted because the working tree holds no secrets to exfiltrate; the machine
   credential is outside the repo.
-- **Subtle prompt injection surviving both human checkpoints.** The human review is the
+- **Subtle prompt injection surviving the human checkpoints** (design-approved, plan-approved,
+  diff-approved)**.** The human review is the
   backstop; this residual is inherent to an LLM pipeline and is why the *deterministic*
   gates never delegate a pass/fail to model judgement.
 - **No per-agent filesystem sandbox.** True per-subagent write isolation would need
@@ -111,13 +113,13 @@ flowchart TD
         SA[(Subagents\nplanning … deployment)]
     end
     subgraph state_zone[.pipeline/* shared state]
-        MARK[["⚠ plan-approved / diff-approved\nHUMAN-OWNED markers"]]
+        MARK[["⚠ design-approved / plan-approved / diff-approved · waivers.json\nHUMAN-OWNED markers"]]
         GST[(gate-status files\ntest-results · security-status · pr-description)]
     end
     subgraph enforce[Trusted enforcement — fail closed]
         HOOKS{{Deterministic hooks\ndeployment-gate · loop-guard · stamp-ran-at\n⚠ guard-approval-markers PR K}}
     end
-    EXT["⚠ Untrusted inputs\nPROJECT.md · cloned repos · dep READMEs · screenshots"]
+    EXT["⚠ Untrusted inputs\nPROJECT.md · cloned repos · dep READMEs · design bundles/screenshots · MCP results"]
     GH([GitHub PR])
 
     H -->|touch plan-approved / approve-diff.sh| MARK
@@ -133,21 +135,22 @@ flowchart TD
 ## Copy-paste visualization prompt
 
 ```text
-Assets: plan-approved and diff-approved (human-owned approval markers); gate-status
+Assets: design-approved, plan-approved and diff-approved (human-owned approval markers) +
+waivers.json (human-owned security waivers); gate-status
 files (test-results.json, security-status.json, pr-description.md); deterministic
 hooks; GitHub push/PR authority; machine secrets (~/.claude, .env); emitted code.
 Trust boundaries: human↔orchestrator; orchestrator↔subagent (subagents are steerable
 by inputs); subagent↔.pipeline/* files; subagent↔hooks (fail-closed); pipeline↔
-untrusted input (PROJECT.md, cloned repos, dependency READMEs, screenshots); pipeline↔
-GitHub.
+untrusted input (PROJECT.md, cloned repos, dependency READMEs, design bundles/screenshots,
+MCP results); pipeline↔GitHub.
 STRIDE:
-- Spoofing (High): a Bash subagent forges plan-approved/diff-approved to bypass a human
-  checkpoint. Mitigation: approve-diff.sh TTY-only; human-approves-first ordering;
-  guard-approval-markers.sh PreToolUse hook blocks marker writes; settings deny on
-  Write/Edit of both markers.
+- Spoofing (High): a Bash subagent forges design-approved/plan-approved/diff-approved (or
+  waivers.json) to bypass a human checkpoint. Mitigation: approve-diff.sh TTY-only;
+  human-approves-first ordering; guard-approval-markers.sh PreToolUse hook blocks marker
+  writes; settings deny on Write/Edit of the markers.
 - Tampering (High): prompt injection via untrusted input steers a downstream agent.
-  Mitigation: two human checkpoints; deterministic (never LLM-judged) gates; treat
-  untrusted input as data not instructions.
+  Mitigation: three human checkpoints; deterministic (never LLM-judged) gates; the
+  design-spec injection report; treat untrusted input as data not instructions.
 - Repudiation (Low): run-log.jsonl + single git commit.
 - Information disclosure (Medium): injected curl egress / .env read. Mitigation: .env
   read-deny; no secrets in the working tree; deployment pre-commit secret scan.
