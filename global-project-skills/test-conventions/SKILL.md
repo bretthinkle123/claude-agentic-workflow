@@ -185,6 +185,20 @@ test that asserts the property must exercise the variable that would actually br
   the plaintext never appears in storage. This proves the declared at-rest mechanism is actually in
   the persisted form, not just named (**ASVS V14 / 11.4.2**; the test half of security's
   `data_surface` reconciliation). A field with a `data_protection_waiver` needs no such test.
+- **Any feature that issues/consumes a self-contained token** (JWT/PASETO) → a **token-validation**
+  test (ASVS-DET **T2-3**, ASVS 9.2.1/9.2.3): an **expired** token AND a **wrong-audience** (or
+  wrong-issuer) token are **both rejected** (401), not just a happy-path valid token. A suite that
+  only ever mints a fresh valid token never proves the `exp`/`aud` checks run.
+- **Any feature that manages sessions** (login/logout) → a **session-lifecycle** test (ASVS-DET
+  **T2-4**, ASVS 7.2.4/7.4.1): the session identifier **rotates on authentication** (the pre-login
+  id is not honored post-login — fixation), and **logout invalidates** the session (the old token
+  is rejected afterward).
+- **Any multi-write / money / ledger operation** → an **atomic-rollback** test (ASVS-DET **T2-5**,
+  ASVS 2.3.3): force a failure mid-transaction and assert **no partial write persists** (all-or-
+  nothing) — the transactional counterpart to the safe-error fail-closed shape.
+- **Any password registration / change** → a **breached-password-rejected** test (ASVS-DET **T2-6**,
+  ASVS 6.2.4/6.2.12): a known-breached password (e.g. `Password1!` / a top-list entry, or a seeded
+  HIBP-style check) is **refused** at registration/change with a clear error.
 
 `plan-audit` should flag an acceptance criterion whose only test is the weak form; the
 testing agent should generate the adversarial shape proactively.

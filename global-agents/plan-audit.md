@@ -117,6 +117,17 @@ When invoked:
      in `test-conventions` (ASVS 16.5.1 / 16.5.3). A feature that processes untrusted input with
      no such criterion is a **material** flag: verbose errors and fail-open on the error path are
      common real leaks. (Skip for a trivial feature with no server-side error surface.)
+   - **Security-property tests present (MATERIAL, each only when its trigger applies; ASVS-DET
+     T2-3…T2-6).** For each triggered property, confirm `acceptance.md` carries the criterion (the
+     matching adversarial shape is in `test-conventions`); a missing one is a **material** flag:
+     - **T2-3 (token validation, 9.2.1/9.2.3)** — the feature **issues or consumes a self-contained
+       token** (JWT/PASETO): an **expired** and a **wrong-audience/issuer** token are both rejected.
+     - **T2-4 (session lifecycle, 7.2.4/7.4.1)** — the feature **manages sessions**: the session id
+       **rotates on authentication** (anti-fixation) and **logout invalidates** it.
+     - **T2-5 (atomic rollback, 2.3.3)** — a **multi-write / money / ledger** operation: a
+       mid-transaction failure **rolls back** with no partial write (tie to the concurrency mode).
+     - **T2-6 (breached-password, 6.2.4/6.2.12)** — the feature has **password registration/change**:
+       a known-breached password is **rejected**.
    - **ASVS compliance scoped (MATERIAL for a security-surface feature).** The plan
      carries a **`## ASVS Compliance`** block (per `stride-threat-model-template`)
      listing the **triggered** ASVS 5.0.0 chapters, the **in-scope L3** items chosen

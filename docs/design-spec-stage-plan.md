@@ -189,6 +189,11 @@ last; the first three layers deliver the Section-1 capability without it.
 2. **Layer 2** ✅ — the `design-approved` in-session marker + orchestrator wiring + currency hash +
    forgery guard (`guard-approval-markers.sh` + settings deny). **Built.**
 3. **Layer 3** ✅ — planning's third input branch (currency-checked) + design→AC tracing. **Built.**
-4. **Layer 4** ⬜ — post-build design-review (advisory visual-regression). **Deferred** — brittle,
-   advisory-only, and best paired with the visual-regression/a11y tooling (FE row); not required
-   for the Section-1 capability, which Layers 0–3 already deliver.
+4. **Layer 4** ✅ — post-build design-review (advisory visual-regression + a11y budget). **BUILT
+   (2026-07-05):** `ui-capture.sh` + `ui-capture.mjs` (Playwright render → screenshot → pixelmatch
+   diff vs baseline → axe) writes `ui-capture.json`; the deterministic `design-review-check.sh`
+   compares it to `design-budget.json` and writes an **advisory** `design-review.json` (never a
+   gate); documentation surfaces it in the PR. Orchestration stage 4d, conditional on `.pipeline/ui.env`.
+   The budget logic is harness-tested (`tests/suites/design-review.sh`); the Playwright capture is
+   **runtime-bound** (needs `npm i playwright pixelmatch pngjs @axe-core/playwright`), fail-safe no-op
+   when unprovisioned. Web/platform-agnostic; the native-iOS analogue is XCUITest snapshotting (iOS Layer 3, macOS).

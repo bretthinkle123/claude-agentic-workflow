@@ -1,9 +1,10 @@
 # ASVS 5.0.0 determinism roadmap — promoting agent-reasoned checks to deterministic gates
 
-> **Delivered 2026-07-04 — Slice A + first Tier-2:** Tier-1 **T1-1…T1-4** ship as `asvs-sast.sh`
-> (a Stop hook on the security agent + a deploy-gate `critical>0` floor; `tests/suites/asvs-sast.sh`).
-> Tier-2 **T2-1** (auth-required) and **T2-2** (safe-error) ship as plan-audit **material flags** +
-> `test-conventions` adversarial shapes, riding `criteria_covered`. Remaining rows below are ⬜.
+> **Delivered — Slices A–D (2026-07-04/05).** Tier-1 **T1-1…T1-8** ship in `asvs-sast.sh` (security
+> Stop hook + deploy-gate `critical>0` floor; `tests/suites/asvs-sast.sh`): T1-1…T1-5 as **critical**
+> (block), T1-6…T1-8 as **advisory warnings** (framework-ambiguous → non-blocking). Tier-2
+> **T2-1…T2-6** ship as plan-audit **material flags** + `test-conventions` adversarial shapes, riding
+> `criteria_covered`. All rows below are ✅. Only genuinely-judgment (Tier-3) items remain under 6g.
 
 **Status: roadmap/spec, partially built (see the banner + ✅ marks).** Companion to the ASVS 5.0.0
 verification layer (security step 6g + `asvs-5.0-checklist.md`). Today 6g is **agent-reasoned**: the
@@ -88,9 +89,11 @@ require, apply to almost every real feature. T2-3…T2-6 as their triggers appea
    ⇒ no-op, so no loop-exit churn) and `tests/suites/asvs-sast.sh` (detection + gate).
 2. **Slice B — Tier-2 T2-1 + T2-2. ✅ DONE (2026-07-04).** plan-audit material flags +
    `test-conventions` adversarial shapes; ride `criteria_covered`.
-3. **Slice C — T1-5/T1-6 (cookie flags, debug/errors) + remaining Tier-2 (T2-3…T2-6)** ⬜ as feature
-   triggers warrant.
-4. **Slice D — T1-7/T1-8** ⬜ (framework-ambiguous; tune thresholds, keep noisy ones advisory).
+3. **Slice C — T1-5 (cookie flags, critical) + T1-6 (debug/errors, advisory) + Tier-2 T2-3…T2-6.**
+   ✅ DONE (2026-07-05). T1-5/T1-6 in `asvs-sast.sh` + tests; T2-3…T2-6 as plan-audit material flags +
+   `test-conventions` shapes.
+4. **Slice D — T1-7 (headers) / T1-8 (sensitive-in-URL).** ✅ DONE (2026-07-05) — emitted as **advisory
+   warnings** (framework-ambiguous, precise explicit-bad patterns, favour false-negatives).
 
 Each slice narrows the set of ASVS requirements that rely on agent judgement, without removing the
 6g `asvs.reconciled` baseline that still covers the Tier-3 semantic items. The end state: the
