@@ -60,7 +60,10 @@ Use 1–2 trigger questions per category:
 - **Repudiation** — Can an actor deny an action? Is there sufficient audit
   logging (who did what, when)?
 - **Information Disclosure** — Can data leak (PII in logs/errors, over-broad
-  responses, unencrypted storage)?
+  responses, unencrypted storage)? **For every stored sensitive field, name a concrete
+  at-rest control** (password → slow KDF; sensitive PII → KMS field-encryption; personal →
+  SSE — `data-protection-conventions`), not the abstract "unencrypted storage" — so the
+  mitigation is a 6d-verifiable mechanism that security's `data_surface` reconciliation checks.
 - **Denial of Service** — Can the feature be exhausted (unbounded input, missing
   rate limits, expensive queries)?
 - **Elevation of Privilege** — Can a low-privilege actor gain higher access

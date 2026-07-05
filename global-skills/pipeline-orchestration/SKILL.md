@@ -61,6 +61,7 @@ string and those files — never assume it can see the conversation.
        jq -e '.status=="clean"
               and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null)
               and ((.input_surface.uncontrolled // []) | length == 0)
+              and ((.data_surface.unprotected // []) | length == 0)
               and (.asvs.reconciled != false)' security-status.json   AND
        jq -e '.status=="pass"
               and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))

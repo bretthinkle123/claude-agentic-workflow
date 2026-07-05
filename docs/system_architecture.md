@@ -401,11 +401,12 @@ Writes two output files: `security-report.md` (human-readable — including a **
 inventory** listing every finding regardless of severity/exploitability/remediation, plus a STRIDE
 delta addendum) and `security-status.json` (machine-readable, parsed by gate hooks; carries
 `critical_count`, `warning_count`, `fixed_count`, `total_findings`, `stride_new_threats`, the
-`osv_max_cvss` CVE-severity floor, the `input_surface` reconciliation, and the **`asvs`**
-reconciliation object — `{l1_l2_universal, in_scope_l3, triggered_chapters, l1_l2_missing,
-l3_in_scope_missing, doc_advisory, waivers, reconciled}`). Status is `clean` unless `critical_count
-> 0` — and the agent writes `clean` only when `asvs.reconciled` and `input_surface.reconciled` are
-both true. An unmet ASVS L1/L2 code/config item is itself a critical (→ status not clean), **and**
+`osv_max_cvss` CVE-severity floor, the `input_surface` reconciliation, the `data_surface`
+reconciliation — `{classified, sensitive, unprotected, reconciled}` (per-field at-rest protection,
+DP plan) — and the **`asvs`** reconciliation object — `{l1_l2_universal, in_scope_l3,
+triggered_chapters, l1_l2_missing, l3_in_scope_missing, doc_advisory, waivers, reconciled}`). Status
+is `clean` unless `critical_count > 0` — and the agent writes `clean` only when `asvs.reconciled`,
+`input_surface.reconciled`, and `data_surface.reconciled` are all true. An unmet ASVS L1/L2 code/config item is itself a critical (→ status not clean), **and**
 `deployment-gate.sh` + the loop-exit predicate independently block on `.asvs.reconciled == false`
 (a deterministic backstop, CVSS-floor-style) — so a `clean` status that contradicts an unreconciled
 ASVS state cannot ship. Warnings are surfaced but do not block.
@@ -657,12 +658,14 @@ pass. That independence is what lets the breaker bound a thrashing loop the per-
    omit a budget field you won't measure (leave it `null`), or set `perf.status:"n/a"` when
    perf mode genuinely didn't run. Nulling a budget dimension that the AC *names* is not an
    escape — that hides the criterion and fails the `criteria_covered` check above instead.
-4. `security-status.json` exists and `status == "clean"`. Three deterministic floors ride this
+4. `security-status.json` exists and `status == "clean"`. Four deterministic floors ride this
    file even when `status` is `clean`: the **B6 CVE floor** (`osv_max_cvss >= 7.0` without an
    `osv_waiver` → block), the **input-surface floor** (`input_surface.uncontrolled` non-empty →
-   block), and the **ASVS floor** (`asvs.reconciled == false` → block — an unmet ASVS 5.0.0 L1/L2
-   or in-scope-L3 code/config requirement remains). All three are mirrored in the loop-exit
-   predicate so `loop-exit ≡ gate` (asserted by `loop-exit-invariant.sh`). A fourth,
+   block), the **data-surface floor** (`data_surface.unprotected` non-empty → block — a stored
+   sensitive field shipped without its declared at-rest mechanism/waiver, DP plan), and the **ASVS
+   floor** (`asvs.reconciled == false` → block — an unmet ASVS 5.0.0 L1/L2 or in-scope-L3
+   code/config requirement remains). All four are mirrored in the loop-exit predicate so
+   `loop-exit ≡ gate` (asserted by `loop-exit-invariant.sh`). A further,
    **deploy-only** check (like the M5 diff-approval and the WS3-1 mutation-scope check, and
    therefore *not* in the loop-exit predicate) is **waiver authenticity (Option B):** any
    `osv_waiver` or `asvs.waivers` the security agent *claimed* in `security-status.json` must have
@@ -799,7 +802,7 @@ commit; until then, all changes live in the working tree.
 | `surface-delta.md` | implementation agent | security agent (6f STRIDE-delta reconciliation) | Best-effort hint listing new/changed attack surface (entry points, trust boundaries, data flows, privilege surface); non-authoritative — the diff is the source of truth |
 | `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
-| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,"osv_max_cvss":0,"input_surface":{...,"reconciled":true},"asvs":{"l1_l2_universal":true,"in_scope_l3":[],"triggered_chapters":[...],"l1_l2_missing":[],"l3_in_scope_missing":[],"reconciled":true},...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`); the `asvs` object (ASVS 5.0.0 6g — L1/L2 universal, in-scope L3) is a deterministic floor: `deployment-gate.sh` + loop-exit block on `asvs.reconciled==false` |
+| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,"osv_max_cvss":0,"input_surface":{...,"reconciled":true},"data_surface":{"classified":N,"sensitive":M,"unprotected":[],"reconciled":true},"asvs":{"l1_l2_universal":true,"in_scope_l3":[],"triggered_chapters":[...],"l1_l2_missing":[],"l3_in_scope_missing":[],"reconciled":true},...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`); the `asvs` object (ASVS 5.0.0 6g — L1/L2 universal, in-scope L3) and `data_surface` (DP — per-field at-rest protection) are deterministic floors: `deployment-gate.sh` + loop-exit block on `asvs.reconciled==false` and on `data_surface.unprotected` non-empty |
 | `sbom.cdx.json` | `generate-sbom.sh` (via security) | documentation (surfaces component count in the PR) | CycloneDX SBOM (M6); **best-effort, non-gating** — absent when Docker is unavailable |
 | `asvs-sast.json` | `asvs-sast.sh` (security Stop hook) | deployment-gate.sh (blocks on `critical>0`), security agent (fixes findings) | `{"critical":N,"warning":M,"findings":[{rule,asvs,severity,file,line,match}]}` — deterministic ASVS Tier-1 SAST (ASVS-DET); absent ⇒ 0 ⇒ no-op |
 | `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |

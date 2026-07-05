@@ -75,6 +75,10 @@ sec_mut_case 0 "clean + osv 7.5 + human-recorded waiver → pass"            '.o
 sec_mut_case 2 "clean + uncontrolled input source → block"         '.input_surface.uncontrolled=["POST /transfers"]'
 sec_mut_case 0 "clean + input_surface reconciled ([]) → pass"      '.input_surface={declared:2,implemented:2,uncontrolled:[],reconciled:true}'
 
+# Data-surface reconciliation floor (data-protection plan, DP): an unprotected sensitive field blocks.
+sec_mut_case 2 "clean + unprotected sensitive field → block"       '.data_surface.unprotected=["users.ssn"]'
+sec_mut_case 0 "clean + data_surface reconciled ([]) → pass"       '.data_surface={classified:4,sensitive:1,unprotected:[],reconciled:true}'
+
 # Source-marker guard (audit E3): a reverted/do-not-commit marker in the change set
 # blocks. The gate runs in a non-git fixture dir, so exercise the guard on an untracked
 # source file by making the workdir a throwaway git repo with the fixture + a marked file.

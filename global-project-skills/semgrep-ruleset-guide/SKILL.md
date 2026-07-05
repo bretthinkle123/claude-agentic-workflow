@@ -22,7 +22,35 @@ semgrep scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]
 > `$HOME/.claude/hooks/semgrep-scan.sh scan --config=auto --config=p/secrets --config=p/owasp-top-ten [scope]`
 > (requires Docker Desktop running). On Linux/WSL, call `semgrep` directly.
 
-Stack-specific additions for this project: `<STACK CONFIGS — e.g. p/python, p/django, p/react, p/dockerfile>`
+**Stack-specific additions (SB).** Beyond the always-on defaults, add the `--config` rows that
+match this project's actual stack so language/framework depth isn't left unscanned. Pick from the
+menu (add the ones that apply; delete the rest), then record the final list on the project line:
+
+The **language pack** is the reliable unit (it already carries that language's framework rules);
+add a dedicated framework pack only where one is confirmed to exist. `--config=auto` (a default)
+also auto-selects language rules, so these are depth on top, not the only coverage.
+
+| Stack element | Add `--config` (language pack — reliable) | Dedicated pack, if it resolves |
+|---|---|---|
+| Python (Django/Flask/FastAPI) | `p/python` | `p/django` |
+| JavaScript / TypeScript | `p/javascript` · `p/typescript` | `p/react` |
+| Node.js backend | `p/javascript` | — (Node rules live in the JS pack) |
+| Go | `p/golang` | — |
+| Java (incl. Spring) | `p/java` | — |
+| Ruby (incl. Rails) | `p/ruby` | — |
+| Dockerfile | `p/dockerfile` | — |
+| Kubernetes / Terraform | `p/kubernetes` · `p/terraform` (Checkov stays the primary IaC gate) | — |
+| CI configs | `p/github-actions` | — |
+| JWT-heavy | `p/jwt` | — |
+
+> **Swift / iOS** is **not** covered here — a Semgrep-Swift ruleset + SwiftLint is the deferred
+> **SB slice 4** (macOS/iOS-bound; see the **iOS** roadmap row + `docs/ios-swiftui-target-plan.md`).
+
+**Selected for this project:** `<STACK CONFIGS — fill from the menu above, e.g. p/python p/django p/dockerfile>`
+
+> Verify a `--config=p/<x>` resolves (Semgrep prints an error on an unknown pack). If a dedicated
+> framework pack doesn't resolve, the **language pack + the always-on defaults** (`auto`,
+> `p/secrets`, `p/owasp-top-ten`) still cover it — drop the unknown pack, never leave the scan unrun.
 
 Scope is the diff-scoped change set (see `diff-scoping-conventions`), or `.` on a
 full first scan.

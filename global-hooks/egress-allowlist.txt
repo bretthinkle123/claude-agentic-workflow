@@ -1,0 +1,38 @@
+# egress-allowlist.txt — the pipeline engine's default-deny network ACL (EG side-track).
+#
+# The ONLY outbound hosts the agent workload is permitted to reach. Everything else is denied
+# (Layer 2 proxy) and/or flagged (Layer 3 egress-check.sh). One host per line; `#` comments and
+# blank lines ignored; a leading `.` means "this host and any subdomain" (e.g. `.docker.io`).
+#
+# STARTER SET — derived from the plan's consumer table. CONFIRM empirically in Phase 0 (run one
+# representative pipeline with egress LOGGED and blocking OFF, then reconcile this list against
+# the observed hosts) before trusting it as the enforced ACL. Over-blocking breaks a scanner;
+# under-blocking misses a real path — so measure, don't guess.
+
+# plan-audit — dependency reality-check (anti-slopsquatting registry lookups)
+registry.npmjs.org
+pypi.org
+files.pythonhosted.org
+
+# security — OSV dependency CVE database
+osv.dev
+api.osv.dev
+
+# security — Semgrep + Trivy scanner images and their vuln DBs / rulesets (Docker)
+.docker.io
+registry-1.docker.io
+auth.docker.io
+semgrep.dev
+ghcr.io
+
+# deployment — git push + open PR
+github.com
+api.github.com
+codeload.github.com
+
+# implementation — package installs reuse the npm/PyPI hosts above; context7 MCP endpoint
+# is added per-project ONLY when the project wires it in .mcp.json.
+
+# NOTE: api.anthropic.com (the Claude Code runtime transport) is intentionally NOT here — it is
+# the model harness, not the sandboxed tool workload, and blocking it breaks the pipeline. The
+# control targets the tools the agents invoke, never the model transport.

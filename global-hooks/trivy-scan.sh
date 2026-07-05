@@ -31,7 +31,11 @@ HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
 # `image`, ...) — the same "don't repeat the binary name" contract as
 # semgrep-scan.sh — and the wrapper still works if TRIVY_IMAGE is overridden to an
 # image that doesn't default its entrypoint to trivy.
+# EG side-track: when the operator has provisioned the default-deny egress network
+# (global-hooks/egress-proxy/), export PIPELINE_EGRESS_NETWORK=<name> and this container joins it
+# (its only route out is the allow-listing proxy). Unset ⇒ default bridge, unchanged behavior.
 MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
+  ${PIPELINE_EGRESS_NETWORK:+--network "$PIPELINE_EGRESS_NETWORK"} \
   --entrypoint trivy \
   -v "${HOST_DIR}:/src" \
   -v trivy-cache:/root/.cache/ \

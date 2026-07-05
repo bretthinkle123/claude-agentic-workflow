@@ -76,6 +76,19 @@ When invoked:
      rate-limit tier against `api-edge-conventions`: a per-owner limit must be
      **principal-keyed post-auth**, not IP-keyed — flag a plan that says "per-owner" but
      describes an IP key or a pre-auth hook.
+   - **Data-protection complete (MATERIAL) — every stored sensitive field has a named
+     at-rest mechanism (or reasoned waiver), and the plan states a class per stored field.**
+     Only when the plan stores user data. Confirm `plan.md`'s Data section classifies each
+     stored field (credential | sensitive-PII | personal | non-sensitive), and that every
+     field classified **sensitive** carries in `acceptance.md` a `data_protection` criterion
+     naming its at-rest mechanism (**KDF** password | **KMS field-encryption** sensitive-PII |
+     **SSE** personal) + "persisted form is not plaintext", **or** an explicit
+     `data_protection_waiver: <reason>`. A sensitive field with no named mechanism-or-waiver,
+     or a stored field left unclassified, is a **material** flag (security's `data_surface`
+     reconciliation, or the criteria-coverage gate, will otherwise block at deploy — or the
+     control ships absent as a non-exploitable warning that today would slip through). Verify
+     the mechanism matches the class (a password must be a slow KDF, never a fast hash; a
+     `data-protection-conventions` cross-check).
    - **Object-level authorization tested (MATERIAL) — every owner/tenant-scoped
      resource has a cross-owner denial criterion.** For each resource the plan exposes
      that is read or mutated **by a client-supplied id** and belongs to a user/tenant

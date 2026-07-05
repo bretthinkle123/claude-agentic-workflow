@@ -1,10 +1,13 @@
 # Plan — data-classification + at-rest protection enforcement for built apps (DP side-track)
 
-> **Status: spec, awaiting approval.** Forward-looking design; nothing built yet. Scope is the
-> **security of the app the pipeline builds** (like input-controls / BOLA), NOT the engine.
-> Builds on existing controls (Checkov at-rest, `logging-conventions` redaction,
-> `secrets-management`, `auth-patterns`, ASVS 6g) — it makes them **accountable**, not
-> duplicative.
+> **Status: BUILT (2026-07-04, roadmap row DP).** All six layers are implemented and
+> harness-tested: the `data-protection-conventions` skill, planning classification + `data_protection`
+> criteria, the plan-audit material flag, the `test-conventions` persisted-form shape, security's
+> `data_surface` reconciliation, and the deterministic `data_surface.unprotected` deploy-gate floor
+> mirrored into the loop-exit predicate (`loop-exit ≡ gate` intact — invariant 22 / gate 26). Scope is
+> the **security of the app the pipeline builds** (like input-controls / BOLA), NOT the engine. Builds
+> on existing controls (Checkov at-rest, `logging-conventions` redaction, `secrets-management`,
+> `auth-patterns`, ASVS 6g) — it makes them **accountable**, not duplicative.
 
 ## Goal & honest scope
 
