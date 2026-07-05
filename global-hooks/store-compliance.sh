@@ -35,9 +35,15 @@ command -v jq >/dev/null 2>&1 || exit 0
 # declaration (NOT bare build.gradle — a Kotlin/Java backend uses Gradle too). Narrowing the trigger
 # doesn't weaken the checks: a real iOS app has an .xcodeproj and a real Android app a manifest, and
 # each rule still reads Info.plist/build.gradle content once its platform is triggered.
+#
+# lsfiles = every working-tree file that isn't gitignored — tracked AND untracked. This MUST include
+# untracked: the deployment agent makes the pipeline's first/only commit LAST, so during the security
+# stage (when this Stop hook fires) the app's own files (.xcodeproj, manifests, source) are typically
+# UNCOMMITTED. Bare `git ls-files` (tracked only) would miss them and no-op on a real app.
+lsfiles() { git ls-files --cached --others --exclude-standard 2>/dev/null; }
 APPLE=false; ANDROID=false
-git ls-files 2>/dev/null | grep -qiE '(\.xcodeproj|(^|/)PrivacyInfo\.xcprivacy$)' && APPLE=true
-git ls-files 2>/dev/null | grep -qiE '(^|/)AndroidManifest\.xml$' && ANDROID=true
+lsfiles | grep -qiE '(\.xcodeproj|(^|/)PrivacyInfo\.xcprivacy$)' && APPLE=true
+lsfiles | grep -qiE '(^|/)AndroidManifest\.xml$' && ANDROID=true
 grep -riqE 'app store|native ios|swiftui' PROJECT.md CLAUDE.md 2>/dev/null && APPLE=true
 grep -riqE 'google play|native android|jetpack compose' PROJECT.md CLAUDE.md 2>/dev/null && ANDROID=true
 
@@ -58,20 +64,20 @@ ANDROID_TARGET_SDK_FLOOR=35   # Google Play required targetSdk. # policy floor �
 
 # ---------- Apple ----------
 if [ "$APPLE" = true ]; then
-  APPLE_CFG=$(git ls-files 2>/dev/null | grep -iE '(Info\.plist$|project\.pbxproj$|\.entitlements$|PrivacyInfo\.xcprivacy$)')
+  APPLE_CFG=$(lsfiles | grep -iE '(Info\.plist$|project\.pbxproj$|\.entitlements$|PrivacyInfo\.xcprivacy$)')
   cfgtext=""; for f in $APPLE_CFG; do [ -f "$f" ] && cfgtext="$cfgtext"$'\n'"$(cat "$f" 2>/dev/null)"; done
   cfgflat=$(printf '%s' "$cfgtext" | tr '\n' ' ')
 
   # SC-1 — privacy manifest absent. Gated on a real app target (.xcodeproj) so a pre-scaffold repo
   # isn't flagged; a SHIPPING iOS app without PrivacyInfo.xcprivacy is an automated rejection.
-  if git ls-files 2>/dev/null | grep -qiE '\.xcodeproj'; then
-    git ls-files 2>/dev/null | grep -qiE '(^|/)PrivacyInfo\.xcprivacy$' || \
+  if lsfiles | grep -qiE '\.xcodeproj'; then
+    lsfiles | grep -qiE '(^|/)PrivacyInfo\.xcprivacy$' || \
       add apple SC-1 critical "PrivacyInfo.xcprivacy privacy manifest absent from the app target (App Store automated rejection)"
   fi
 
   # SC-2 — a capability API used without its usage-description string (Info.plist OR the modern
   # pbxproj INFOPLIST_KEY_NS… build-setting form). Conservative API→key map; favors false-negatives.
-  swiftsrc=$(git ls-files 2>/dev/null | grep -iE '\.(swift|m|mm)$')
+  swiftsrc=$(lsfiles | grep -iE '\.(swift|m|mm)$')
   srctext=""; for f in $swiftsrc; do [ -f "$f" ] && srctext="$srctext"$'\n'"$(cat "$f" 2>/dev/null)"; done
   cap() {  # api-ERE  key-token  human
     printf '%s' "$srctext" | grep -qiE "$1" || return 0
@@ -98,8 +104,8 @@ fi
 
 # ---------- Android ----------
 if [ "$ANDROID" = true ]; then
-  gtext=""; for f in $(git ls-files 2>/dev/null | grep -iE 'build\.gradle(\.kts)?$'); do [ -f "$f" ] && gtext="$gtext"$'\n'"$(cat "$f" 2>/dev/null)"; done
-  mtext=""; for f in $(git ls-files 2>/dev/null | grep -iE 'AndroidManifest\.xml$');   do [ -f "$f" ] && mtext="$mtext"$'\n'"$(cat "$f" 2>/dev/null)"; done
+  gtext=""; for f in $(lsfiles | grep -iE 'build\.gradle(\.kts)?$'); do [ -f "$f" ] && gtext="$gtext"$'\n'"$(cat "$f" 2>/dev/null)"; done
+  mtext=""; for f in $(lsfiles | grep -iE 'AndroidManifest\.xml$');   do [ -f "$f" ] && mtext="$mtext"$'\n'"$(cat "$f" 2>/dev/null)"; done
 
   # SC-4 — targetSdk below Google's floor. Resolve the literal; an unresolvable variable/version-
   # catalog indirection is an ADVISORY "unresolved", never a silent pass (the one check Google

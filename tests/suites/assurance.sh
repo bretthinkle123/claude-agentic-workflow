@@ -29,7 +29,8 @@ assurance_of() {  # <kind: python|swift|claude-ios|swift-adapters|android|claude
       android-adapters) printf '<manifest/>\n' > AndroidManifest.xml; printf '{}' > .pipeline/android-adapters.json ;;
       kotlin-backend)  printf 'plugins { kotlin("jvm") }\n' > build.gradle.kts; printf 'fun main() {}\n' > Server.kt ;;
     esac
-    git add -A >/dev/null 2>&1 || true
+    # deliberately NO `git add` — the stamp is computed BEFORE deployment's first commit, so the
+    # app source is untracked at that point; this guards the tracked-only-ls-files regression.
     bash "$RS" ) >/dev/null 2>&1
   jq -r '.assurance' "$w/.pipeline/run-summary.json" 2>/dev/null
 }

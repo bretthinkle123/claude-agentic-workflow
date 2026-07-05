@@ -175,6 +175,23 @@ to `~/.claude/hooks/`, so the new hook rides the existing install. SC-4's floor 
 **looked up at implementation time** (planning has WebSearch) — Google's required target API level
 changes annually and this doc deliberately does not hard-code it.
 
+## Known residuals (Layer C first cut — verified in the 2026-07-05 PR audit)
+
+- **Fixed in-audit:** `store-compliance.sh` and the `run-summary.sh` mobile detection now scan
+  **tracked *and* untracked** files (`git ls-files --cached --others --exclude-standard`). They
+  originally used bare `git ls-files` (tracked only) and silently no-oped on a real app, because the
+  deployment agent makes the pipeline's first commit **last** — so the app's files are uncommitted
+  when these hooks fire. The suites now leave fixtures untracked to guard the regression.
+- **SC-2 can false-positive (accepted grep limit):** it flags a capability-API class name appearing
+  in source without its usage string — a comment/string mention of e.g. `AVCaptureDevice` with no
+  usage key would flag. Narrow scenario, same class of residual as `asvs-sast.sh`; a real use is the
+  overwhelming case. Revisit if it bites.
+- **SC-5 misses the Gradle `buildTypes { release { debuggable true } }` form** (only the manifest
+  `android:debuggable="true"` is checked) — a false-negative, consistent with the favour-FN posture;
+  add the Gradle form in the SC-6/7/9 follow-up.
+- **Paths with spaces** (e.g. `My App.xcodeproj`) can be skipped by the `for f in $list` word-split —
+  a false-negative; low-frequency, worth hardening in the follow-up.
+
 ## Maintenance note (the honest cost)
 
 SC-4's SDK floor and SC-9's Required-Reason API list are **policy-pinned, not code-pinned** — they

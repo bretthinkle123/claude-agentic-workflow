@@ -14,6 +14,9 @@ echo "-- store-compliance (Tier-1 app-store) --"
 
 # Build a throwaway git repo from <file> <content> pairs, run the hook, echo a jq query on its JSON.
 #   store_scan '<jq>' <file1> <content1> [<file2> <content2> ...]
+# NOTE: the files are left UNCOMMITTED and UNSTAGED on purpose — that is the real pipeline state when
+# this security Stop hook fires (deployment makes the first commit LAST). It regression-guards the
+# bug where the hook used bare `git ls-files` (tracked only) and silently no-oped on a real app.
 store_scan() {
   local q="$1"; shift
   local w; w="$(mktemp -d)"; _WORKDIRS+=("$w")
@@ -23,8 +26,7 @@ store_scan() {
       case "$1" in */*) mkdir -p "$(dirname "$1")" ;; esac
       printf '%s\n' "$2" > "$1"; shift 2
     done
-    git add -A >/dev/null 2>&1
-    bash "$STORE" ) >/dev/null 2>&1
+    bash "$STORE" ) >/dev/null 2>&1   # deliberately NO `git add` — files stay untracked (real state)
   jq -rc "$q" "$w/.pipeline/store-compliance.json" 2>/dev/null
 }
 

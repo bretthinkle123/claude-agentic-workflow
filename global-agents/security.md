@@ -148,7 +148,7 @@ When invoked:
    **`deployment-gate.sh` independently blocks on `asvs-sast.json` `critical > 0`** — so an
    unfixed Tier-1 finding cannot ship even if it is missed here. (This is the deterministic
    counterpart to the agent-reasoned ASVS checks in step 6g.)
-4f2. **App-store compliance (store-compliance side-track, Layer C)** — when the project declares an
+4e2. **App-store compliance (store-compliance side-track, Layer C)** — when the project declares an
    Apple App Store / Google Play target (`.xcodeproj`/`Info.plist`/`build.gradle`/`AndroidManifest.xml`
    present, or PROJECT.md declares it), the deterministic scan flags known **automated rejection
    causes** and you **fix** every critical:
