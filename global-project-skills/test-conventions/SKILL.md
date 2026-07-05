@@ -200,6 +200,22 @@ test that asserts the property must exercise the variable that would actually br
   ASVS 6.2.4/6.2.12): a known-breached password (e.g. `Password1!` / a top-list entry, or a seeded
   HIBP-style check) is **refused** at registration/change with a clear error.
 
+**App-store submission shapes (only when `PROJECT.md` declares an Apple App Store / Google Play
+target; store-compliance Layer D).** The behavior-testable counterparts of the deterministic
+`store-compliance.sh` config checks:
+- **The app collects any user data** → a **data-declaration reconciliation** test (store **SC-T2-1**):
+  enumerate the data types the code actually collects (reuse the DP `data_surface` classified-field
+  inventory as the source of truth) and assert the set **equals** the declared privacy nutrition
+  label / Play **Data safety** manifest — fail on an **under**-declaration (collected-but-undeclared)
+  *and* an **over**-declaration (declared-but-uncollected). Highest-value store shape; build it first.
+- **The feature has account creation** → an **account-deletion** test (**SC-T2-2**): the in-app
+  deletion flow removes the account + its data; **for a Google Play target, also assert a
+  web-accessible deletion path** exists (Play requires the external path, not just in-app).
+- **An Apple target with any social/third-party login** → a **Sign-in-with-Apple-present** test
+  (**SC-T2-3**): the auth surface offers Sign in with Apple alongside the social option.
+- **The feature monetizes digital goods** → a **store-billing** test (**SC-T2-4**): the purchase path
+  routes through StoreKit IAP (Apple) / Google Play Billing (Play), not an external processor.
+
 `plan-audit` should flag an acceptance criterion whose only test is the weak form; the
 testing agent should generate the adversarial shape proactively.
 

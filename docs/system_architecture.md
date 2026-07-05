@@ -186,7 +186,8 @@ claude-agentic-workflow/
 │   ├── swift-conventions/          iOS: SwiftUI architecture, state model, XCTest + the web→SwiftUI mapping cheat-sheet
 │   ├── apple-hig-compliance/       iOS: native nav patterns, Dynamic Type, dark mode — the web→native design seam
 │   ├── claude-design-to-swiftui/   iOS: Claude Design export → faithful SwiftUI replication recipe
-│   └── app-store-submission-requirements/  iOS: signing, privacy manifest, data-use — planning emits them as ACs
+│   ├── app-store-submission-requirements/  Apple: signing, privacy manifest, data-use — planning emits them as ACs
+│   └── google-play-submission-requirements/  Google Play: Data safety, targetSdk floor, account-deletion (incl. web), Play Billing — planning emits them as ACs (store-compliance Layer A)
 │
 ├── templates/
 │   ├── CLAUDE.md               Seed for the per-project CLAUDE.md (fill in stack + run commands)
@@ -919,7 +920,8 @@ when the feature needs that knowledge.
 | `swift-conventions` | on-demand (planning, implementation, testing — iOS target only) | SwiftUI architecture, state model, XCTest shape + the web→SwiftUI mapping cheat-sheet |
 | `apple-hig-compliance` | on-demand (planning, design stages — iOS target only) | Native nav patterns, SF Symbols, Dynamic Type, dark mode — mapping web idioms to iOS-native equivalents |
 | `claude-design-to-swiftui` | on-demand (planning, implementation — iOS target only) | Claude Design export → faithful SwiftUI replication recipe |
-| `app-store-submission-requirements` | on-demand (planning, deployment — iOS target only) | Signing, privacy manifest, data-use declarations — emitted as acceptance criteria early |
+| `app-store-submission-requirements` | on-demand (planning, deployment — Apple App Store target) | Signing, privacy manifest, data-use declarations — emitted as acceptance criteria early |
+| `google-play-submission-requirements` | on-demand (planning, deployment — Google Play target) | Data safety form, targetSdk floor, permission justifications, in-app + web account deletion, Play Billing — emitted as acceptance criteria early (store-compliance Layer A) |
 
 ---
 

@@ -28,8 +28,11 @@ store_scan() {
   jq -rc "$q" "$w/.pipeline/store-compliance.json" 2>/dev/null
 }
 
-# (1) scoping — a plain Python project declares no store target → no-op, no JSON file written.
+# (1) scoping — no store target → no-op, no JSON file written.
 assert_eq "" "$(store_scan '.critical' app.py 'def add(a,b): return a+b')" "no store target → no-op (no output file)"
+# A Kotlin/Java Gradle BACKEND (Gradle but no AndroidManifest / no declaration) must NOT be scoped as
+# Android — the over-broad-detection fix (bare build.gradle no longer triggers).
+assert_eq "" "$(store_scan '.critical' build.gradle 'plugins { id "java" }')" "JVM/Gradle backend (no manifest/declaration) → no-op (not mis-scoped as Android)"
 
 # (2) Apple detection
 #   SC-1 (privacy manifest absent, gated on a real .xcodeproj) + SC-2 (camera API w/o usage string)
@@ -41,8 +44,8 @@ let d = AVCaptureDevice.default(for: .video)' \
 assert_eq 2 "$(printf '%s' "$APPLE_BAD_JSON" | jq -r '.c')" "Apple: no manifest + camera-w/o-usage → 2 critical"
 assert_eq "true" "$(printf '%s' "$APPLE_BAD_JSON" | jq -r '.rules|index("SC-1")!=null')" "SC-1 (privacy manifest absent) fires"
 assert_eq "true" "$(printf '%s' "$APPLE_BAD_JSON" | jq -r '.rules|index("SC-2")!=null')" "SC-2 (capability API w/o usage string) fires"
-#   SC-1 NOT fired without a real .xcodeproj (pre-scaffold repo shouldn't be flagged)
-assert_eq 0 "$(store_scan '.critical' Info.plist '<plist><dict><key>ITSAppUsesNonExemptEncryption</key><false/></dict></plist>')" "Apple w/o .xcodeproj → SC-1 not fired (no premature flag)"
+#   SC-1 NOT fired without a real .xcodeproj (Apple declared via PROJECT.md; pre-scaffold shouldn't flag)
+assert_eq 0 "$(store_scan '.critical' PROJECT.md 'Target: native iOS (SwiftUI)' Info.plist '<plist><dict><key>ITSAppUsesNonExemptEncryption</key><false/></dict></plist>')" "Apple declared but no .xcodeproj → SC-1 not fired (no premature flag)"
 #   SC-8 advisory (export-compliance key absent) — warning, not critical
 assert_eq 1 "$(store_scan '.warning' App.xcodeproj/project.pbxproj '//' PrivacyInfo.xcprivacy 'x' Info.plist '<plist><dict/></plist>')" "SC-8 export key absent → 1 warning"
 #   Clean Apple app (manifest + export key present, no capability API) → nothing
@@ -55,8 +58,8 @@ ANDROID_BAD_JSON="$(store_scan '{c:.critical,rules:[.findings[].rule]}' \
   AndroidManifest.xml '<manifest><application android:debuggable="true"/></manifest>')"
 assert_eq 2 "$(printf '%s' "$ANDROID_BAD_JSON" | jq -r '.c')" "Android: low targetSdk + debuggable → 2 critical"
 assert_eq "true" "$(printf '%s' "$ANDROID_BAD_JSON" | jq -r '.rules|index("SC-4")!=null')" "SC-4 (targetSdk below floor) fires"
-#   SC-4 unresolved indirection → advisory, not a silent pass
-assert_eq 1 "$(store_scan '.warning' build.gradle.kts 'android { targetSdk = libs.versions.target.get() }')" "SC-4 unresolved targetSdk indirection → 1 warning (never silent)"
+#   SC-4 unresolved indirection → advisory, not a silent pass (manifest triggers Android scope)
+assert_eq 1 "$(store_scan '.warning' AndroidManifest.xml '<manifest/>' build.gradle.kts 'android { targetSdk = libs.versions.target.get() }')" "SC-4 unresolved targetSdk indirection → 1 warning (never silent)"
 #   Clean Android (targetSdk at floor, not debuggable) → nothing
 assert_eq 0 "$(store_scan '.critical' build.gradle.kts 'android { targetSdk = 35 }' AndroidManifest.xml '<manifest><application/></manifest>')" "clean Android (targetSdk=floor) → 0 critical"
 

@@ -13,7 +13,7 @@ RS="$REPO_ROOT/scripts/run-summary.sh"
 echo "-- assurance (reduced-assurance stamp) --"
 
 # Run run-summary.sh in a throwaway git repo seeded per KIND; echo the resulting .assurance.
-assurance_of() {  # <kind: python|swift|claude-ios|swift-adapters|android|claude-android|android-adapters>
+assurance_of() {  # <kind: python|swift|claude-ios|swift-adapters|android|claude-android|android-adapters|kotlin-backend>
   local kind="$1" w; w="$(mktemp -d)"; _WORKDIRS+=("$w")
   ( cd "$w"
     git init -q; git config user.email a@b.c; git config user.name t
@@ -24,9 +24,10 @@ assurance_of() {  # <kind: python|swift|claude-ios|swift-adapters|android|claude
       swift)           printf 'import SwiftUI\nstruct ContentView: View {}\n' > ContentView.swift ;;
       claude-ios)      printf 'Frontend: native iOS (SwiftUI), not the JS default.\n' > CLAUDE.md ;;
       swift-adapters)  printf 'import SwiftUI\n' > ContentView.swift; printf '{}' > .pipeline/swift-adapters.json ;;
-      android)         printf 'class MainActivity : ComponentActivity()\n' > MainActivity.kt ;;
+      android)         printf '<manifest package="com.x"/>\n' > AndroidManifest.xml ;;
       claude-android)  printf 'Frontend: native Android (Kotlin/Compose), not the JS default.\n' > CLAUDE.md ;;
-      android-adapters) printf 'class MainActivity\n' > MainActivity.kt; printf '{}' > .pipeline/android-adapters.json ;;
+      android-adapters) printf '<manifest/>\n' > AndroidManifest.xml; printf '{}' > .pipeline/android-adapters.json ;;
+      kotlin-backend)  printf 'plugins { kotlin("jvm") }\n' > build.gradle.kts; printf 'fun main() {}\n' > Server.kt ;;
     esac
     git add -A >/dev/null 2>&1 || true
     bash "$RS" ) >/dev/null 2>&1
@@ -38,9 +39,12 @@ assert_eq "standard" "$(assurance_of python)" "python-only project → assurance
 assert_eq "reduced (swift adapters absent)" "$(assurance_of swift)"      "swift source present → assurance=reduced"
 assert_eq "reduced (swift adapters absent)" "$(assurance_of claude-ios)" "CLAUDE.md declares native iOS/SwiftUI → assurance=reduced"
 assert_eq "standard" "$(assurance_of swift-adapters)" "swift + adapters sentinel present → assurance=standard"
-# Android arm (Layer E) — the hole this closes: a Kotlin/Gradle project must NOT be stamped standard
-assert_eq "reduced (android adapters absent)" "$(assurance_of android)"         "kotlin source present → assurance=reduced (was the standard-stamp hole)"
-assert_eq "reduced (android adapters absent)" "$(assurance_of claude-android)"  "CLAUDE.md declares native Android/Kotlin → assurance=reduced"
+# Android arm (Layer E) — the hole this closes: a real Android target must NOT be stamped standard
+assert_eq "reduced (android adapters absent)" "$(assurance_of android)"         "AndroidManifest present → assurance=reduced (the standard-stamp hole)"
+assert_eq "reduced (android adapters absent)" "$(assurance_of claude-android)"  "CLAUDE.md declares native Android → assurance=reduced"
 assert_eq "standard" "$(assurance_of android-adapters)" "android + adapters sentinel present → assurance=standard"
+# Regression: a Kotlin/JVM Gradle BACKEND (Gradle + .kt, but no manifest/declaration) is NOT Android
+# and must stay standard — the over-broad-detection fix (was mis-stamped reduced).
+assert_eq "standard" "$(assurance_of kotlin-backend)"   "Kotlin/JVM Gradle backend (no manifest/declaration) → assurance=standard (not mis-stamped Android)"
 
 finish assurance

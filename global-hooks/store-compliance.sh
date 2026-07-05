@@ -29,9 +29,15 @@ set -uo pipefail
 command -v jq >/dev/null 2>&1 || exit 0
 
 # --- Deterministic scoping key (machine-checkable, fail-open) ---
+# Keys ONLY on platform-SPECIFIC markers so a non-mobile project is never mis-activated: Apple = an
+# .xcodeproj / PrivacyInfo.xcprivacy or an explicit declaration (NOT bare Info.plist/.entitlements —
+# macOS/Electron desktop apps carry those); Android = an AndroidManifest.xml or an explicit
+# declaration (NOT bare build.gradle — a Kotlin/Java backend uses Gradle too). Narrowing the trigger
+# doesn't weaken the checks: a real iOS app has an .xcodeproj and a real Android app a manifest, and
+# each rule still reads Info.plist/build.gradle content once its platform is triggered.
 APPLE=false; ANDROID=false
-git ls-files 2>/dev/null | grep -qiE '(\.xcodeproj|(^|/)Info\.plist$|\.entitlements$|(^|/)PrivacyInfo\.xcprivacy$)' && APPLE=true
-git ls-files 2>/dev/null | grep -qiE '((^|/)build\.gradle(\.kts)?$|(^|/)AndroidManifest\.xml$)' && ANDROID=true
+git ls-files 2>/dev/null | grep -qiE '(\.xcodeproj|(^|/)PrivacyInfo\.xcprivacy$)' && APPLE=true
+git ls-files 2>/dev/null | grep -qiE '(^|/)AndroidManifest\.xml$' && ANDROID=true
 grep -riqE 'app store|native ios|swiftui' PROJECT.md CLAUDE.md 2>/dev/null && APPLE=true
 grep -riqE 'google play|native android|jetpack compose' PROJECT.md CLAUDE.md 2>/dev/null && ANDROID=true
 

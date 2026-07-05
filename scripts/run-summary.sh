@@ -41,9 +41,13 @@ grep -riqE 'native ios|swiftui' "$DIR/../CLAUDE.md" "$DIR/../PROJECT.md" 2>/dev/
 SWIFT_ADAPTERS=false
 { [ -f "$HOME/.claude/hooks/swift-gate.sh" ] || [ -f "$DIR/swift-adapters.json" ]; } && SWIFT_ADAPTERS=true
 
+# Android detection keys ONLY on Android-specific markers — an AndroidManifest.xml, or an explicit
+# PROJECT.md/CLAUDE.md declaration. Deliberately NOT bare `build.gradle`/`.kt`/`kotlin`: those also
+# describe a Kotlin/Java **backend** (Ktor, Spring Boot), which is not Android and must NOT be
+# mis-stamped `reduced` (that would falsely tell documentation "not gate-verified").
 ANDROID_TARGET=false
-git ls-files 2>/dev/null | grep -qiE '(\.kts?$|(^|/)build\.gradle(\.kts)?$|(^|/)AndroidManifest\.xml$)' && ANDROID_TARGET=true
-grep -riqE 'native android|kotlin|google play|jetpack compose' "$DIR/../CLAUDE.md" "$DIR/../PROJECT.md" 2>/dev/null && ANDROID_TARGET=true
+git ls-files 2>/dev/null | grep -qiE '(^|/)AndroidManifest\.xml$' && ANDROID_TARGET=true
+grep -riqE 'native android|google play|jetpack compose' "$DIR/../CLAUDE.md" "$DIR/../PROJECT.md" 2>/dev/null && ANDROID_TARGET=true
 ANDROID_ADAPTERS=false
 { [ -f "$HOME/.claude/hooks/android-gate.sh" ] || [ -f "$DIR/android-adapters.json" ]; } && ANDROID_ADAPTERS=true
 
