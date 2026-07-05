@@ -52,6 +52,20 @@ assert_eq 0 "$(store_scan '.critical' PROJECT.md 'Target: native iOS (SwiftUI)' 
 assert_eq 1 "$(store_scan '.warning' App.xcodeproj/project.pbxproj '//' PrivacyInfo.xcprivacy 'x' Info.plist '<plist><dict/></plist>')" "SC-8 export key absent → 1 warning"
 #   Clean Apple app (manifest + export key present, no capability API) → nothing
 assert_eq 0 "$(store_scan '.critical' App.xcodeproj/project.pbxproj '//' Main.swift 'import Foundation' PrivacyInfo.xcprivacy 'x' Info.plist '<plist><dict><key>ITSAppUsesNonExemptEncryption</key><false/></dict></plist>')" "clean Apple app → 0 critical"
+#   Spaced-path regression: the usage string lives in a pbxproj under a directory with a SPACE. The
+#   old `for f in $(…)` word-split that path and dropped the file, wrongly firing SC-2. read -r fixes it.
+assert_eq 0 "$(store_scan '.critical' \
+  'My App.xcodeproj/project.pbxproj' 'INFOPLIST_KEY_NSCameraUsageDescription = "we use the camera";' \
+  Cam.swift 'import AVFoundation
+let d = AVCaptureDevice.default(for: .video)' \
+  PrivacyInfo.xcprivacy 'x')" "spaced-path pbxproj is read (usage string found) → SC-2 not fired"
+#   SC-2 comment FP: the capability class appears ONLY inside a // comment → must NOT fire (line
+#   comments are stripped before the scan; erring to a false negative is the accepted posture).
+assert_eq 0 "$(store_scan '.critical' \
+  App.xcodeproj/project.pbxproj '//' \
+  Cam.swift '// AVCaptureDevice is documented elsewhere, not used here
+import Foundation' \
+  PrivacyInfo.xcprivacy 'x')" "capability API only in a // comment → SC-2 not fired (no false positive)"
 
 # (2) Android detection
 #   SC-4 (targetSdk below floor) + SC-5 (debuggable release)

@@ -62,10 +62,15 @@ add() {  # store rule sev "message"
 # Policy floors — POLICY-PINNED, verify annually (the stores change these on their schedule, not ours).
 ANDROID_TARGET_SDK_FLOOR=35   # Google Play required targetSdk. # policy floor — verify annually
 
+# readfiles <grep-ERE> — concatenate the content of every working-tree file whose PATH matches the
+# ERE, safe against spaces in filenames (`My App.xcodeproj`): reads the path list line-by-line with
+# `read -r` instead of word-splitting `for f in $(…)`, which split a spaced path into non-existent
+# fragments and silently dropped that file's content from the scan (a false negative).
+readfiles() { lsfiles | grep -iE "$1" | while IFS= read -r f; do [ -f "$f" ] && { cat "$f" 2>/dev/null; printf '\n'; }; done; }
+
 # ---------- Apple ----------
 if [ "$APPLE" = true ]; then
-  APPLE_CFG=$(lsfiles | grep -iE '(Info\.plist$|project\.pbxproj$|\.entitlements$|PrivacyInfo\.xcprivacy$)')
-  cfgtext=""; for f in $APPLE_CFG; do [ -f "$f" ] && cfgtext="$cfgtext"$'\n'"$(cat "$f" 2>/dev/null)"; done
+  cfgtext=$(readfiles '(Info\.plist$|project\.pbxproj$|\.entitlements$|PrivacyInfo\.xcprivacy$)')
   cfgflat=$(printf '%s' "$cfgtext" | tr '\n' ' ')
 
   # SC-1 — privacy manifest absent. Gated on a real app target (.xcodeproj) so a pre-scaffold repo
@@ -77,8 +82,10 @@ if [ "$APPLE" = true ]; then
 
   # SC-2 — a capability API used without its usage-description string (Info.plist OR the modern
   # pbxproj INFOPLIST_KEY_NS… build-setting form). Conservative API→key map; favors false-negatives.
-  swiftsrc=$(lsfiles | grep -iE '\.(swift|m|mm)$')
-  srctext=""; for f in $swiftsrc; do [ -f "$f" ] && srctext="$srctext"$'\n'"$(cat "$f" 2>/dev/null)"; done
+  # Strip `//` line comments before the capability-API scan so a class name mentioned only in a
+  # comment doesn't trigger SC-2 — a false positive there would block a deploy; dropping the comment
+  # errs to a false negative, the accepted posture. Block comments / string literals remain a residual.
+  srctext=$(readfiles '\.(swift|m|mm)$' | sed 's#//.*##')
   cap() {  # api-ERE  key-token  human
     printf '%s' "$srctext" | grep -qiE "$1" || return 0
     printf '%s' "$cfgflat" | grep -qi "$2" || \
@@ -104,8 +111,8 @@ fi
 
 # ---------- Android ----------
 if [ "$ANDROID" = true ]; then
-  gtext=""; for f in $(lsfiles | grep -iE 'build\.gradle(\.kts)?$'); do [ -f "$f" ] && gtext="$gtext"$'\n'"$(cat "$f" 2>/dev/null)"; done
-  mtext=""; for f in $(lsfiles | grep -iE 'AndroidManifest\.xml$');   do [ -f "$f" ] && mtext="$mtext"$'\n'"$(cat "$f" 2>/dev/null)"; done
+  gtext=$(readfiles 'build\.gradle(\.kts)?$')
+  mtext=$(readfiles 'AndroidManifest\.xml$')
 
   # SC-4 — targetSdk below Google's floor. Resolve the literal; an unresolvable variable/version-
   # catalog indirection is an ADVISORY "unresolved", never a silent pass (the one check Google

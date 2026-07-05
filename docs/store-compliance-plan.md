@@ -182,15 +182,18 @@ changes annually and this doc deliberately does not hard-code it.
   originally used bare `git ls-files` (tracked only) and silently no-oped on a real app, because the
   deployment agent makes the pipeline's first commit **last** — so the app's files are uncommitted
   when these hooks fire. The suites now leave fixtures untracked to guard the regression.
-- **SC-2 can false-positive (accepted grep limit):** it flags a capability-API class name appearing
-  in source without its usage string — a comment/string mention of e.g. `AVCaptureDevice` with no
-  usage key would flag. Narrow scenario, same class of residual as `asvs-sast.sh`; a real use is the
-  overwhelming case. Revisit if it bites.
-- **SC-5 misses the Gradle `buildTypes { release { debuggable true } }` form** (only the manifest
-  `android:debuggable="true"` is checked) — a false-negative, consistent with the favour-FN posture;
-  add the Gradle form in the SC-6/7/9 follow-up.
-- **Paths with spaces** (e.g. `My App.xcodeproj`) can be skipped by the `for f in $list` word-split —
-  a false-negative; low-frequency, worth hardening in the follow-up.
+- **SC-2 comment false-positive — mitigated:** `//` line comments are now stripped from Swift/ObjC
+  source before the capability-API scan, so a class name mentioned only in a line comment no longer
+  fires SC-2 (stripping errs to a false negative, the accepted posture). **Residual:** block comments
+  (`/* … */`) and string literals are still scanned — the same grep-limit class as `asvs-sast.sh`.
+- **Paths with spaces — fixed:** all file-content gathering now reads the path list line-by-line
+  (`readfiles`, `while IFS= read -r`) instead of `for f in $list`, so a spaced path
+  (`My App.xcodeproj`) is no longer word-split and dropped from the scan. Regression-guarded.
+- **SC-5 still misses the Gradle `debuggable true` form (deliberate).** Only the manifest
+  `android:debuggable="true"` is checked. A naive Gradle grep is NOT safe: `buildTypes` legitimately
+  sets `debug { debuggable true }`, so a block-unaware match would fire a **false positive that
+  blocks the deploy** — worse than the current false-negative. Needs block-aware parsing (know it's
+  the `release` type); defer to the SC-6/7/9 follow-up rather than ship a deploy-blocker.
 
 ## Maintenance note (the honest cost)
 
