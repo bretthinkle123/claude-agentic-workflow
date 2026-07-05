@@ -139,9 +139,12 @@ claude-agentic-workflow/
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
 │   ├── semgrep-scan.sh         runs Semgrep via Docker (no native Windows build)
-│   ├── trivy-scan.sh           runs Trivy via Docker — container image/Dockerfile CVE scan (when a Dockerfile is in the change set)
+│   ├── trivy-scan.sh           runs Trivy via Docker — container CVE scan + broad `fs` SCA/secret/misconfig (SB)
+│   ├── gitleaks-scan.sh        dedicated secrets scan (native-first, Docker fallback); folds into critical_count (SB)
 │   ├── lockfile-check.sh       supply-chain integrity (M6): manifest-without-lockfile blocks, unpinned deps warn; run by security, folds into its findings
 │   ├── generate-sbom.sh        writes .pipeline/sbom.cdx.json (CycloneDX via Trivy); run by security; best-effort, non-gating (M6)
+│   ├── egress-check.sh         security Stop hook (EG Layer 3): reads .pipeline/egress-log.jsonl, warns on any DENIED egress host (signal, not a gate)
+│   ├── egress-allowlist.txt    the default-deny egress ACL (single source of truth); egress-proxy/ = the operator-provisioned Layer-2 proxy recipe (Docker/WSL2)
 │   └── post-deploy-check.sh    [UNIMPLEMENTED] CI hook — runs after PR merges, not in pipeline
 │
 ├── global-skills/          Reference knowledge preloaded into agents that need it
@@ -156,6 +159,7 @@ claude-agentic-workflow/
 │   ├── auth-patterns/              Firebase/Cognito facade, OAuth, MFA, mfa_verified claim
 │   ├── logging-conventions/        structlog/Pino, OTel, CloudWatch/X-Ray, log field schema
 │   ├── secrets-management/         runtime-secret fetch facade (Secrets Manager/SSM), caching, rotation
+│   ├── data-protection-conventions/  on-demand: classify each stored field → at-rest control (KDF/KMS/SSE); crypto facade (DP)
 │   ├── iac-conventions/            Terraform infra/ layout, AWS provider, IaC security baseline
 │   ├── ddia-patterns/              storage, replication, consistency trade-offs (from DDIA)
 │   ├── containerization-conventions/  Docker vs. serverless decision rubric
@@ -371,12 +375,15 @@ fixes, not just symptoms. It fires only on failure, so the Opus cost is small in
 commit), fix exploitable vulnerabilities (any severity) and critical/high hygiene findings
 directly, and report remaining findings. Runs:
 
-1. **Semgrep** via `semgrep-scan.sh` Docker wrapper — SAST, SCA, secrets scanning
+1. **Semgrep** via `semgrep-scan.sh` Docker wrapper — SAST, SCA, secrets scanning (stack-specific rule packs per `semgrep-ruleset-guide`, SB)
 2. **OSV Scanner** — dependency CVE scanning
+2b. **Gitleaks (SB)** via `gitleaks-scan.sh` (native-first, Docker fallback) — a dedicated secrets scan beyond regex-grep + Semgrep `p/secrets`; findings fold into `critical_count`
 3. **Checkov** — IaC scanning (only when `infra/` is in the change set)
-3b. **Trivy** via `trivy-scan.sh` Docker wrapper — container image / Dockerfile CVE + misconfig scanning (only when a `Dockerfile`/image is in the change set); critical CVEs fold into `critical_count` and block at the deploy gate
+3b. **Trivy** via `trivy-scan.sh` Docker wrapper — container image / Dockerfile CVE + misconfig scanning (when a `Dockerfile`/image is in the change set), **plus `trivy fs` broad multi-ecosystem SCA/secret/misconfig (SB)** as a second opinion alongside OSV; critical CVEs fold into `critical_count` and block at the deploy gate
 3c. **Supply-chain (M6)** — `lockfile-check.sh`: a manifest changed without its lockfile blocks (folds into `critical_count`); unpinned/floating deps and bare re-locks warn. Plus `generate-sbom.sh` writes a CycloneDX `.pipeline/sbom.cdx.json` (best-effort, non-gating)
 3d. **ASVS Tier-1 SAST (ASVS-DET)** — `asvs-sast.sh`: a deterministic, high-precision grep scan over the change set for four high-value ASVS 5.0.0 violations — JWT `alg:none` (9.1.2), password fast-hash instead of a slow KDF (11.4.2), non-CSPRNG for a security value (11.5.1), insecure cipher/mode (11.3.1). Writes `.pipeline/asvs-sast.json`; runs as a security **Stop hook** (agent-independent) and the deploy gate blocks on `critical > 0`. This is the deterministic counterpart to the agent-reasoned ASVS check (step 6g)
+3e. **Egress detection (EG Layer 3)** — `egress-check.sh` (security **Stop hook**) reads the default-deny proxy's `.pipeline/egress-log.jsonl` (present when the operator has provisioned the Layer-2 proxy) and surfaces any **denied** outbound host as a warning — a signal (folds into `warning_count`), not a gate; absent log ⇒ no-op
+3f. **Data-protection reconciliation (DP)** — when the change stores user data, reconcile the implemented storage surface against the plan's classification and list any sensitive field lacking its declared at-rest control (KDF/KMS/SSE) or a waiver in `data_surface.unprotected`; a non-empty list flips `status` off `clean` and blocks (a deterministic floor mirrored into loop-exit, see below)
 4. **Manual checks** — secrets grep, row-level security audit, input sanitization, context-specific
    output encoding (HTML body/attribute, JavaScript, URL sinks), log-sink safety (log forging,
    secrets/PII in logs), STRIDE-mechanism verification, and **STRIDE delta / attack-surface
