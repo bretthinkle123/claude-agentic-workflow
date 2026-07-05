@@ -24,13 +24,26 @@ needed; if `shellcheck` happens to be installed, `static.sh` uses it, otherwise 
 |---|---|
 | `static.sh` | every hook parses (`bash -n`); every `hooks/*.sh` an agent wires exists; the gate + loop-exit predicates compile |
 | `gate.sh` | `deployment-gate.sh` passes the green fixture and blocks on each failure (tests fail, criteria incomplete, **perf F1**, security not clean, missing pr-description) |
+| `diff-approved.sh` | M5 human diff-review + F3 currency: `approve-diff.sh` is human-only (TTY) and project-guarded; the gate, in a real git repo, requires `diff-approved` with a matching `approved_change_hash` |
+| `marker-guard.sh` | `guard-approval-markers.sh` (PR K) blocks a subagent forging a human-owned approval marker via Bash, while every legitimate command (reads, `write-review-manifest.sh`) passes |
+| `lockfile-check.sh` | supply-chain integrity (M6): manifest-without-lockfile blocks (exit 2), unpinned deps / bare re-lock warn (exit 1), in-sync is clean |
 | `loop-guard.sh` | `reset`/`tick`; cycle cap + wall-clock cap → `capped` exit 2; `done` → `completed`; `done` won't overwrite `capped`; no-op outside a project |
 | `loop-exit-invariant.sh` | **`deployment-gate.sh` verdict ⟺ the canonical loop-exit predicate** across a matrix, plus a substring guard that the orchestration SKILL still carries the perf-pairing clause |
 | `stamp-ran-at.sh` | placeholder `ran_at` → real UTC on both artifacts; no-op on missing/unknown/outside-project; malformed JSON left unchanged |
 | `record-clean.sh` | resets `debug_retry_count` iff both gates clean; no-op otherwise |
+| `hash-determinism.sh` | audit E1: `compute-change-hash.sh` is stable across locale and odd filenames, so the human diff-approval gate can't become unpassable from a differently-configured shell |
+| `asvs.sh` | ASVS 5.0.0 enforcement wiring: the 6g checklist exists and the `asvs.reconciled` deploy floor blocks when false |
+| `waiver-guard.sh` | Option B: a subagent Bash write to `waivers.json` is blocked (reads pass); the gate refuses any claimed waiver with no matching human record |
+| `asvs-sast.sh` | ASVS-DET Tier-1 SAST: each high-precision pattern (T1-1…T1-8) flags on a bad file, stays quiet on clean/good-crypto fixtures; the gate blocks on `critical > 0` |
+| `design-spec.sh` | DS stage: the forgery guard blocks a subagent writing `design-approved` (the stage's one mechanically enforceable guarantee — design content never gates) |
+| `egress.sh` | EG: `egress-check.sh` flags DENIED hosts from the proxy log and no-ops without one; the tinyproxy ACL derives from `egress-allowlist.txt` |
+| `assurance.sh` | the reduced-assurance stamp: `run-summary.sh` stamps `reduced (swift adapters absent)` on a Swift/iOS target without Swift gate adapters, `standard` otherwise |
+| `design-review.sh` | FE Layer 4 budget compare: over-budget screens/a11y listed in the advisory `design-review.json`; absent or malformed `ui-capture.json` ⇒ clean no-op |
 
-These lock in this era's gate work: **G**'s perf-completeness block, **G6**'s terminal `completed`
-loop-state, and the enforced non-placeholder `ran_at`.
+These lock in the gate work era by era: **G**'s perf-completeness block, **G6**'s terminal
+`completed` loop-state, the enforced non-placeholder `ran_at`, **I**'s human diff-review +
+supply-chain checks, **K**'s marker guard, and the side-track floors (ASVS, ASVS-DET, DP/EG,
+Option B waivers, the assurance stamp, FE Layer 4).
 
 ## How it's built
 

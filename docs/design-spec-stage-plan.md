@@ -1,10 +1,13 @@
 # Plan — design-spec stage: an authoritative-but-untrusted design bundle as pipeline input (DS side-track)
 
-> **Status: Layers 0–3 BUILT (2026-07-04, roadmap row DS). Layer 4 remains ⬜.** The `design-spec`
-> agent, the `design-system-conventions` skill, the `design-approved` checkpoint + currency/forgery
-> guard, the orchestration wiring, and planning's authoritative third branch are implemented and
-> harness-tested (`tests/suites/design-spec.sh`). What is NOT built is **Layer 4** — the post-build
-> visual-regression design-review (brittle, advisory, deliberately a later slice).
+> **Status: Layers 0–4 BUILT (Layers 0–3 on 2026-07-04, Layer 4 on 2026-07-05; roadmap row DS).**
+> The `design-spec` agent, the `design-system-conventions` skill, the `design-approved` checkpoint +
+> currency/forgery guard, the orchestration wiring, and planning's authoritative third branch are
+> implemented and harness-tested (`tests/suites/design-spec.sh`). **Layer 4** (the post-build
+> design-review) is also built — deterministic budget compare (`design-review-check.sh` +
+> `tests/suites/design-review.sh`) with the Playwright capture (`ui-capture.sh`/`.mjs`)
+> **runtime-bound**: a fail-safe no-op until the operator provisions `ui.env` + a browser runtime.
+> It is advisory only — never a gate, never in loop-exit.
 > Scope is the **engine** (a new pre-planning stage + a human checkpoint), NOT any built app.
 > This is Layer 2 of the front-end workstream (`[[deferred-frontend-workstream]]`); it is the
 > prerequisite that makes Section 1 of the Claude-Design evaluation real. Companion:

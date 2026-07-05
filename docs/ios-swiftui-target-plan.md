@@ -1,6 +1,13 @@
 # Plan — native SwiftUI iOS target: planning/build competence + honest gate adaptation (iOS side-track)
 
-> **Status: spec, awaiting approval.** Forward-looking design; nothing here is built yet.
+> **Status: partially BUILT.** Layers 0–2 shipped 2026-07-04 (PR #21: the four iOS skills in
+> `global-project-skills/` — `swift-conventions`, `apple-hig-compliance`, `claude-design-to-swiftui`,
+> `app-store-submission-requirements` — plus the planning/implementation iOS routing), and Layer 3's
+> **reduced-assurance stamp** shipped 2026-07-05 (`run-summary.sh` + `tests/suites/assurance.sh`).
+> What remains ⬜ is the rest of **Layer 3** — the Swift gate adapters (`xcodebuild` smoke,
+> Semgrep-Swift/SPM SCA, `xccov` coverage) — which is **macOS/Xcode-bound and cannot be built on
+> the Windows dev host**; until a macOS runner exists, iOS runs are stamped reduced-assurance by
+> construction.
 > Scope is the **engine's ability to plan, build, and gate a native iOS app** (Project 3),
 > NOT the app itself. Consumes the artifact from `docs/design-spec-stage-plan.md` (a design
 > bundle → approved `design-spec.md`). This is the front-end workstream's iOS specialization

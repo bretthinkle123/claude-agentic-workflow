@@ -70,6 +70,12 @@ When invoked:
    breach (from `visual_over_budget` / `a11y_over_budget`). It is **advisory** (visual
    diff is brittle; the human design-approved checkpoint is the real fidelity gate) — present
    it as reviewer context the human weighs, never as a pass/fail.
+   **Runtime security (DAST Layer 1):** when `.pipeline/dast-review.json` exists, add a
+   **DAST (runtime)** section — the OWASP ZAP passive-baseline `alerts_by_severity` tally and
+   any `over_budget` severity bands (with the offending alert names). It is **advisory** (a
+   passive baseline runs post-GREEN, outside the security loop; the pre-merge scanners + human
+   diff review stay the teeth) — present it as reviewer context, never as a pass/fail. Note that
+   the gating DAST layers run in CI against staging, not in this run.
 7. **Record the reviewed-state hash — do this LAST, after every README,
    system_architecture.md, and source-tree edit is written**, so it captures the
    exact bytes the human will review and the deployment agent will commit. You
