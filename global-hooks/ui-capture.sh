@@ -34,12 +34,12 @@ fi
 # Start the app (if a start command was given), wait for it to answer, capture, then stop it.
 SRV_PID=""
 if [ -n "$UI_START_CMD" ]; then
-  ( eval "$UI_START_CMD" ) >/.pipeline/ui-server.log 2>&1 &
+  ( eval "$UI_START_CMD" ) >.pipeline/ui-server.log 2>&1 &
   SRV_PID=$!
   for _ in $(seq 1 30); do curl -sf "$UI_BASE_URL" >/dev/null 2>&1 && break; sleep 1; done
 fi
 
-node "$HOOK_DIR/ui-capture.mjs"; rc=$?
+node "$HOOK_DIR/ui-capture.mjs" || true
 
 [ -n "$SRV_PID" ] && kill "$SRV_PID" >/dev/null 2>&1 || true
 exit 0

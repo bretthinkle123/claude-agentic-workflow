@@ -37,5 +37,7 @@ assert_eq "advisory" "$(review "$CAP_OK" '' '.status')" "status is always adviso
 assert_eq 0 "$(review "$CAP_OVER" '{"visual":{"default_tolerance_pct":2.0,"per_screen":{"login":10.0}},"a11y":{"critical":5}}' '.visual_over_budget | length')" "per-screen tolerance override suppresses the flag"
 # no capture at all → no-op: no design-review.json written (empty output)
 assert_eq "" "$(review __none__ '' '.status')" "no ui-capture.json → no-op (no output file)"
+# malformed capture → clean no-op (audit): never emit an invalid design-review.json for docs to choke on
+assert_eq "" "$(review 'not json at all' '' '.status')" "malformed ui-capture.json → no-op (no invalid output file)"
 
 finish design-review

@@ -16,6 +16,7 @@ set -uo pipefail
 command -v jq >/dev/null 2>&1 || exit 0
 CAP=.pipeline/ui-capture.json
 [ -f "$CAP" ] || exit 0                            # no capture ⇒ nothing to review ⇒ no-op
+jq -e . "$CAP" >/dev/null 2>&1 || exit 0           # malformed capture ⇒ no-op (never emit an invalid review file)
 OUT=.pipeline/design-review.json
 BUDGET=.pipeline/design-budget.json
 
