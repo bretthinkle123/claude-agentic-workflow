@@ -171,6 +171,20 @@ if [ "${SAST_CRIT:-0}" -gt 0 ] 2>/dev/null; then
   exit 2
 fi
 
+# App-store compliance floor (store-compliance plan, Layer C). store-compliance.sh (a Stop hook on
+# the security agent, agent-independent) writes .pipeline/store-compliance.json with a deterministic
+# count of known auto-rejection causes for a declared Apple/Google Play target (absent privacy
+# manifest, a capability API without its usage string, targetSdk below Google's floor, a debuggable
+# release, …). Same posture as the ASVS-DET floor: deploy-only, NOT in the loop-exit predicate;
+# absent file ⇒ 0 ⇒ no-op (a non-mobile project, or a run before the scan). Designs out the
+# rejection cause pre-upload; it is NOT a guarantee of store acceptance (human review remains).
+STORE_COMPLIANCE=".pipeline/store-compliance.json"
+STORE_CRIT=$(jq -r '(.critical // 0)' "$STORE_COMPLIANCE" 2>/dev/null || echo 0)
+if [ "${STORE_CRIT:-0}" -gt 0 ] 2>/dev/null; then
+  echo "Blocked: $STORE_COMPLIANCE reports $STORE_CRIT app-store compliance critical(s) (see .findings[]) — a known automated rejection cause for the declared store target (privacy manifest / usage strings / targetSdk floor / debuggable release). Fix it before submission." >&2
+  exit 2
+fi
+
 # Reverted / do-not-commit source markers (audit E3). A reverted money-path fix once
 # passed build-green and nearly shipped; this makes the signal deterministic. The guard
 # no-ops on a clean change set and self-skips outside a pipeline project.

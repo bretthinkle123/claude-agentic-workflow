@@ -1,6 +1,9 @@
 # Plan — app-store compliance gate (Apple App Store + Google Play), project-scoped via PROJECT.md
 
-> **Status: SPEC — not built.** Companion to `docs/ios-swiftui-target-plan.md` (which shipped the
+> **Status: Layers E + C BUILT (2026-07-05); Layers A/B/D SPEC.** Layer E (Android reduced-assurance
+> stamp) and Layer C (deterministic `store-compliance.sh` + deploy-gate floor + 14-assertion suite,
+> first cut) are shipped and harness-green; the Google Play skill (A), planning routing (B), and
+> Tier-2 flags (D) remain. Companion to `docs/ios-swiftui-target-plan.md` (which shipped the
 > Apple-side competence), `docs/pipeline-deployment-targets.md` (the post-merge Fastlane / Gradle
 > submission recipes), and `docs/asvs-determinism-roadmap.md` (whose Tier 1/2/3 promotion pattern
 > this reuses). Scope is making store-submission requirements **accountable inside the pipeline** —
@@ -118,13 +121,20 @@ post-merge Fastlane/Gradle recipes in `pipeline-deployment-targets.md` own the s
    declares the store target(s) → planning loads the matching skill(s) and emits the store ACs
    into `acceptance.md`. Apple side is already speced (iOS plan Layer 1); this adds the Play
    branch and the both-stores case. **S.**
-3. **Layer C — `store-compliance.sh` (Tier 1 rows).** Sequenced like the ASVS slices: the
-   criticals first (SC-1/SC-2/SC-4/SC-5/SC-9 — lowest false-positive risk given the hardened
-   sketches), then SC-3/SC-6/SC-7/SC-8 as advisory. Wired **exactly** like `asvs-sast.sh`: security
-   Stop hook writing its own `store-compliance.json` + deploy-gate `critical>0` floor (deploy-only,
-   absent ⇒ no-op, nothing in loop-exit) + `tests/suites/store-compliance.sh` coverage. Activated
-   by the **deterministic scoping key** above (PROJECT.md grep + file-signal fallbacks) — no
-   matching target ⇒ no-op, so default runs see zero cost. **M.**
+3. **Layer C — `store-compliance.sh` (Tier 1 rows). ✅ BUILT (2026-07-05) — first cut.** Wired
+   **exactly** like `asvs-sast.sh`: a security Stop hook writing its own `.pipeline/store-compliance.json`
+   `{ran_at, scope, critical, warning, findings[]}` + a deploy-gate `critical>0` floor (deploy-only,
+   absent ⇒ no-op, nothing in loop-exit) + `tests/suites/store-compliance.sh` (14 assertions). Activated
+   by the **deterministic scoping key** above (file signals + PROJECT.md/CLAUDE.md grep) — no matching
+   target ⇒ whole hook no-ops, so default runs see zero cost. **Scope = repo state** (an absent
+   manifest / low targetSdk is a whole-app fact, not a per-diff one). **Built this cut:** SC-1 (privacy
+   manifest absent, gated on `.xcodeproj`), SC-2 (capability API ↔ `NS…UsageDescription`, conservative
+   API→key map over Info.plist + pbxproj), SC-3 (ATS disabled, advisory), SC-8 (export-compliance key
+   absent, advisory), SC-4 (targetSdk vs the `ANDROID_TARGET_SDK_FLOOR` constant; unresolved
+   indirection ⇒ advisory, never a silent pass), SC-5 (debuggable critical / cleartext advisory).
+   **Deferred to a Layer-C follow-up** (higher false-positive risk — used-API↔declaration compares):
+   SC-6 (permission declared-vs-used), SC-7 (debug logging in release), SC-9 (Required-Reason API
+   compare). **M — first cut done; follow-up pending.**
 4. **Layer D — Tier 2 rows** as plan-audit material flags + `test-conventions` shapes (the proven
    8.2.2 pattern). **SC-T2-1 first** — its DP dependency shipped 2026-07-04, so it is unblocked and
    is the highest-value row; SC-T2-2/3/4 follow. **M.**
