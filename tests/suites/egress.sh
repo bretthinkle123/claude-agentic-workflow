@@ -38,6 +38,11 @@ assert_eq 0 "$(check_denied '{"host":"pypi.org","action":"allow"}
 # malformed lines are skipped, not counted
 assert_eq 0 "$(check_denied 'not json
 {"host":"pypi.org","action":"allow"}')" "malformed line skipped → denied_hosts=0"
+# CRITICAL (regression, audit): a malformed line must NOT blind the detector — a real denied host
+# mixed with junk still reports (a slurp would drop the whole log on one bad line).
+assert_eq 1 "$(check_denied '{"host":"evil.example","action":"deny"}
+garbage not-json line
+{"host":"pypi.org","action":"allow"}')" "malformed line among real entries → denial still caught (=1)"
 # no proxy log at all → no-op: no findings file (empty output)
 assert_eq "" "$(check_denied __none__)" "no egress-log.jsonl → no-op (no findings file)"
 

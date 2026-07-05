@@ -75,6 +75,9 @@ When invoked:
    ```
    $HOME/.claude/hooks/gitleaks-scan.sh dir --report-format json --report-path .pipeline/gitleaks.json .
    ```
+   (The `dir` subcommand needs gitleaks ≥ v8.19; the wrapper's Docker `:latest` fallback always
+   satisfies it. If a **native** binary is older and errors on `dir`, that surfaces — use
+   `detect --source .` on the old CLI, or let the Docker path run — never report clean without a scan.)
    Fold each finding into `critical_count` (a committed secret is a hard block — fix by removing
    the secret and moving it to runtime fetch per `secrets-management`, then re-scan). If the
    wrapper reports no engine (no native binary, Docker down), **surface that** — do not report

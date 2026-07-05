@@ -23,10 +23,11 @@ LOG=.pipeline/egress-log.jsonl
 [ -f "$LOG" ] || exit 0                            # no proxy log ⇒ nothing to detect ⇒ no-op
 OUT=.pipeline/egress-findings.json
 
-# Every denied decision, grouped by host with a count. Malformed lines are skipped (fail toward
-# NOT inventing a finding). `deny` is matched case-insensitively.
-DENIED=$(jq -sc '
-  [ .[] | select(type=="object")
+# Every denied decision, grouped by host with a count. Processed LINE BY LINE with `fromjson?`
+# so a single malformed line is skipped INDIVIDUALLY — never drops the whole log (a slurp `-s`
+# would abort on one junk line and blind the detector). `deny` is matched case-insensitively.
+DENIED=$(jq -Rnc '
+  [ inputs | fromjson? | select(type=="object")
         | select((.action // "" | ascii_downcase) == "deny")
         | (.host // "unknown") ]
   | group_by(.) | map({host: .[0], attempts: length})

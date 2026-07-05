@@ -13,6 +13,14 @@
 #   $HOME/.claude/hooks/gitleaks-scan.sh dir --report-format json --report-path .pipeline/gitleaks.json .
 #   $HOME/.claude/hooks/gitleaks-scan.sh git --report-format json .            # scan history
 # Surfaces (never silently skips) when no engine is available — same rule as "Docker not running".
+#
+# VERSION NOTE: the `dir`/`git` subcommands need gitleaks >= v8.19; older binaries use
+# `detect --source .`. The Docker image below is unpinned `:latest`, so the DOCKER path (what this
+# Windows host uses) is always modern and supports `dir`/`git`. A NATIVE binary older than v8.19
+# will error on `dir` — that error surfaces (not silent); upgrade gitleaks, or `unset` it from PATH
+# so the Docker path is used, or pass `detect --source .` on the old CLI. We do NOT auto-fall-back
+# from a failed native run because gitleaks exits 1 for BOTH "leaks found" and "unknown command",
+# so a fallback could mask a real finding.
 set -uo pipefail
 
 IMAGE="${GITLEAKS_IMAGE:-ghcr.io/gitleaks/gitleaks:latest}"
