@@ -1,0 +1,16 @@
+{
+  "//": "FE Layer 4 design-review budget (advisory). Copy to .pipeline/design-budget.json on a UI project. visual = max screenshot drift %% vs the baseline before it is flagged (per-screen overrides the default); a11y = max axe violations allowed per severity. Never blocks — surfaces in the PR.",
+  "visual": {
+    "default_tolerance_pct": 2.0,
+    "per_screen": {
+      "login": 1.0,
+      "checkout": 1.0
+    }
+  },
+  "a11y": {
+    "critical": 0,
+    "serious": 0,
+    "moderate": 5,
+    "minor": 50
+  }
+}

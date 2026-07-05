@@ -145,6 +145,8 @@ claude-agentic-workflow/
 │   ├── generate-sbom.sh        writes .pipeline/sbom.cdx.json (CycloneDX via Trivy); run by security; best-effort, non-gating (M6)
 │   ├── egress-check.sh         security Stop hook (EG Layer 3): reads .pipeline/egress-log.jsonl, warns on any DENIED egress host (signal, not a gate)
 │   ├── egress-allowlist.txt    the default-deny egress ACL (single source of truth); egress-proxy/ = the operator-provisioned Layer-2 proxy recipe (Docker/WSL2)
+│   ├── ui-capture.sh + .mjs    FE Layer 4 (runtime-bound): Playwright render → screenshot → pixelmatch diff vs baseline → axe → .pipeline/ui-capture.json (no ui.env/Playwright ⇒ no-op)
+│   ├── design-review-check.sh  FE Layer 4 (deterministic): compares ui-capture.json to the design budget → advisory .pipeline/design-review.json (never a gate)
 │   └── post-deploy-check.sh    [UNIMPLEMENTED] CI hook — runs after PR merges, not in pipeline
 │
 ├── global-skills/          Reference knowledge preloaded into agents that need it

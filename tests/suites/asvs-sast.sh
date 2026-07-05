@@ -47,6 +47,27 @@ assert_eq 0 "$(scan_repo fp4.py 'note = \"Uses DES historically\"  # RC4 mention
 assert_eq 1 "$(scan_repo tp3.py 'access_token = random.random()')"  "access_token=random.random → 1 critical (still caught)"
 assert_eq 1 "$(scan_repo tp4.py 'c = DES.new(key)')"                "DES.new( → 1 critical (still caught)"
 
+# Slice C/D — warning-severity variant of scan_repo (echoes the .warning count).
+scan_repo_w() {
+  local fn="$1" body="$2" w; w="$(mktemp -d)"; _WORKDIRS+=("$w")
+  ( cd "$w"; git init -q; git config user.email a@b.c; git config user.name t
+    printf '.pipeline/\n' > .gitignore; mkdir -p .pipeline; echo '{}' > .pipeline/state.json
+    printf '%s\n' "$body" > "$fn"; bash "$SAST" ) >/dev/null 2>&1
+  jq -r '.warning' "$w/.pipeline/asvs-sast.json" 2>/dev/null
+}
+
+# T1-5 (Slice C, CRITICAL) — explicit cookie protection disabled
+assert_eq 1 "$(scan_repo t5.py 'resp.set_cookie("sid", v, httponly=False)')" "T1-5 httponly=False → 1 critical"
+assert_eq 1 "$(scan_repo t5b.py 'SESSION_COOKIE_SECURE = False')"            "T1-5 Django SESSION_COOKIE_SECURE=False → 1 critical"
+assert_eq 0 "$(scan_repo t5ok.py 'resp.set_cookie("sid", v, httponly=True, secure=True)')" "FP: httponly=True (good) → 0 critical"
+assert_eq 0 "$(scan_repo t5ok2.py 'SESSION_COOKIE_SECURE = True')"           "FP: SESSION_COOKIE_SECURE=True → 0 critical"
+# T1-6/T1-7/T1-8 are WARNINGS (advisory) — 0 critical, >=1 warning
+assert_eq 0 "$(scan_repo t6.py 'app.run(debug=True)')"                       "T1-6 app.run(debug=True) → 0 critical (advisory)"
+assert_eq 1 "$(scan_repo_w t6.py 'app.run(debug=True)')"                     "T1-6 app.run(debug=True) → 1 warning"
+assert_eq 1 "$(scan_repo_w t7.py 'CORS_HEADER = "Access-Control-Allow-Origin: *"')" "T1-7 CORS wildcard → 1 warning"
+assert_eq 1 "$(scan_repo_w t8.py 'link = f\"https://x/reset?token={tok}\"')" "T1-8 token in URL query → 1 warning"
+assert_eq 0 "$(scan_repo_w t8ok.py 'url = \"https://x/list?page=2&sort=asc\"')" "FP: benign query params → 0 warning"
+
 # (2) gate floor on the count
 gate_sast() {  # <want> <desc> <json|''>
   local want="$1" desc="$2" j="$3" w; w="$(mk_fixture)"

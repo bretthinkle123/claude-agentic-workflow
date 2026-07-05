@@ -83,6 +83,18 @@ string and those files — never assume it can see the conversation.
      # run log + loop journal). The retrospective MUST quote per-stage model + cost from THIS
      # file, never hand-write them — the trial's retrospective mis-said implementation ran on
      # "opus" when the log (auto-derived from frontmatter) said sonnet.
+     # ASSURANCE STAMP (iOS Layer 3): if run-summary.json `.assurance` != "standard" (a Swift/iOS
+     # target whose Swift gate adapters aren't built yet), the deterministic gates ran but analyzed
+     # little Swift — documentation/the retrospective must NOT call the run "gate-verified"; surface
+     # the reduced-assurance state at the diff-review checkpoint instead.
+4d. DESIGN-REVIEW STAGE (FE Layer 4 — CONDITIONAL, advisory, web-UI only; skipped otherwise):
+     run iff .pipeline/ui.env exists (the project declared a servable UI). Renders each declared
+     screen, diffs vs its baseline, runs axe, then compares to the budget:
+          bash ~/.claude/hooks/ui-capture.sh          # RUNTIME-BOUND (Playwright); no ui.env / no Playwright ⇒ no-op
+          bash ~/.claude/hooks/design-review-check.sh  # deterministic budget compare → .pipeline/design-review.json
+     -> ADVISORY only: design-review.json never gates and is NOT in the loop-exit predicate (visual
+        diff is too brittle to block on; the human design-approved checkpoint is the teeth).
+        documentation surfaces any over-budget screen/a11y breach in the PR.
 
 5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
 5b. HARD HUMAN DIFF-REVIEW CHECKPOINT (M5) — the deploy-side counterpart to plan-approved:
@@ -169,6 +181,7 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 | `test-results.json` | testing | record-clean.sh, deployment-gate.sh (incl. perf-completeness), documentation |
 | `test-quality.json` | testing | documentation (surfaces mutation score + adversarial gaps). Score/gaps advisory; the deploy gate reads it for ONE deploy-only honesty check (WS3-1): `quality_ok:true` must not claim a scope it didn't mutate, absent a `quality_waiver` |
 | `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh (feature-level cycle/wall-clock budget; independent of `record-clean.sh`). Terminal `status`: `capped` (cap-out) or `completed` (`done`, on GREEN exit); left `running` only mid-loop |
+| `design-review.json` | design-review stage (`design-review-check.sh`, from `ui-capture.sh`'s `ui-capture.json`) | documentation (surfaces over-budget screens/a11y in the PR). **Advisory — never gates, not in loop-exit** (FE Layer 4) |
 | `pr-description.md` | documentation | deployment, gate |
 | `diff-approved` | human (via `approve-diff.sh`, TTY-only) | deployment-gate.sh (**the M5 human-review gate + F3 currency anchor**: gate requires it + commit-hash == `approved_change_hash`) |
 | `review-manifest.json` | documentation | approve-diff.sh (sanity: tree == reviewed hash). **No longer the gate's currency anchor** — `diff-approved` is (F3) |

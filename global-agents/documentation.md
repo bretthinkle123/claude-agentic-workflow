@@ -60,6 +60,16 @@ When invoked:
    integrity (from the security report) and, when `.pipeline/sbom.cdx.json` exists,
    that a CycloneDX SBOM was generated + its component count. The deployment gate
    checks that this file exists before allowing a deploy.
+   **Assurance:** read `.pipeline/run-summary.json` `.assurance`; if it is not
+   `"standard"` (a Swift/iOS target whose Swift gate adapters aren't built yet), add a
+   prominent **Assurance** note to the PR — the deterministic gates ran but analyzed
+   little Swift, so **do NOT describe the run as "gate-verified"**; state it is
+   *reduced-assurance* until the Swift adapters (iOS Layer 3) land.
+   **Design review (FE Layer 4):** when `.pipeline/design-review.json` exists, add a
+   **Design review** section — screens over their visual tolerance and any a11y budget
+   breach (from `visual_over_budget` / `a11y_over_budget`). It is **advisory** (visual
+   diff is brittle; the human design-approved checkpoint is the real fidelity gate) — present
+   it as reviewer context the human weighs, never as a pass/fail.
 7. **Record the reviewed-state hash — do this LAST, after every README,
    system_architecture.md, and source-tree edit is written**, so it captures the
    exact bytes the human will review and the deployment agent will commit. You
