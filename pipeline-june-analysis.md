@@ -326,13 +326,28 @@ hours, **M** ≈ a focused session/day, **L** ≈ multi-session. Status: ✅ don
 
 **Critical path:** `M2 ✅ → PR F ✅ → PR G ✅ (M1) → PR H ✅ (M8) → PR I ✅ (M5·M6·F3) → PR J ✅ (Polish)` →
 **[10/10 scaffolder reached]** → `PR L (CI) → PR M (build) → PR N (envs+load) → PR O (observability) → PR P (scale/DR)`
-→ [10/10 fully-functional]. **PR K (M9)** and the **side-tracks** (front-end FE, api-edge AE, parallel-impl PI, doc-consolidation DOC, skill-enrichment SK; DB ✅, SEC ✅, and DEP ✅ done) run in parallel — none on the critical path.
+→ [10/10 fully-functional]. **PR K (M9)** and the **side-tracks** run in parallel — none on the
+critical path. Done: **K ✅, AE ✅, ASVS ✅, DS ✅ (design-spec stage), DP ✅ (data-protection), DB ✅,
+SEC ✅, DEP ✅**. Partial: **EG ◑ (egress — slices done, proxy operator-provisioned), SB ◑ (scanner
+breadth — slices 1–3 done, Swift slice 4 deferred to iOS)**. Still ⬜: **iOS (macOS-bound), CQ
+(CodeQL CI), FE-remainder (visual-regression/a11y), PI, DOC, SK**.
 
 > **Status (2026-07-01):** **Track 1 is COMPLETE — the pipeline is a 10/10 scaffolder.** PRs F, G, G6,
 > H, I, J are all **merged and live** (F #7, G #8, G6+AE #9, H #10, I #11, J #12). Harness on `main` is
 > **101 assertions green**. A green run now means *correct + criterion-complete + reviewed*, with lean
 > authoring agents. Remaining work is all parallel/optional: Track 2 (L–P, the last 40% = delivery +
 > ops) and the side-tracks (K, FE, PI, DOC, SK) — all still ⬜.
+
+> **Status update (2026-07-05):** the security + front-end side-tracks advanced substantially since
+> the 2026-07-01 snapshot. **Merged to `main`:** **PR K** (engine threat model + marker guard);
+> **ASVS 5.0.0** enforcement + ASVS-DET Tier-1 SAST; the **design-spec stage** (DS — untrusted
+> design bundle → human-vouched `design-spec.md` + injection report + forgery guard) and the **native
+> iOS/SwiftUI planning layer**; **DP** (per-field at-rest enforcement, a new loop-exit gate floor);
+> **EG** (default-deny egress — allow-list + detection built, Layer-2 proxy operator-provisioned);
+> **SB** (Gitleaks + `trivy fs` + Semgrep stack menu; Swift slice deferred). The eval harness is now
+> **16 suites** (added `asvs`, `waiver-guard`, `asvs-sast`, `design-spec`, `egress`). Track 2 (L–P
+> delivery/ops), the macOS-bound **iOS gate adaptation** + **SB Swift slice**, **CQ** (CodeQL CI), and
+> the FE visual-regression/a11y remainder are the outstanding forward work.
 
 ### Done (2026-06-30)
 - ✅ **M2 run #1** — pipeline built + shipped `linkly-pipeline-test` PR #1 end-to-end, independently
