@@ -83,10 +83,11 @@ string and those files — never assume it can see the conversation.
      # run log + loop journal). The retrospective MUST quote per-stage model + cost from THIS
      # file, never hand-write them — the trial's retrospective mis-said implementation ran on
      # "opus" when the log (auto-derived from frontmatter) said sonnet.
-     # ASSURANCE STAMP (iOS Layer 3): if run-summary.json `.assurance` != "standard" (a Swift/iOS
-     # target whose Swift gate adapters aren't built yet), the deterministic gates ran but analyzed
-     # little Swift — documentation/the retrospective must NOT call the run "gate-verified"; surface
-     # the reduced-assurance state at the diff-review checkpoint instead.
+     # ASSURANCE STAMP (iOS Layer 3 + store-compliance Layer E): if run-summary.json `.assurance`
+     # != "standard" (a native-mobile target — Swift/iOS or Kotlin/Android — whose language gate
+     # adapters aren't built yet; the stamp names which), the deterministic gates ran but analyzed
+     # little of that language — documentation/the retrospective must NOT call the run "gate-verified";
+     # surface the reduced-assurance state at the diff-review checkpoint instead.
 4d. DESIGN-REVIEW STAGE (FE Layer 4 — CONDITIONAL, advisory, web-UI only; skipped otherwise):
      run iff .pipeline/ui.env exists (the project declared a servable UI). Renders each declared
      screen, diffs vs its baseline, runs axe, then compares to the budget:

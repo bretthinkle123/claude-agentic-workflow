@@ -27,19 +27,31 @@ command -v jq >/dev/null 2>&1 || { echo "run-summary: jq not found on PATH." >&2
 LOOP_CAPS=0
 [ -f "$EVENTS" ] && LOOP_CAPS=$(jq -rs 'map(select(.status=="capped")) | length' "$EVENTS" 2>/dev/null || echo 0)
 
-# Assurance stamp (iOS plan Layer 3). The deterministic gates (Semgrep/OSV/coverage) are
-# Python/JS-shaped; on a **Swift/iOS** target they run but analyze little until the Swift language
-# adapters (xcodebuild smoke, Semgrep-Swift, xccov coverage) exist. So detect a Swift target with
-# ABSENT adapters and stamp the run `reduced` — while that stamp is present the run must NOT be
-# called "gate-verified" (documentation/retrospective read this field). Default `standard`.
+# Assurance stamp (iOS plan Layer 3 + store-compliance Layer E). The deterministic gates
+# (Semgrep/OSV/coverage) are Python/JS-shaped; on a native-MOBILE target — Swift/iOS OR
+# Kotlin/Android — they run but analyze little until that language's gate adapters exist. Detect a
+# native-mobile target with ABSENT adapters and stamp `reduced (<lang> adapters absent)` — while
+# present the run must NOT be called "gate-verified" (documentation/retrospective read this field).
+# Default `standard`. Android has NO gate adapters today (no Android sibling of the iOS Layer-3
+# work), so an Android target is always reduced — Layer E closes the hole where a Kotlin/Gradle
+# project used to sail through stamped `standard`, the exact vacuous-green the stamp exists to prevent.
 SWIFT_TARGET=false
 git ls-files 2>/dev/null | grep -qiE '(\.swift$|(^|/)Package\.swift$|\.xcodeproj)' && SWIFT_TARGET=true
 grep -riqE 'native ios|swiftui' "$DIR/../CLAUDE.md" "$DIR/../PROJECT.md" 2>/dev/null && SWIFT_TARGET=true
 SWIFT_ADAPTERS=false
 { [ -f "$HOME/.claude/hooks/swift-gate.sh" ] || [ -f "$DIR/swift-adapters.json" ]; } && SWIFT_ADAPTERS=true
+
+ANDROID_TARGET=false
+git ls-files 2>/dev/null | grep -qiE '(\.kts?$|(^|/)build\.gradle(\.kts)?$|(^|/)AndroidManifest\.xml$)' && ANDROID_TARGET=true
+grep -riqE 'native android|kotlin|google play|jetpack compose' "$DIR/../CLAUDE.md" "$DIR/../PROJECT.md" 2>/dev/null && ANDROID_TARGET=true
+ANDROID_ADAPTERS=false
+{ [ -f "$HOME/.claude/hooks/android-gate.sh" ] || [ -f "$DIR/android-adapters.json" ]; } && ANDROID_ADAPTERS=true
+
 ASSURANCE="standard"
 if [ "$SWIFT_TARGET" = true ] && [ "$SWIFT_ADAPTERS" = false ]; then
   ASSURANCE="reduced (swift adapters absent)"
+elif [ "$ANDROID_TARGET" = true ] && [ "$ANDROID_ADAPTERS" = false ]; then
+  ASSURANCE="reduced (android adapters absent)"
 fi
 
 # Per-stage rollup from the run log. `slurp` the JSONL, group by stage, and for each stage
