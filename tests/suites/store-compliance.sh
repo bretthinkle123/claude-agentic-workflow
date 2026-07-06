@@ -78,6 +78,23 @@ assert_eq "true" "$(printf '%s' "$ANDROID_BAD_JSON" | jq -r '.rules|index("SC-4"
 assert_eq 1 "$(store_scan '.warning' AndroidManifest.xml '<manifest/>' build.gradle.kts 'android { targetSdk = libs.versions.target.get() }')" "SC-4 unresolved targetSdk indirection → 1 warning (never silent)"
 #   Clean Android (targetSdk at floor, not debuggable) → nothing
 assert_eq 0 "$(store_scan '.critical' build.gradle.kts 'android { targetSdk = 35 }' AndroidManifest.xml '<manifest><application/></manifest>')" "clean Android (targetSdk=floor) → 0 critical"
+#   SC-5 Gradle form (Groovy): debuggable enabled in the RELEASE buildType → critical.
+GRADLE_REL_JSON="$(store_scan '{c:.critical,rules:[.findings[].rule]}' \
+  build.gradle 'android { targetSdk 35
+  buildTypes { release { debuggable true } debug { debuggable true } } }' \
+  AndroidManifest.xml '<manifest><application/></manifest>')"
+assert_eq 1 "$(printf '%s' "$GRADLE_REL_JSON" | jq -r '.c')" "SC-5 Gradle: release{debuggable true} → 1 critical"
+assert_eq "true" "$(printf '%s' "$GRADLE_REL_JSON" | jq -r '.rules|index("SC-5")!=null')" "SC-5 (Gradle release debuggable) fires"
+#   THE SAFETY TEST: debuggable in the DEBUG buildType (release is false) must NOT fire — that would
+#   be a deploy-blocking false positive. This is why the check is block-aware, not a plain grep.
+assert_eq 0 "$(store_scan '.critical' \
+  build.gradle 'android { targetSdk 35
+  buildTypes { release { debuggable false } debug { debuggable true } } }' \
+  AndroidManifest.xml '<manifest><application/></manifest>')" "debug{debuggable true}, release false → 0 critical (no false positive)"
+#   SC-5 Gradle form (Kotlin DSL): getByName("release") { isDebuggable = true } → critical.
+assert_eq "true" "$(store_scan '.findings|map(.rule)|index("SC-5")!=null' \
+  build.gradle.kts 'android { buildTypes { getByName("release") { isDebuggable = true } } }' \
+  AndroidManifest.xml '<manifest/>')" "SC-5 Kotlin DSL: getByName(\"release\"){isDebuggable=true} fires"
 
 # (3) gate floor on the critical count
 gate_store() {  # <want-exit> <desc> <json|''>

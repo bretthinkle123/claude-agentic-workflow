@@ -189,11 +189,17 @@ changes annually and this doc deliberately does not hard-code it.
 - **Paths with spaces — fixed:** all file-content gathering now reads the path list line-by-line
   (`readfiles`, `while IFS= read -r`) instead of `for f in $list`, so a spaced path
   (`My App.xcodeproj`) is no longer word-split and dropped from the scan. Regression-guarded.
-- **SC-5 still misses the Gradle `debuggable true` form (deliberate).** Only the manifest
-  `android:debuggable="true"` is checked. A naive Gradle grep is NOT safe: `buildTypes` legitimately
-  sets `debug { debuggable true }`, so a block-unaware match would fire a **false positive that
-  blocks the deploy** — worse than the current false-negative. Needs block-aware parsing (know it's
-  the `release` type); defer to the SC-6/7/9 follow-up rather than ship a deploy-blocker.
+- **SC-5 Gradle `debuggable true` form — fixed, block-aware.** SC-5 now also catches the modern (and
+  more common) Gradle form on top of the legacy manifest attribute. It is deliberately **block-aware**:
+  `release_debuggable` brace-matches the body of `release` buildType blocks
+  (`release {…}` / `getByName("release") {…}` / `create("release") {…}`) and only flags a
+  `debuggable`/`isDebuggable` enable found *there* — so the legitimate `debug { debuggable true }`
+  buildType never fires (that would be a deploy-blocking false positive). Comments and `http://` URLs
+  are stripped and single→double quotes normalised first so a stray brace can't desync the match; any
+  construct it can't positively resolve to a release block (e.g. `buildTypes.all { … }`, a variable)
+  is left unflagged — a false negative, the accepted posture. Regression-guarded, incl. the
+  debug-block safety case. **Residual:** an unbalanced brace *inside a string literal* could still
+  desync brace tracking (rare in Gradle); block/line comments are already handled.
 
 ## Maintenance note (the honest cost)
 

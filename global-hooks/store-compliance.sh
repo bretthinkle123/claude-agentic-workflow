@@ -126,8 +126,40 @@ if [ "$ANDROID" = true ]; then
   fi
 
   # SC-5 — debuggable (critical) / cleartext (advisory) in a release build.
+  # (a) Legacy manifest form: android:debuggable="true".
   printf '%s' "$mtext" | grep -qiE 'android:debuggable[[:space:]]*=[[:space:]]*"true"' && \
     add android SC-5 critical 'android:debuggable="true" in the manifest — must be false for a release build'
+  # (b) Modern Gradle form (the COMMON case): debuggable enabled in the RELEASE buildType. This is
+  # BLOCK-AWARE on purpose — a plain `debuggable true` grep would also fire on the legitimate
+  # `debug { debuggable true }` buildType, a deploy-blocking FALSE POSITIVE. `release_debuggable`
+  # extracts only the body of release buildType blocks (release {…} / getByName("release") {…} /
+  # create("release") {…}) by brace-matching, then looks for a debuggable-enable inside. Comments and
+  # http:// URLs are stripped and single→double quotes normalised first so a stray brace can't desync
+  # the matching; any construct it can't resolve to a release block is simply NOT flagged (favour-FN).
+  release_debuggable() {  # stdin: gradle text → prints the concatenated body of every release block
+    sed -E ':a;s@/\*[^*]*\*+([^/*][^*]*\*+)*/@ @;ta' \
+      | sed -E "s@(^|[[:space:]])//.*@\1@; s@'@\"@g" \
+      | awk '
+        { doc = doc $0 "\n" }
+        END {
+          n = length(doc); depth = 0; tok = ""; last = ""; relopen = -1
+          for (i = 1; i <= n; i++) {
+            c = substr(doc, i, 1)
+            if (c == "{") {
+              depth++
+              lbl = (tok != "" ? tok : last)
+              if (relopen == -1 && tolower(lbl) ~ /(^|[^a-z0-9])release([^a-z0-9]|$)/) relopen = depth
+              tok = ""; last = ""; continue
+            }
+            if (c == "}") { if (relopen == depth) relopen = -1; if (depth > 0) depth--; tok = ""; last = ""; continue }
+            if (c ~ /[A-Za-z0-9_.()"]/) { tok = tok c } else { if (tok != "") { last = tok; tok = "" } }
+            if (relopen != -1) out = out c
+          }
+          print out
+        }'
+  }
+  printf '%s' "$gtext" | release_debuggable | grep -qiE '(is)?debuggable[[:space:]]*[=(]?[[:space:]]*true' && \
+    add android SC-5 critical 'debuggable enabled in the release buildType (Gradle) — must be false/absent for a release build'
   printf '%s' "$mtext" | grep -qiE 'android:usesCleartextTraffic[[:space:]]*=[[:space:]]*"true"' && \
     add android SC-5 warning 'android:usesCleartextTraffic="true" — disable cleartext traffic for release'
 fi
