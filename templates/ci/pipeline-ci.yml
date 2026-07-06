@@ -73,6 +73,37 @@ jobs:
           # Use the same rule packs the project's semgrep-ruleset-guide names; honors a
           # committed .semgrepignore. Pin the image digest on first run.
 
+  # codeql — deep SAST (roadmap row CQ): semantic taint/dataflow analysis beyond Semgrep's
+  # pattern matching; findings surface as code-scanning ALERTS on the PR/merge commit (the
+  # job fails only on analysis error, not on findings — added assurance, not a delivery
+  # step). CI-only BY DESIGN: it builds a database and is slow, so it stays out of the local
+  # security⇄debug⇄test loop (docs/ci-merge-gate-plan.md Layer 4). Free on public repos;
+  # private repos need GitHub Advanced Security — if neither applies, delete this job (the
+  # Semgrep/ASVS layers above still run). Fill <CODEQL_LANGUAGES> when the stack is known:
+  # e.g. [python] or [python, javascript-typescript]; supported: c-cpp, csharp, go,
+  # java-kotlin, javascript-typescript, python, ruby, swift. build-mode none needs no build
+  # commands; Swift instead needs autobuild on a macOS runner (see the iOS roadmap row).
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write   # upload results to code scanning (per-job elevation)
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [<CODEQL_LANGUAGES>]
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
+        with:
+          category: "/language:${{ matrix.language }}"
+
   deps:
     runs-on: ubuntu-latest
     timeout-minutes: 15

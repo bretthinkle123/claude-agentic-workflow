@@ -17,6 +17,7 @@ Full rationale: `docs/ci-merge-gate-plan.md`.
 |---|---|
 | Tests + coverage floor | re-run natively (same floor figure as the local gate) |
 | SAST / SCA / secrets / IaC | re-run Semgrep, OSV, Gitleaks, Trivy fs, Checkov |
+| Deep SAST — taint/dataflow (CQ) | `codeql` job: security-extended queries → code-scanning **alerts** on the PR; the job fails only on analysis error, not findings — depth Semgrep's patterns can't reach, alert-only by default |
 | ASVS Tier-1 patterns / source markers / lockfile integrity | re-run the `scripts/ci/` copies with `SCAN_BASE` |
 | Store compliance (mobile targets) | re-run `store-compliance.sh` (repo-state scoped; no-ops elsewhere) |
 | Criteria coverage (`criteria_covered`) | **NOT re-derivable** — agent judgment; guarded by required human review + the `docs/decisions/` record in the diff |
@@ -68,6 +69,12 @@ JSON
 
 For the engine repo itself, the single required context is `eval` (Layer 1's workflow).
 
+`codeql` is deliberately **not** in the required contexts above — it's alert-only assurance by
+default. To make deep SAST blocking, add its matrix contexts (`codeql (<language>)`) or enable a
+code-scanning merge-protection rule. Prerequisite either way: fill `<CODEQL_LANGUAGES>` in the
+template; CodeQL is free on public repos, needs GitHub Advanced Security on private ones — delete
+the job if neither applies (the Semgrep/ASVS jobs still run).
+
 ## Workflow conventions (baked into the template)
 
 First-party actions pinned by commit SHA; scanners run from official images (pin digests on
@@ -84,4 +91,5 @@ snapshot/migrate/health → prod canary + alarm-driven rollback; inert until the
 `DEPLOY_ENABLED=true`). Load/failover validation is a separate dispatch/scheduled
 **`load-campaign.yml`**. Rubrics + the rollback runbook live in `delivery-conventions`; the
 `envs/` split, deploy alarms, and prod WAF in `iac-conventions`. The reserved `dast-baseline`
-slot is filled per `docs/dast-plan.md`; CodeQL (row CQ) lands as one added job when adopted.
+slot is filled per `docs/dast-plan.md`; CodeQL (row CQ) ships as the template's `codeql` job —
+see the honest-scope table and the branch-protection note above.
