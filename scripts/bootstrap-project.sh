@@ -123,7 +123,9 @@ if [[ -f "$TARGET/.github/workflows/pipeline-ci.yml" ]]; then
   note "[skip] .github/workflows/pipeline-ci.yml already exists"
 elif [[ -f "$TEMPLATES/ci/pipeline-ci.yml" ]]; then
   mkdir -p "$TARGET/.github/workflows" "$TARGET/scripts/ci"
-  cp "$TEMPLATES/ci/pipeline-ci.yml" "$TARGET/.github/workflows/pipeline-ci.yml"
+  # Every workflow template rides in (pipeline-ci = the merge gate; build-provenance = the
+  # PR M artifact path, self-skipping until a Dockerfile exists).
+  cp "$TEMPLATES/ci/"*.yml "$TARGET/.github/workflows/"
   # Fill test/build from the same flags that populate smoke.env (values must not contain | or &).
   [[ -n "$TEST"  ]] && sed -i "s|<TEST_CMD>|$TEST|"  "$TARGET/.github/workflows/pipeline-ci.yml"
   [[ -n "$BUILD" ]] && sed -i "s|<BUILD_CMD>|$BUILD|" "$TARGET/.github/workflows/pipeline-ci.yml"

@@ -38,7 +38,10 @@ third-party calls);
 (containerized vs. direct process vs. serverless, and Kubernetes vs. a managed
 container runtime); `ci-conventions` when the project has (or the plan adds) a
 `.github/workflows/` CI merge gate — what each job re-verifies vs. what stays a
-pre-merge-only guarantee, and the branch-protection checklist. When the frontend target is a **native iOS app (SwiftUI)** —
+pre-merge-only guarantee, and the branch-protection checklist;
+`delivery-conventions` when the change ships a container image or touches the
+post-merge deploy path (immutable SHA tags, cosign signing + SBOM/SLSA
+attestation, verify-before-rollout, container hardening). When the frontend target is a **native iOS app (SwiftUI)** —
 recorded as an alternative to the default JavaScript frontend under `## Stack notes` —
 `swift-conventions` for the view/state/navigation architecture,
 `apple-hig-compliance` to map the design onto native iOS patterns (not a web layout

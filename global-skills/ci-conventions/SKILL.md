@@ -77,7 +77,8 @@ first run); `permissions: contents: read` default with per-job elevation; per-re
 
 ## How delivery chains on (PR M/N)
 
-Deploy workflows trigger via `workflow_run` on this workflow's success on `main` — build/
-sign/push (PR M), then staging → progressive prod delivery (PR N,
+Deploy workflows trigger via `workflow_run` on this workflow's success on `main` —
+**`build-provenance.yml`** (PR M: build → sign → SBOM/SLSA-attest → push; see
+`delivery-conventions`), then staging → progressive prod delivery (PR N,
 `docs/environments-delivery-plan.md`). The reserved `dast-baseline` job slot is filled per
 `docs/dast-plan.md`; CodeQL (row CQ) lands as one additional job when adopted.
