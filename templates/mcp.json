@@ -15,6 +15,11 @@
     "figma": {
       "type": "sse",
       "url": "http://127.0.0.1:3845/sse"
+    },
+    "sentry": {
+      "type": "http",
+      "url": "https://mcp.sentry.dev/mcp",
+      "//": "triage agent only, READ-ONLY token (issue/event read scopes; no write/admin) — see triage-conventions setup checklist. Resolves to nothing unless the project wires it."
     }
   }
 }
