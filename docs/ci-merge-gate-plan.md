@@ -1,7 +1,9 @@
 # Plan — CI as the merge gate (PR L): re-verify the objective gates on the merge commit
 
-> **Status: SPEC — not built, awaiting approval.** The keystone of Track 2 (`pipeline-june-analysis.md`
-> §7 Phase 1, §10 row L): everything downstream (M–P, CQ, DAST) depends on it. Companions:
+> **Status: BUILT — merged as PR #28 (2026-07-06); `eval` is a required check on `main`.** The
+> keystone of Track 2 (`pipeline-june-analysis.md`
+> §7 Phase 1, §10 row L): everything downstream (M–P, CQ, DAST Layers 2–3 / the CI re-home — DAST
+> Layer 1 is Docker-local and shipped before L) depends on it. Companions:
 > `docs/dast-plan.md` (runtime security jobs that slot into this CI), `docs/delivery-operations-plan.md`
 > (PRs M–P, which chain deploy workflows onto this one), `docs/pipeline-deployment-targets.md`
 > (existing post-merge recipes this supersedes-in-part). Scope is the **per-project CI wiring the
@@ -136,6 +138,13 @@ documents it, the operator runs it, and the checklist is the auditable record. *
 
 CodeQL (roadmap row CQ) is deliberately **not** part of this PR — but the template reserves the job
 name and the skill documents where it lands, so CQ becomes a one-job diff once L is live.
+
+> **Landed (2026-07-06):** the `codeql` job now ships in `templates/ci/pipeline-ci.yml` — matrix
+> over `<CODEQL_LANGUAGES>`, `build-mode: none`, security-extended queries, SHA-pinned
+> (`codeql-action` v4.36.3). Alert-only by default (the job fails on analysis error, not findings);
+> `ci-conventions` documents how to make it blocking and the public/GHAS licensing constraint.
+> The engine repo itself doesn't run it — CodeQL has no bash support; the harness (`eval`) is the
+> engine's gate.
 
 ## Sequencing
 

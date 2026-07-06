@@ -1,6 +1,6 @@
 # Plan — environments + progressive delivery + real load (PR N kickoff)
 
-> **Status: KICKOFF PLAN — the five coupled decisions, decided.** This is the doc
+> **Status: BUILT — merged as PR #30 (2026-07-06).** This is the doc
 > `docs/delivery-operations-plan.md` requires before PR N starts. It converts N's milestone bullets
 > into concrete, buildable choices, each with the alternative it rejects and why. Depends on PR M
 > (signed artifact); provides the staging target `docs/dast-plan.md` L2/L3 needs. Everything here is

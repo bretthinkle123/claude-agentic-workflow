@@ -24,16 +24,26 @@ and the [Anthropic Claude Code docs](https://code.claude.com/docs/en/overview).
 
 ## The mental model in one paragraph
 
-Nine specialized Claude Code subagents handle one stage each (an optional design-spec stage →
+Ten specialized Claude Code subagents handle one stage each (an optional design-spec stage →
 planning → plan-audit → implementation → security → testing → documentation → deployment, with a
 debugging agent invoked on failures). The **design-spec** stage runs only when the project
 provides a front-end design source; it normalizes that (untrusted) design into a human-vouched
-`.pipeline/design-spec.md` before planning. The other eight always apply.
+`.pipeline/design-spec.md` before planning. The **triage** agent sits outside the pipeline loop
+entirely — an operator-invoked, read-only incident summarizer (one Sentry issue → a human-facing
+brief; no Bash, no Edit). The other eight always apply.
 They share no conversation context — each starts blank. All cross-stage state travels through files
 under `.pipeline/`. Shell scripts (hooks) enforce every deterministic gate at zero LLM cost. Skills
 preload reference knowledge into agents that need it. The whole pipeline is installed once globally
 (`~/.claude/`) via `install-global.sh` and bootstrapped into each project in seconds via
 `bootstrap-project.sh` — no copying files into projects.
+
+The authoring pipeline ends at the PR, but the guarantees now extend **past the merge**: this repo's
+own `.github/workflows/eval.yml` runs the full deterministic harness as a required merge check, and
+`templates/ci/` gives each project a delivery chain — `pipeline-ci.yml` re-runs the deterministic
+gates on the merge commit, `build-provenance.yml` produces a signed, SBOM-attested, SLSA-provenanced
+image, and the opt-in `deploy.yml` / `load-campaign.yml` / `dr-drill.yml` / `scheduled-rescan.yml`
+verify-then-progressively-deploy, load-validate, DR-drill, and continuously re-scan it. All of that
+is per-project scaffolding the pipeline authors — not new gates in the authoring loop.
 
 ---
 
@@ -103,15 +113,18 @@ flowchart TD
     DA -->|yes| DAC[dast-capture.sh → dast-review.sh\nZAP passive baseline\nadvisory dast-review.json · never a gate]
     DAC --> DOC
     DA -->|no| DOC[documentation agent\nhaiku · maxTurns 25]
-    DOC -->|writes| DOCS[README updates\npr-description.md\nreview-manifest.json]
+    DOC -->|writes| DOCS[README updates\npr-description.md\ndocs/decisions/branch records\nreview-manifest.json]
     DOCS --> CR["/code-review — standard automated pre-step\nreview-only triage of the diff"]
     CR --> HARDCK{Human diff-review checkpoint M5\nreview diff + code-review findings + reports\nrun approve-diff.sh — TTY-only, writes diff-approved}
     HARDCK --> DEP[deployment agent\nsonnet · maxTurns 15]
     DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n5 conditions checked}
     GATE -->|blocked| DEP
     GATE -->|passed| COMMIT[git commit\ngit push\ngh pr create]
-    COMMIT --> PR([PR on GitHub\npipeline ends here])
-    PR --> CI([CI/CD after merge\nout of scope])
+    COMMIT --> PR([PR on GitHub\nauthoring pipeline ends here])
+    PR --> CI[pipeline-ci.yml — CI merge gate\nre-runs the deterministic gates\non the merge commit]
+    CI --> BP[build-provenance.yml\nSHA-tagged image · SBOM\ncosign sign · SLSA attestation\nself-skips without a Dockerfile]
+    BP --> DEPL[deploy.yml — opt-in\nverify signature → staging →\ncanary 10/50/100 → prod\nburn-rate auto-rollback]
+    DEPL --> OPS([operate\nobservability + triage agent\nload-campaign · dr-drill · scheduled-rescan])
 ```
 
 ---
@@ -120,7 +133,7 @@ flowchart TD
 
 ```
 claude-agentic-workflow/
-├── global-agents/          Nine subagent definitions (incl. conditional design-spec) — the source of truth for agent behavior
+├── global-agents/          Ten subagent definitions (incl. conditional design-spec + standalone triage) — the source of truth for agent behavior
 │   ├── design-spec.md
 │   ├── planning.md
 │   ├── plan-audit.md
@@ -129,7 +142,8 @@ claude-agentic-workflow/
 │   ├── security.md
 │   ├── testing.md
 │   ├── documentation.md
-│   └── deployment.md
+│   ├── deployment.md
+│   └── triage.md           operator-invoked, read-only incident summarizer — outside the pipeline loop (PR O)
 │
 ├── global-hooks/           Twenty-six deterministic scripts (+ the ui-capture.mjs Node helper) — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
@@ -158,7 +172,7 @@ claude-agentic-workflow/
 │   ├── design-review-check.sh  FE Layer 4 (deterministic): compares ui-capture.json to the design budget → advisory .pipeline/design-review.json (never a gate)
 │   ├── dast-capture.sh         DAST Layer 1 (runtime-bound): boots the app + runs OWASP ZAP passive baseline in Docker → raw .pipeline/dast-capture.json (opt-in via dast.env; no dast.env/Docker ⇒ no-op)
 │   ├── dast-review.sh          DAST Layer 1 (deterministic): tallies dast-capture.json alerts by severity vs .pipeline/dast-budget.json → advisory .pipeline/dast-review.json (never a gate)
-│   └── post-deploy-check.sh    [UNIMPLEMENTED] CI hook — runs after PR merges, not in pipeline
+│   └── post-deploy-check.sh    CI-homed: reborn as pipeline-ci.yml's deploy-verify job (probes DEPLOY_HEALTH_URL; inert until deploy.yml is enabled) — never a pipeline Stop hook
 │
 ├── global-skills/          Reference knowledge preloaded into agents that need it
 │   └── README.md           How to install, update, and add global skills
@@ -177,7 +191,11 @@ claude-agentic-workflow/
 │   ├── ddia-patterns/              storage, replication, consistency trade-offs (from DDIA)
 │   ├── containerization-conventions/  Docker vs. serverless decision rubric
 │   ├── api-edge-conventions/        on-demand: rate limiting, CORS, security headers, idempotency (planning + implementation)
-│   └── dependency-audit-policy/     on-demand: plan-audit's dependency reality-check + version policy (loaded only when the plan adds deps)
+│   ├── dependency-audit-policy/     on-demand: plan-audit's dependency reality-check + version policy (loaded only when the plan adds deps)
+│   ├── ci-conventions/              on-demand: the per-project CI merge gate — what each pipeline-ci.yml job re-verifies, SCAN_BASE contract, CI waiver channel, branch-protection checklist (PR L)
+│   ├── delivery-conventions/        on-demand: build/tag/sign/provenance rules — immutable SHA tags, cosign, SBOM/SLSA, verify-before-rollout, canary + rollback rubrics (PRs M/N)
+│   ├── observability-conventions/   on-demand: Sentry release-tagging, OTel→CloudWatch/X-Ray, SLO burn-rate alarms (feeds the canary rollback), synthetics, mobile crash reporting (PR O)
+│   └── triage-conventions/          preloaded in triage: incident-brief schema, redaction rule, injection-report format, read-only Sentry MCP checklist (PR O)
 │
 ├── global-project-skills/  Per-project skill templates (installed alongside global-skills)
 │   ├── semgrep-ruleset-guide/  which Semgrep rule sets to apply per language/framework (fill <STACK CONFIGS>)
@@ -197,7 +215,15 @@ claude-agentic-workflow/
 │   ├── ui.env                  FE Layer 4 opt-in: copy to .pipeline/ui.env to declare the servable UI (base URL + screens) — its presence activates the design-review stage
 │   ├── design-budget.json      FE Layer 4: copy to .pipeline/design-budget.json — per-screen visual-diff tolerance + a11y violation caps
 │   ├── dast.env                DAST Layer 1 opt-in: copy to .pipeline/dast.env to declare the scan target + boot command — its presence activates the post-GREEN DAST stage
-│   └── dast-budget.json        DAST Layer 1: copy to .pipeline/dast-budget.json — per-severity ZAP finding caps
+│   ├── dast-budget.json        DAST Layer 1: copy to .pipeline/dast-budget.json — per-severity ZAP finding caps
+│   ├── renovate.json           Continuous dependency remediation (PR P): update PRs flow through the same gates
+│   └── ci/                     Per-project GitHub Actions delivery chain (bootstrap copies what applies)
+│       ├── pipeline-ci.yml         the CI merge gate — re-runs the deterministic gates on the merge commit (SCAN_BASE mode); + the codeql deep-SAST job (CQ, alert-only) and deploy-verify (= the reborn post-deploy-check)
+│       ├── build-provenance.yml    post-merge: hadolint → OIDC AWS → SHA-tagged build → dockle → CycloneDX SBOM → cosign keyless sign → SLSA attestation; self-skips without a Dockerfile
+│       ├── deploy.yml              opt-in (DEPLOY_ENABLED): cosign verify-before-rollout → staging (snapshot→migrate→rollout) → prod behind the GitHub production rule → weighted canary + burn-rate auto-rollback
+│       ├── load-campaign.yml       dispatch+weekly vs staging: k6 thresholds from the acceptance budget + failover drill + scale-ceiling ramp (proves autoscaling fires)
+│       ├── dr-drill.yml            monthly opt-in: executed restore into a throwaway instance, positive-count verify, RTO/RPO asserted, teardown
+│       └── scheduled-rescan.yml    weekly OSV+Trivy re-scan of the shipped artifact (continuous vuln management)
 │
 ├── scripts/
 │   ├── install-global.sh       Publishes global-agents, global-hooks, global-skills, templates → ~/.claude/
@@ -208,27 +234,39 @@ claude-agentic-workflow/
 │
 ├── tests/                  Eval/regression harness (M8) — deterministic, zero-LLM; run `bash tests/run-eval.sh`
 │   ├── run-eval.sh             Entry: runs every suite against golden fixtures; exit 0 iff all pass (CI-ready)
-│   ├── suites/                 19 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
+│   ├── suites/                 21 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
 │   │                           loop-exit-invariant, stamp-ran-at, record-clean, hash-determinism, asvs,
 │   │                           waiver-guard, asvs-sast, design-spec, egress, assurance, design-review, dast-review,
-│   │                           store-compliance
+│   │                           store-compliance, ci-scan-base, triage (355 assertions; run in CI by eval.yml)
 │   ├── fixtures/linkly-green/  Golden pipeline snapshot (Linkly, perf corrected to a passing state)
 │   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
 │
 ├── docs/
 │   ├── agentic-pipeline-plan.md      Full design doc — chronological design log (historical; lags the live pipeline)
 │   ├── system_architecture.md        This file
+│   ├── pr-history.md                 Every PR made against this repo + a by-concept summary
 │   ├── pipeline-threat-model.md      Engine-scope STRIDE model (PR K) — the pipeline itself as target
 │   ├── asvs-determinism-roadmap.md   ASVS-DET: agent-reasoned checks promoted to deterministic gates (Slices A–D shipped)
 │   ├── design-spec-stage-plan.md     DS side-track plan — design bundle → vouched design-spec.md (Layers 0–4 built)
 │   ├── ios-swiftui-target-plan.md    iOS side-track plan (skills/planning layers built; Layer 3 gate adapters macOS-bound)
 │   ├── data-protection-enforcement-plan.md  DP side-track plan — per-field at-rest accountability (built)
 │   ├── egress-control-plan.md        EG side-track plan — default-deny egress (deterministic slices built; proxy operator-provisioned)
+│   ├── dast-plan.md                  DAST side-track plan — Layer 1 built (PR #26); Layers 2–4 remain
+│   ├── store-compliance-plan.md      STORE side-track plan — Layers A–E built (PR #27); SC-6/7/9 deferred
+│   ├── ci-merge-gate-plan.md         PR L spec — CI as the merge gate (built, PR #28)
+│   ├── delivery-operations-plan.md   PRs M–P spec — artifact/provenance, observability, scale/DR (built, PRs #29/#31/#32)
+│   ├── environments-delivery-plan.md PR N spec — environments + progressive delivery + real load (built, PR #30)
+│   ├── triage-agent-plan.md          PR O spec — the read-only triage agent (built, PR #31)
+│   ├── DOC-consolidation-plan.md     Planned doc-set consolidation (the DOC roadmap row)
+│   ├── decisions/<branch>/           Design-record retention (PR L Layer 0): documentation copies plan/acceptance/plan-audit/security-report here before the review manifest
 │   ├── pipeline-alternatives.md      Non-default stack scaffolds (Cognito, GCP, JS backend)
 │   ├── pipeline-deployment-targets.md  CI/CD patterns for after the PR merges
 │   ├── pipeline-mcp-config.md        MCP server wiring per agent
 │   ├── pipeline-code-quality-audit.md  [DESIGN, not built] code-audit stage spec
 │   └── pipeline-refinement-loops.md  Candidate refinement loops (the planning loop shipped; the rest are designs)
+│
+├── .github/workflows/
+│   └── eval.yml            The engine's own CI merge gate: runs the full 21-suite / 355-assertion harness on every push/PR to main (PR L Layer 1; `eval` is a required check)
 │
 ├── memory/                 Auto-memory persisted across Claude Code sessions
 │   ├── brett-profile.md    Brett's preferences, default stack, collaboration style
@@ -525,8 +563,12 @@ coverage and test counts.
 
 **Responsibility:** Only runs once both gates are clean. Finds every directory touched by the
 change (via `git diff --name-only`), creates or updates per-directory `README.md` files, updates
-`system_architecture.md` if data flow or boundaries changed, and writes `pr-description.md`. As
-its **last action**, runs `write-review-manifest.sh` to record the `reviewed_change_hash` — a
+`system_architecture.md` if data flow or boundaries changed, and writes `pr-description.md`. It
+also performs **design-record retention (PR L Layer 0)**: copies `plan.md`, `acceptance.md`,
+`plan-audit.md`, `security-report.md` (+ `design-spec.md`/`run-summary.json` when present) into
+`docs/decisions/<branch>/` so the gitignored `.pipeline/` reasoning survives the merge. As
+its **last action** — after those copies, so they ride the reviewed hash — it runs
+`write-review-manifest.sh` to record the `reviewed_change_hash` — a
 SHA-256 hash of the exact bytes the human will review and the deployment agent will commit. The
 deployment gate checks this hash for currency.
 
@@ -566,6 +608,30 @@ supersedes the earlier "deployment = haiku" allocation — the inspection capabi
 **Hard gate:** `git push` and `gh pr create` are deliberately excluded from `settings.json`'s
 allow-list so they each require explicit human approval even after the gate passes. The human
 approves the actual push.
+
+---
+
+### triage
+
+| Property | Value |
+|---|---|
+| Model | `opus` |
+| Effort | `high` |
+| maxTurns | 15 |
+| Tools | Read, Glob, Grep, Write, mcp__sentry — **deliberately no Bash, no Edit** |
+| Preloaded skills | `triage-conventions` |
+
+**Responsibility:** **Not part of the pipeline loop.** An operator invokes it on demand with one
+Sentry issue id; it pulls that incident's evidence (read-only Sentry MCP), grounds a hypothesis in
+the repo (Read/Grep/Glob), writes a human-facing `.pipeline/incident-brief.md` — facts, quoted
+evidence, a repo-grounded hypothesis, a suggested next step, and an **injection report** (telemetry
+is untrusted: instruction-shaped strings are quoted, never obeyed) — and stops. A fix happens only
+if a human feeds the brief into a normal pipeline run (planning → … → PR).
+
+**Safety is by tool absence, not instruction:** no Bash (no git/gh/aws/curl surface for an injected
+command), no Edit (cannot modify anything), Write scoped to the brief, and the global marker deny
+applies. `tests/suites/triage.sh` (21 assertions) fails loud if Bash or Edit is ever added to its
+frontmatter. The Sentry MCP token must be read-only (setup checklist in `triage-conventions`).
 
 ---
 
@@ -833,9 +899,11 @@ Desktop is not running.
 
 ### post-deploy-check.sh
 
-**Status: [UNIMPLEMENTED]**. Intended as a CI hook that runs after the PR merges and CI deploys
-the app. Curls `DEPLOY_HEALTH_URL/health` and exits 2 on non-200. Not wired into the pipeline
-itself — the deployment agent stops at the PR. See `docs/pipeline-deployment-targets.md`.
+**Status: CI-homed (PR L).** Its role — probe `DEPLOY_HEALTH_URL/health` after a merge deploys —
+now lives as the **deploy-verify job in `templates/ci/pipeline-ci.yml`**, inert until a project
+enables `deploy.yml` (PR N) and sets `DEPLOY_HEALTH_URL`. It was never, and still isn't, a pipeline
+Stop hook: the deployment agent stops at the PR; there is no live instance to probe inside the
+authoring loop. See `docs/ci-merge-gate-plan.md`.
 
 ---
 
@@ -885,6 +953,7 @@ commit; until then, all changes live in the working tree.
 | `dast-budget.json` | operator (copied from `templates/dast-budget.json`) | dast-review.sh | Per-severity caps (high/medium/low/informational) the ZAP baseline is compared against — safe defaults if absent |
 | `dast-capture.json` | dast-capture.sh (runtime-bound: OWASP ZAP passive baseline in Docker vs the booted app) | dast-review.sh | Raw ZAP report (`site[].alerts[]`); no dast.env / no Docker ⇒ fail-safe no-op (file absent) |
 | `dast-review.json` | dast-review.sh (deterministic severity tally vs budget) | documentation (surfaces over-budget severity bands in the PR) | **Advisory — never a gate, not in loop-exit** (DAST Layer 1); malformed capture ⇒ clean no-op |
+| `incident-brief.md` | triage agent (operator-invoked, outside the pipeline loop) | human (decides whether to start a normal pipeline run from it) | One Sentry incident → facts, quoted evidence, repo-grounded hypothesis, suggested next step, injection report. **Never triggers anything itself** — a fix happens only via a normal human-started run (PR O) |
 
 ---
 
@@ -922,6 +991,10 @@ when the feature needs that knowledge.
 | `claude-design-to-swiftui` | on-demand (planning, implementation — iOS target only) | Claude Design export → faithful SwiftUI replication recipe |
 | `app-store-submission-requirements` | on-demand (planning, deployment — Apple App Store target) | Signing, privacy manifest, data-use declarations — emitted as acceptance criteria early |
 | `google-play-submission-requirements` | on-demand (planning, deployment — Google Play target) | Data safety form, targetSdk floor, permission justifications, in-app + web account deletion, Play Billing — emitted as acceptance criteria early (store-compliance Layer A) |
+| `ci-conventions` | on-demand (planning — when the project has or needs GitHub Actions CI) | The per-project CI merge gate: what each `pipeline-ci.yml` job re-verifies, the SCAN_BASE re-run contract, the CI waiver channel, branch-protection checklist (PR L) |
+| `delivery-conventions` | on-demand (planning — when the change ships a container image or touches a deploy workflow) | Tag/digest rules, cosign keyless signing, SBOM + SLSA attestation, verify-before-rollout, D2 migration sequence, D3 canary rubric + rollback runbook, continuous vuln management (PRs M/N) |
+| `observability-conventions` | on-demand (planning — when a change ships to a real environment or defines SLOs) | Sentry release-tagging, OTel→CloudWatch/X-Ray, SLO burn-rate alarms (the signal `deploy.yml`'s canary rollback consumes), synthetics, mobile crash reporting (PR O) |
+| `triage-conventions` | triage | Incident-brief schema, redaction rule, provenance + injection-report format, read-only Sentry MCP setup/scope checklist (PR O) |
 
 ---
 
