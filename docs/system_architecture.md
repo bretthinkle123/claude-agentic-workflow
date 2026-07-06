@@ -238,7 +238,7 @@ claude-agentic-workflow/
 │   ├── suites/                 21 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
 │   │                           loop-exit-invariant, stamp-ran-at, record-clean, hash-determinism, asvs,
 │   │                           waiver-guard, asvs-sast, design-spec, egress, assurance, design-review, dast-review,
-│   │                           store-compliance, ci-scan-base, triage (365 assertions; run in CI by eval.yml)
+│   │                           store-compliance, ci-scan-base, triage (366 assertions; run in CI by eval.yml)
 │   ├── fixtures/linkly-green/  Golden pipeline snapshot (Linkly, perf corrected to a passing state)
 │   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
 │

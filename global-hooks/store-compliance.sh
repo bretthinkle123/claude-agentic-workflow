@@ -140,7 +140,7 @@ if [ "$APPLE" = true ]; then
         add apple SC-9 critical "$3 Required-Reason API used but $2 is not declared in PrivacyInfo.xcprivacy (App Store automated rejection)"
     }
     rra '\bUserDefaults\b|\bNSUserDefaults\b'                                            'NSPrivacyAccessedAPICategoryUserDefaults'    'UserDefaults'
-    rra 'fileModificationDate|creationDateKey|contentModificationDateKey|getattrlist|\bfstatat?\(|\blstat\(' 'NSPrivacyAccessedAPICategoryFileTimestamp' 'File-timestamp'
+    rra 'fileModificationDate|creationDateKey|contentModificationDateKey|getattrlist|\bfstat(at)?\(|\blstat\(' 'NSPrivacyAccessedAPICategoryFileTimestamp' 'File-timestamp'
     rra 'volumeAvailableCapacity|systemFreeSize|\bstatv?fs\(|\bfstatfs\('                'NSPrivacyAccessedAPICategoryDiskSpace'       'Disk-space'
     rra '\bactiveInputModes\b'                                                           'NSPrivacyAccessedAPICategoryActiveKeyboards' 'Active-keyboard'
     rra '\bsystemUptime\b|\bmach_absolute_time\('                                        'NSPrivacyAccessedAPICategorySystemBootTime'  'System-boot-time'
@@ -221,10 +221,15 @@ if [ "$ANDROID" = true ]; then
   # Data-safety red flag (reviewers compare the form against the manifest). Advisory only — the
   # map is heuristic (reflection, libraries, and dynamic requests are invisible to a grep).
   droidsrc=$(relsrc '\.(kt|java)$')
+  # mflat: the declaration grep must run on FLATTENED manifest text — Android Studio's default
+  # formatting puts android:name= on its own line under <uses-permission, and a line-based grep
+  # would read a properly-declared permission as undeclared (an advisory FP one way and a silent
+  # FN the other). Same flatten rationale as the Apple cfgflat.
+  mflat=$(printf '%s' "$mtext" | tr '\n' ' ')
   perm() {  # api-ERE  manifest-perm-ERE  human
     local used=false decl=false
     printf '%s' "$droidsrc" | grep -qE "$1" && used=true
-    printf '%s' "$mtext" | grep -qiE "uses-permission[^>]*android\.permission\.($2)" && decl=true
+    printf '%s' "$mflat" | grep -qiE "uses-permission[^>]*android\.permission\.($2)" && decl=true
     if [ "$used" = true ] && [ "$decl" = false ]; then
       add android SC-6 warning "$3 API used but no matching <uses-permission> in AndroidManifest.xml (runtime failure + Data-safety mismatch)"
     elif [ "$used" = false ] && [ "$decl" = true ]; then

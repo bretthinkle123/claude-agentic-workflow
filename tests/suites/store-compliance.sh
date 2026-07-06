@@ -145,6 +145,16 @@ assert_eq 0 "$(store_scan '[.findings[]|select(.rule=="SC-6")]|length' \
   AndroidManifest.xml '<manifest><uses-permission android:name="android.permission.CAMERA"/><application/></manifest>' \
   Cam.kt 'val mgr = getSystemService(CameraManager::class.java)' \
   build.gradle.kts 'android { targetSdk = 35 }')" "SC-6: declared AND used → no finding (reconciled)"
+#   Multi-line manifest regression: Android Studio's default formatting puts android:name= on its
+#   own line — the declaration must still be seen (flattened grep), or a declared permission reads
+#   as undeclared (advisory false positive).
+assert_eq 0 "$(store_scan '[.findings[]|select(.rule=="SC-6")]|length' \
+  AndroidManifest.xml '<manifest>
+  <uses-permission
+      android:name="android.permission.CAMERA" />
+  <application/></manifest>' \
+  Cam.kt 'val mgr = getSystemService(CameraManager::class.java)' \
+  build.gradle.kts 'android { targetSdk = 35 }')" "SC-6: multi-line <uses-permission> formatting still counts as declared (no false positive)"
 
 # (2d) SC-7 — debug-log flood / test endpoint (advisory)
 LOGSPAM="$(for i in $(seq 1 12); do echo "Log.d(\"t\", \"m$i\")"; done)"
