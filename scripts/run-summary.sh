@@ -27,19 +27,41 @@ command -v jq >/dev/null 2>&1 || { echo "run-summary: jq not found on PATH." >&2
 LOOP_CAPS=0
 [ -f "$EVENTS" ] && LOOP_CAPS=$(jq -rs 'map(select(.status=="capped")) | length' "$EVENTS" 2>/dev/null || echo 0)
 
-# Assurance stamp (iOS plan Layer 3). The deterministic gates (Semgrep/OSV/coverage) are
-# Python/JS-shaped; on a **Swift/iOS** target they run but analyze little until the Swift language
-# adapters (xcodebuild smoke, Semgrep-Swift, xccov coverage) exist. So detect a Swift target with
-# ABSENT adapters and stamp the run `reduced` — while that stamp is present the run must NOT be
-# called "gate-verified" (documentation/retrospective read this field). Default `standard`.
+# Assurance stamp (iOS plan Layer 3 + store-compliance Layer E). The deterministic gates
+# (Semgrep/OSV/coverage) are Python/JS-shaped; on a native-MOBILE target — Swift/iOS OR
+# Kotlin/Android — they run but analyze little until that language's gate adapters exist. Detect a
+# native-mobile target with ABSENT adapters and stamp `reduced (<lang> adapters absent)` — while
+# present the run must NOT be called "gate-verified" (documentation/retrospective read this field).
+# Default `standard`. Android has NO gate adapters today (no Android sibling of the iOS Layer-3
+# work), so an Android target is always reduced — Layer E closes the hole where a Kotlin/Gradle
+# project used to sail through stamped `standard`, the exact vacuous-green the stamp exists to prevent.
+#
+# lsfiles = tracked AND untracked (non-ignored) working-tree files. MUST include untracked: this
+# stamp is computed at GREEN, BEFORE the deployment agent makes the pipeline's first/only commit —
+# so the app's own source (.swift, manifests) is typically uncommitted. Bare `git ls-files` (tracked
+# only) would miss it and stamp a real mobile app `standard`, the vacuous-green this guards against.
+lsfiles() { git ls-files --cached --others --exclude-standard 2>/dev/null; }
 SWIFT_TARGET=false
-git ls-files 2>/dev/null | grep -qiE '(\.swift$|(^|/)Package\.swift$|\.xcodeproj)' && SWIFT_TARGET=true
+lsfiles | grep -qiE '(\.swift$|(^|/)Package\.swift$|\.xcodeproj)' && SWIFT_TARGET=true
 grep -riqE 'native ios|swiftui' "$DIR/../CLAUDE.md" "$DIR/../PROJECT.md" 2>/dev/null && SWIFT_TARGET=true
 SWIFT_ADAPTERS=false
 { [ -f "$HOME/.claude/hooks/swift-gate.sh" ] || [ -f "$DIR/swift-adapters.json" ]; } && SWIFT_ADAPTERS=true
+
+# Android detection keys ONLY on Android-specific markers — an AndroidManifest.xml, or an explicit
+# PROJECT.md/CLAUDE.md declaration. Deliberately NOT bare `build.gradle`/`.kt`/`kotlin`: those also
+# describe a Kotlin/Java **backend** (Ktor, Spring Boot), which is not Android and must NOT be
+# mis-stamped `reduced` (that would falsely tell documentation "not gate-verified").
+ANDROID_TARGET=false
+lsfiles | grep -qiE '(^|/)AndroidManifest\.xml$' && ANDROID_TARGET=true
+grep -riqE 'native android|google play|jetpack compose' "$DIR/../CLAUDE.md" "$DIR/../PROJECT.md" 2>/dev/null && ANDROID_TARGET=true
+ANDROID_ADAPTERS=false
+{ [ -f "$HOME/.claude/hooks/android-gate.sh" ] || [ -f "$DIR/android-adapters.json" ]; } && ANDROID_ADAPTERS=true
+
 ASSURANCE="standard"
 if [ "$SWIFT_TARGET" = true ] && [ "$SWIFT_ADAPTERS" = false ]; then
   ASSURANCE="reduced (swift adapters absent)"
+elif [ "$ANDROID_TARGET" = true ] && [ "$ANDROID_ADAPTERS" = false ]; then
+  ASSURANCE="reduced (android adapters absent)"
 fi
 
 # Per-stage rollup from the run log. `slurp` the JSONL, group by stage, and for each stage

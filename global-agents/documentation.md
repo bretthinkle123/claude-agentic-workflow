@@ -61,10 +61,11 @@ When invoked:
    that a CycloneDX SBOM was generated + its component count. The deployment gate
    checks that this file exists before allowing a deploy.
    **Assurance:** read `.pipeline/run-summary.json` `.assurance`; if it is not
-   `"standard"` (a Swift/iOS target whose Swift gate adapters aren't built yet), add a
-   prominent **Assurance** note to the PR — the deterministic gates ran but analyzed
-   little Swift, so **do NOT describe the run as "gate-verified"**; state it is
-   *reduced-assurance* until the Swift adapters (iOS Layer 3) land.
+   `"standard"` (a native-mobile target — Swift/iOS or Kotlin/Android — whose language
+   gate adapters aren't built yet; the stamp names which, e.g. `reduced (android adapters
+   absent)`), add a prominent **Assurance** note to the PR — the deterministic gates ran
+   but analyzed little of that language, so **do NOT describe the run as "gate-verified"**;
+   state it is *reduced-assurance* until that language's gate adapters land.
    **Design review (FE Layer 4):** when `.pipeline/design-review.json` exists, add a
    **Design review** section — screens over their visual tolerance and any a11y budget
    breach (from `visual_over_budget` / `a11y_over_budget`). It is **advisory** (visual

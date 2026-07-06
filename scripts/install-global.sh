@@ -8,7 +8,7 @@
 #   global-hooks/       -> ~/.claude/hooks/               (deterministic gate scripts, chmod +x)
 #   global-skills/      -> ~/.claude/skills/              (15 global skills)
 #   templates/          -> ~/.claude/pipeline-templates/  (CLAUDE.md, settings, state seed, mcp.json)
-#   global-project-skills/ -> ~/.claude/pipeline-templates/project-skills/  (7 per-project skill templates)
+#   global-project-skills/ -> ~/.claude/pipeline-templates/project-skills/  (8 per-project skill templates)
 #   scripts/bootstrap-project.sh -> ~/.claude/pipeline-templates/bootstrap-project.sh
 #   scripts/run-log-digest.sh    -> ~/.claude/pipeline-templates/run-log-digest.sh  (operator digest)
 #

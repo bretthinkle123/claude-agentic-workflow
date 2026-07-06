@@ -24,6 +24,8 @@ hooks:
         - type: command
           command: "$HOME/.claude/hooks/asvs-sast.sh"
         - type: command
+          command: "$HOME/.claude/hooks/store-compliance.sh"
+        - type: command
           command: "$HOME/.claude/hooks/egress-check.sh"
         - type: command
           command: "$HOME/.claude/hooks/stamp-ran-at.sh security"
@@ -146,6 +148,21 @@ When invoked:
    **`deployment-gate.sh` independently blocks on `asvs-sast.json` `critical > 0`** — so an
    unfixed Tier-1 finding cannot ship even if it is missed here. (This is the deterministic
    counterpart to the agent-reasoned ASVS checks in step 6g.)
+4e2. **App-store compliance (store-compliance side-track, Layer C)** — when the project declares an
+   Apple App Store / Google Play target (`.xcodeproj`/`Info.plist`/`build.gradle`/`AndroidManifest.xml`
+   present, or PROJECT.md declares it), the deterministic scan flags known **automated rejection
+   causes** and you **fix** every critical:
+   ```
+   $HOME/.claude/hooks/store-compliance.sh   # writes .pipeline/store-compliance.json {critical, findings[]}
+   ```
+   Criticals: an **absent privacy manifest** (`PrivacyInfo.xcprivacy`), a **capability API used
+   without its `NS…UsageDescription` string**, a **`targetSdk` below Google Play's floor**, a
+   **debuggable release build**. Fix each in place under step 7 (add the manifest/usage string, raise
+   the SDK, disable debuggable) and fold it into `critical_count`; warnings (ATS disabled, missing
+   export-compliance key, cleartext) are advisory. This also runs as your Stop hook, and
+   **`deployment-gate.sh` independently blocks on `store-compliance.json` `critical > 0`**. It designs
+   out the rejection cause pre-upload — it is **not** a guarantee of acceptance (human review remains).
+   No-op on a non-mobile project. Skip this step if no store target is declared.
 4f. **Egress detection (EG side-track)** — your Stop hook `egress-check.sh` reads the default-deny
    proxy's decision log (`.pipeline/egress-log.jsonl`, present only when the operator has
    provisioned the Layer-2 egress proxy — see `global-hooks/egress-proxy/`) and writes

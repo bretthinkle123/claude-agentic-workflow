@@ -131,7 +131,7 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Twenty-five deterministic scripts (+ the ui-capture.mjs Node helper) — zero LLM cost
+├── global-hooks/           Twenty-six deterministic scripts (+ the ui-capture.mjs Node helper) — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
@@ -141,6 +141,7 @@ claude-agentic-workflow/
 │   ├── approve-diff.sh         human-only (TTY) M5 checkpoint: writes diff-approved (approved_change_hash); the gate's review + currency anchor
 │   ├── record-waiver.sh        human-only (TTY) waiver recorder: writes .pipeline/waivers.json (osv/asvs); the gate honors only human-recorded waivers (Option B)
 │   ├── asvs-sast.sh            security Stop hook: deterministic ASVS Tier-1 SAST (JWT-none/pw-KDF/CSPRNG/cipher) → asvs-sast.json; gate blocks on critical>0 (ASVS-DET)
+│   ├── store-compliance.sh     security Stop hook: deterministic app-store checks (privacy manifest, usage strings, targetSdk floor, debuggable release) for a declared Apple/Play target → store-compliance.json; gate blocks on critical>0 (store-compliance Layer C); no store target ⇒ no-op
 │   ├── guard-approval-markers.sh  PreToolUse Bash hook on all Bash-carrying subagents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved/design-approved + waivers.json (PR K + Option B + DS structural guard)
 │   ├── guard-source-markers.sh  Stop hook on implementation + debugging AND a deployment-gate hard block (audit E3): greps the change set for revert/do-not-commit-class markers (TEMP-REVERT, DO NOT COMMIT, …) and blocks; plain TODO/FIXME pass
 │   ├── write-review-manifest.sh writes reviewed_change_hash (documentation's record + approve-diff's sanity check); called by documentation agent
@@ -185,7 +186,8 @@ claude-agentic-workflow/
 │   ├── swift-conventions/          iOS: SwiftUI architecture, state model, XCTest + the web→SwiftUI mapping cheat-sheet
 │   ├── apple-hig-compliance/       iOS: native nav patterns, Dynamic Type, dark mode — the web→native design seam
 │   ├── claude-design-to-swiftui/   iOS: Claude Design export → faithful SwiftUI replication recipe
-│   └── app-store-submission-requirements/  iOS: signing, privacy manifest, data-use — planning emits them as ACs
+│   ├── app-store-submission-requirements/  Apple: signing, privacy manifest, data-use — planning emits them as ACs
+│   └── google-play-submission-requirements/  Google Play: Data safety, targetSdk floor, account-deletion (incl. web), Play Billing — planning emits them as ACs (store-compliance Layer A)
 │
 ├── templates/
 │   ├── CLAUDE.md               Seed for the per-project CLAUDE.md (fill in stack + run commands)
@@ -206,9 +208,10 @@ claude-agentic-workflow/
 │
 ├── tests/                  Eval/regression harness (M8) — deterministic, zero-LLM; run `bash tests/run-eval.sh`
 │   ├── run-eval.sh             Entry: runs every suite against golden fixtures; exit 0 iff all pass (CI-ready)
-│   ├── suites/                 18 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
+│   ├── suites/                 19 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
 │   │                           loop-exit-invariant, stamp-ran-at, record-clean, hash-determinism, asvs,
-│   │                           waiver-guard, asvs-sast, design-spec, egress, assurance, design-review, dast-review
+│   │                           waiver-guard, asvs-sast, design-spec, egress, assurance, design-review, dast-review,
+│   │                           store-compliance
 │   ├── fixtures/linkly-green/  Golden pipeline snapshot (Linkly, perf corrected to a passing state)
 │   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
 │
@@ -584,7 +587,7 @@ and are the pipeline's mechanism for deterministic enforcement. Published to `~/
   (on all 7 Bash-carrying agents — blocks a subagent from forging a human approval marker).
 
 **Global safety rule:** every ambient Stop hook (smoke-check, record-clean, infra-validate,
-log-run, stamp-ran-at, asvs-sast, egress-check, guard-source-markers, ui-capture,
+log-run, stamp-ran-at, asvs-sast, store-compliance, egress-check, guard-source-markers, ui-capture,
 design-review-check, dast-capture, dast-review) — and the orchestrator-invoked `loop-guard.sh` — opens with
 `[ -f .pipeline/state.json ] || exit 0` so it no-ops instantly in any repo that hasn't been
 bootstrapped. The deployment gate has no such guard — it fails closed when interlock files are
@@ -858,6 +861,7 @@ commit; until then, all changes live in the working tree.
 | `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,"osv_max_cvss":0,"input_surface":{...,"reconciled":true},"data_surface":{"classified":N,"sensitive":M,"unprotected":[],"reconciled":true},"asvs":{"l1_l2_universal":true,"in_scope_l3":[],"triggered_chapters":[...],"l1_l2_missing":[],"l3_in_scope_missing":[],"reconciled":true},...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`); the `asvs` object (ASVS 5.0.0 6g — L1/L2 universal, in-scope L3) and `data_surface` (DP — per-field at-rest protection) are deterministic floors: `deployment-gate.sh` + loop-exit block on `asvs.reconciled==false` and on `data_surface.unprotected` non-empty |
 | `sbom.cdx.json` | `generate-sbom.sh` (via security) | documentation (surfaces component count in the PR) | CycloneDX SBOM (M6); **best-effort, non-gating** — absent when Docker is unavailable |
 | `asvs-sast.json` | `asvs-sast.sh` (security Stop hook) | deployment-gate.sh (blocks on `critical>0`), security agent (fixes findings) | `{"critical":N,"warning":M,"findings":[{rule,asvs,severity,file,line,match}]}` — deterministic ASVS Tier-1 SAST (ASVS-DET); absent ⇒ 0 ⇒ no-op |
+| `store-compliance.json` | `store-compliance.sh` (security Stop hook) | deployment-gate.sh (blocks on `critical>0`), security agent (fixes findings) | `{"ran_at","scope":"apple\|android\|apple+android","critical":N,"warning":M,"findings":[{store,rule,severity,match}]}` — deterministic app-store submission checks (store-compliance Layer C); **repo-state scoped**, activated by a declared Apple/Play target; absent ⇒ 0 ⇒ no-op (deploy-only, not in loop-exit) |
 | `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
 | `test-quality.json` | testing agent | documentation (surfaces in PR description) | **Advisory — no gate/loop-exit reads it.** Mutation over changed core modules (`{tool,scope,score,killed,survived}`) + adversarial `gaps[]` ("what the tests don't catch") + `quality_ok` |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |
@@ -916,7 +920,8 @@ when the feature needs that knowledge.
 | `swift-conventions` | on-demand (planning, implementation, testing — iOS target only) | SwiftUI architecture, state model, XCTest shape + the web→SwiftUI mapping cheat-sheet |
 | `apple-hig-compliance` | on-demand (planning, design stages — iOS target only) | Native nav patterns, SF Symbols, Dynamic Type, dark mode — mapping web idioms to iOS-native equivalents |
 | `claude-design-to-swiftui` | on-demand (planning, implementation — iOS target only) | Claude Design export → faithful SwiftUI replication recipe |
-| `app-store-submission-requirements` | on-demand (planning, deployment — iOS target only) | Signing, privacy manifest, data-use declarations — emitted as acceptance criteria early |
+| `app-store-submission-requirements` | on-demand (planning, deployment — Apple App Store target) | Signing, privacy manifest, data-use declarations — emitted as acceptance criteria early |
+| `google-play-submission-requirements` | on-demand (planning, deployment — Google Play target) | Data safety form, targetSdk floor, permission justifications, in-app + web account deletion, Play Billing — emitted as acceptance criteria early (store-compliance Layer A) |
 
 ---
 

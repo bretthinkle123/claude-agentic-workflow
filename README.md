@@ -16,7 +16,7 @@ into a project.
 | `global-agents/` — 9 pipeline subagents (incl. conditional design-spec) | `~/.claude/agents/` | `.claude/settings.json` |
 | `global-hooks/` — 25 gate/telemetry/scanner scripts | `~/.claude/hooks/` | `.pipeline/state.json` |
 | `global-skills/` — 16 global skills | `~/.claude/skills/` | `.pipeline/smoke.env` |
-| `global-project-skills/` — 7 project skill templates | `~/.claude/pipeline-templates/project-skills/` | `.claude/skills/` |
+| `global-project-skills/` — 8 project skill templates | `~/.claude/pipeline-templates/project-skills/` | `.claude/skills/` |
 | `templates/` — CLAUDE.md, settings, state, mcp.json, ui.env + design-budget.json | `~/.claude/pipeline-templates/` | `CLAUDE.md`, `PROJECT.md`, `.gitignore` |
 
 Edit files in their repo source directory, then re-run `install-global.sh` to publish.
@@ -50,7 +50,7 @@ All flags are optional — they pre-wire the smoke check and fill the matching l
 | Created file | Purpose |
 | --- | --- |
 | `.claude/settings.json` | Pipeline command allow-list, project-scoped |
-| `.claude/skills/` — all 7 project-skill templates | `test-conventions` + `semgrep-ruleset-guide` carry `<placeholders>` planning/security fill; the rest (`data-protection`-adjacent + the iOS/`design-system-conventions` set) load on-demand |
+| `.claude/skills/` — all 8 project-skill templates | `test-conventions` + `semgrep-ruleset-guide` carry `<placeholders>` planning/security fill; the rest (the iOS/`design-system-conventions` set + the `app-store`/`google-play`-submission skills) load on-demand |
 | `.pipeline/state.json` | Retry counters and stage-state seed |
 | `.pipeline/smoke.env` | Smoke-check env vars (only written when `--start`/`--health`/`--build` are passed) |
 | `CLAUDE.md` | Per-project conventions and run commands — fill remaining `<placeholders>` |

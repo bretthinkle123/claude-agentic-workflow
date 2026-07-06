@@ -128,6 +128,24 @@ When invoked:
        mid-transaction failure **rolls back** with no partial write (tie to the concurrency mode).
      - **T2-6 (breached-password, 6.2.4/6.2.12)** — the feature has **password registration/change**:
        a known-breached password is **rejected**.
+   - **App-store submission criteria present (MATERIAL only when a store target is declared;
+     store-compliance Layer D).** Only when `PROJECT.md`/`## Stack notes` declares an **Apple App
+     Store** and/or **Google Play** target; for each triggered store criterion, confirm
+     `acceptance.md` carries it (the matching adversarial shape is in `test-conventions`); a missing
+     one is a **material** flag. These are the store counterparts of the ASVS T2 rows — the
+     deterministic `store-compliance.sh` covers the config/manifest subset; these cover the
+     behavior-testable subset:
+     - **SC-T2-1 (data-declaration reconciliation, first — DP-unblocked)** — the app **collects any
+       user data**: the data types the code collects **match** the privacy nutrition label / Play
+       **Data safety** declaration. Reconcile against the DP `data_surface` classified-field
+       inventory (shipped 2026-07-04); an over-/under-declaration is a rejection/removal risk.
+     - **SC-T2-2 (account deletion)** — the feature has **account creation**: an **in-app** deletion
+       flow exists, **and a web-accessible deletion path** for Google Play (stricter than Apple's
+       in-app-only rule).
+     - **SC-T2-3 (Sign in with Apple)** — an **Apple target with any social/third-party login**:
+       Sign in with Apple is offered alongside it (Guideline 4.8).
+     - **SC-T2-4 (store billing)** — the feature **monetizes digital goods**: purchases use StoreKit
+       IAP (Apple) / Google Play Billing (Play), not an external processor.
    - **ASVS compliance scoped (MATERIAL for a security-surface feature).** The plan
      carries a **`## ASVS Compliance`** block (per `stride-threat-model-template`)
      listing the **triggered** ASVS 5.0.0 chapters, the **in-scope L3** items chosen

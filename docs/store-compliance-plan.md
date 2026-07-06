@@ -1,6 +1,14 @@
 # Plan — app-store compliance gate (Apple App Store + Google Play), project-scoped via PROJECT.md
 
-> **Status: SPEC — not built.** Companion to `docs/ios-swiftui-target-plan.md` (which shipped the
+> **Status: Layers A–E BUILT (2026-07-05); SC-6/7/9 (Layer C follow-up) remain.** All five layers
+> are shipped and harness-green: E (Android reduced-assurance stamp), C (deterministic
+> `store-compliance.sh` + deploy-gate floor + 15-assertion suite, first cut), A
+> (`google-play-submission-requirements` skill), B (planning store-target routing + store ACs), D
+> (Tier-2 plan-audit flags + `test-conventions` shapes, SC-T2-1 first). The mobile-target detection
+> was also narrowed to platform-specific markers (AndroidManifest/`.xcodeproj`/declaration, not bare
+> `build.gradle`/`Info.plist`) so a JVM/Gradle backend or a desktop app is never mis-scoped. Only the
+> higher-false-positive used-API↔declaration compares (SC-6 permission, SC-7 debug-logging, SC-9
+> Required-Reason API) remain as a Layer-C follow-up. Companion to `docs/ios-swiftui-target-plan.md` (which shipped the
 > Apple-side competence), `docs/pipeline-deployment-targets.md` (the post-merge Fastlane / Gradle
 > submission recipes), and `docs/asvs-determinism-roadmap.md` (whose Tier 1/2/3 promotion pattern
 > this reuses). Scope is making store-submission requirements **accountable inside the pipeline** —
@@ -110,24 +118,34 @@ post-merge Fastlane/Gradle recipes in `pipeline-deployment-targets.md` own the s
 
 ## Layers
 
-1. **Layer A — `google-play-submission-requirements` skill.** Mirror of the shipped Apple skill:
-   Data-safety form, target-SDK policy, permission best practices, account-deletion parity, Play
-   Billing rules, common rejection causes, and the AC templates planning emits. Place in
-   `global-project-skills/` (same promotion rule as the iOS skills). **S–M.**
-2. **Layer B — planning routing.** Generalize the iOS target-detection branch: `PROJECT.md`
-   declares the store target(s) → planning loads the matching skill(s) and emits the store ACs
-   into `acceptance.md`. Apple side is already speced (iOS plan Layer 1); this adds the Play
-   branch and the both-stores case. **S.**
-3. **Layer C — `store-compliance.sh` (Tier 1 rows).** Sequenced like the ASVS slices: the
-   criticals first (SC-1/SC-2/SC-4/SC-5/SC-9 — lowest false-positive risk given the hardened
-   sketches), then SC-3/SC-6/SC-7/SC-8 as advisory. Wired **exactly** like `asvs-sast.sh`: security
-   Stop hook writing its own `store-compliance.json` + deploy-gate `critical>0` floor (deploy-only,
-   absent ⇒ no-op, nothing in loop-exit) + `tests/suites/store-compliance.sh` coverage. Activated
-   by the **deterministic scoping key** above (PROJECT.md grep + file-signal fallbacks) — no
-   matching target ⇒ no-op, so default runs see zero cost. **M.**
-4. **Layer D — Tier 2 rows** as plan-audit material flags + `test-conventions` shapes (the proven
-   8.2.2 pattern). **SC-T2-1 first** — its DP dependency shipped 2026-07-04, so it is unblocked and
-   is the highest-value row; SC-T2-2/3/4 follow. **M.**
+1. **Layer A — `google-play-submission-requirements` skill. ✅ BUILT (2026-07-05).** Mirror of the
+   shipped Apple skill: Data-safety form, target-SDK policy, permission justifications,
+   account-deletion parity (incl. the web path), Play Billing, common rejection causes, and the AC
+   templates planning emits. In `global-project-skills/` (on-demand; `list-skills.sh` classifies it). **S–M.**
+2. **Layer B — planning routing. ✅ BUILT (2026-07-05).** A dedicated "App-store distribution
+   targets" paragraph in `planning.md`: a declared Apple/Play target loads the matching skill(s) and
+   emits the store ACs into `acceptance.md` (privacy/Data-safety reconciled vs DP `data_surface`,
+   permissions, account deletion, billing, targetSdk floor), with the both-stores reconcile-once rule
+   and the reduced-assurance note for Android. **S.**
+3. **Layer C — `store-compliance.sh` (Tier 1 rows). ✅ BUILT (2026-07-05) — first cut.** Wired
+   **exactly** like `asvs-sast.sh`: a security Stop hook writing its own `.pipeline/store-compliance.json`
+   `{ran_at, scope, critical, warning, findings[]}` + a deploy-gate `critical>0` floor (deploy-only,
+   absent ⇒ no-op, nothing in loop-exit) + `tests/suites/store-compliance.sh` (14 assertions). Activated
+   by the **deterministic scoping key** above (file signals + PROJECT.md/CLAUDE.md grep) — no matching
+   target ⇒ whole hook no-ops, so default runs see zero cost. **Scope = repo state** (an absent
+   manifest / low targetSdk is a whole-app fact, not a per-diff one). **Built this cut:** SC-1 (privacy
+   manifest absent, gated on `.xcodeproj`), SC-2 (capability API ↔ `NS…UsageDescription`, conservative
+   API→key map over Info.plist + pbxproj), SC-3 (ATS disabled, advisory), SC-8 (export-compliance key
+   absent, advisory), SC-4 (targetSdk vs the `ANDROID_TARGET_SDK_FLOOR` constant; unresolved
+   indirection ⇒ advisory, never a silent pass), SC-5 (debuggable critical / cleartext advisory).
+   **Deferred to a Layer-C follow-up** (higher false-positive risk — used-API↔declaration compares):
+   SC-6 (permission declared-vs-used), SC-7 (debug logging in release), SC-9 (Required-Reason API
+   compare). **M — first cut done; follow-up pending.**
+4. **Layer D — Tier 2 rows. ✅ BUILT (2026-07-05).** plan-audit material-flag rows (`plan-audit.md`,
+   next to the ASVS T2 rows) + `test-conventions` adversarial shapes, gated on a declared store
+   target. **SC-T2-1 first** (data-declaration reconciliation vs DP `data_surface`, the highest-value
+   row — its DP dependency shipped 2026-07-04); SC-T2-2 account deletion (in-app + web), SC-T2-3 Sign
+   in with Apple, SC-T2-4 store billing. **M.**
 5. **Layer E — extend the reduced-assurance stamp to Android (safety fix — see Non-goals).**
    `run-summary.sh:35-37` detects only Swift signals (`.swift`/`Package.swift`/`.xcodeproj`,
    `native ios|swiftui` in PROJECT.md/CLAUDE.md), so today a Kotlin/Gradle project sails through
@@ -156,6 +174,35 @@ Publishing needs nothing extra: `scripts/install-global.sh` copies the whole `gl
 to `~/.claude/hooks/`, so the new hook rides the existing install. SC-4's floor constant must be
 **looked up at implementation time** (planning has WebSearch) — Google's required target API level
 changes annually and this doc deliberately does not hard-code it.
+
+## Known residuals (Layer C first cut — verified in the 2026-07-05 PR audit)
+
+- **Fixed in-audit:** `store-compliance.sh` and the `run-summary.sh` mobile detection now scan
+  **tracked *and* untracked** files (`git ls-files --cached --others --exclude-standard`). They
+  originally used bare `git ls-files` (tracked only) and silently no-oped on a real app, because the
+  deployment agent makes the pipeline's first commit **last** — so the app's files are uncommitted
+  when these hooks fire. The suites now leave fixtures untracked to guard the regression.
+- **SC-2 comment false-positive — mitigated:** `//` line comments are now stripped from Swift/ObjC
+  source before the capability-API scan, so a class name mentioned only in a line comment no longer
+  fires SC-2 (stripping errs to a false negative, the accepted posture). **Residual:** block comments
+  (`/* … */`) and string literals are still scanned — the same grep-limit class as `asvs-sast.sh`.
+- **Paths with spaces — fixed:** all file-content gathering now reads the path list line-by-line
+  (`readfiles`, `while IFS= read -r`) instead of `for f in $list`, so a spaced path
+  (`My App.xcodeproj`) is no longer word-split and dropped from the scan. Regression-guarded.
+- **SC-5 Gradle `debuggable true` form — fixed, block-aware.** SC-5 now also catches the modern (and
+  more common) Gradle form on top of the legacy manifest attribute. It is deliberately **block-aware**:
+  `release_debuggable` brace-matches the body of `release` buildType blocks
+  (`release {…}` / `getByName("release") {…}` / `create("release") {…}`) and only flags a
+  `debuggable`/`isDebuggable` enable found *there* — so the legitimate `debug { debuggable true }`
+  buildType never fires (that would be a deploy-blocking false positive). Comments and `http://` URLs
+  are stripped and single→double quotes normalised first so a stray brace can't desync the match; any
+  construct it can't positively resolve to a release block (e.g. `buildTypes.all { … }`, a variable)
+  is left unflagged — a false negative, the accepted posture. Regression-guarded, incl. the
+  debug-block safety case and an unbalanced-brace-in-a-string case (the walker is string-aware, so a
+  `{` inside a `"…"` literal doesn't move the brace depth — that had been a deploy-blocking false
+  positive; now fixed). **Residual:** an *escaped* double-quote inside a string (`"…\"…"`) could
+  still toggle the string-tracking state; vanishingly rare in a Gradle build script, and the
+  favour-FN posture means the likely failure is a miss, not a false block.
 
 ## Maintenance note (the honest cost)
 

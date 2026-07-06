@@ -48,6 +48,23 @@ an idiomatic SwiftUI structure — it consumes the approved `.pipeline/design-sp
 (design-spec stage) when present. Invoke the relevant one before you plan that layer; for an
 app-only CRUD change you may need none of them.
 
+**App-store distribution targets.** When `PROJECT.md`/`## Stack notes` declares a mobile store
+target — **Apple App Store** and/or **Google Play** (independent of the UI framework) — load the
+matching submission skill(s): `app-store-submission-requirements` (Apple) and/or
+`google-play-submission-requirements` (Google Play). Turn each applicable requirement into an
+`acceptance.md` criterion **early** (cheap up front, expensive at upload): the privacy manifest /
+Play **Data safety** declaration (reconcile against the DP `data_surface` classified-field
+inventory), permission usage-strings/justifications, **in-app account deletion** (Play additionally
+requires a **web** deletion path), **store billing** for digital goods (StoreKit IAP / Play
+Billing), and the Android **`targetSdk` floor**. Mark non-applicable items N/A with a one-line
+reason; for a both-stores app, reconcile the shared criteria (account deletion, data declaration,
+billing) once against the stricter **Play** side. The deterministic `store-compliance.sh` security
+hook backs the mechanically-checkable subset (privacy-manifest presence, usage strings, `targetSdk`
+floor, debuggable release) and blocks at the deploy gate on a critical — it designs out known
+rejection causes but does **not** guarantee acceptance (human store review remains). An Android
+target has no deterministic gate adapters yet, so its run is stamped **reduced-assurance**; the ACs
+are the accountability mechanism there.
+
 **Frontend design source — the default for frontend planning.** If the project provides a
 front-end design example — a **Claude Design export, screenshots, or a Figma export** (in a
 `design/` folder, referenced from `PROJECT.md`, or an approved `.pipeline/design-spec.md`) —
