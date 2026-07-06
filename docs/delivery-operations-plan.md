@@ -138,6 +138,15 @@ gives for deferring DOC). Readiness differs per PR:
 Net: **M can start the moment L is green; N/O each get a short plan doc first** (they are where the
 real design work lives), matching how every prior workstream in this repo was built.
 
+> **Readiness audit (2026-07-05) — verified against the live codebase:** PR M's named inputs are
+> real and shipped — `generate-sbom.sh` exists (in **`global-hooks/`**), the OIDC/no-long-lived-keys
+> posture is already the `iac-conventions` rule, and `post-deploy-check.sh` exists as the hook PR L
+> retires into a CI job. **Post-draft status change:** `docs/dast-plan.md` **Layer 1 is now BUILT**
+> (PR #26), so the DAST-in-CI slot referenced here re-homes two existing scripts rather than
+> awaiting new ones; DAST L2/L3 still wait on N's staging, as stated. The per-PR readiness verdicts
+> above (M ready · N/O need kickoff plan docs · P outline-ready) were re-checked and stand — no
+> assumption in this doc has been invalidated by the DAST/STORE work.
+
 ## Sequencing
 
 Strict dependency order: **L → M → N → (O, P, DAST-L2/3 in parallel)**. Do N *through a real app*

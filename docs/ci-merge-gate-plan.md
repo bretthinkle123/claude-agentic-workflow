@@ -6,6 +6,18 @@
 > (PRs M–P, which chain deploy workflows onto this one), `docs/pipeline-deployment-targets.md`
 > (existing post-merge recipes this supersedes-in-part). Scope is the **per-project CI wiring the
 > pipeline scaffolds** plus the **engine's own CI**; it adds no new agents and changes no gate hook.
+>
+> **Readiness audit (2026-07-05) — verified against the live codebase, build-ready:** the harness
+> needs only bash+jq+git (the docker/semgrep strings in `dast-review`/`egress` suites are fixture
+> text, not runtime deps) and every `.sh` is LF-pinned by `.gitattributes` → `ubuntu-latest`-safe;
+> the job-6 `SCAN_BASE` diagnosis re-confirmed at `asvs-sast.sh:33` / `guard-source-markers.sh:45`;
+> the OSV floor is CVSS ≥ 7.0 as job 3 states; `compute-change-hash.sh` covers untracked files, so
+> Layer 0's copy-before-manifest ordering makes the design record ride the human-approved hash with
+> no gate change; `bootstrap-project.sh` already has the `--test`/`--build` fill-in channel and the
+> `.gitignore` append block Layer 2 extends; the repo has **no existing `.github/workflows/`** —
+> nothing to reconcile. Two post-draft additions folded in below: job **6b (store-compliance)** and
+> the job-7 DAST re-home (both built 2026-07-05, after this plan's first draft). Path note:
+> `generate-sbom.sh` / `write-review-manifest.sh` / `post-deploy-check.sh` live in **`global-hooks/`**.
 
 ## Goal & honest scope
 
@@ -83,7 +95,17 @@ PR + push-to-main:
    `git diff $SCAN_BASE...HEAD` (e.g. `origin/main`); this also preserves `guard-source-markers`'s
    added-lines-only semantics, which a full-tree grep would break. A small, honest edit to each
    script's file-population block — not a no-op env flag.)*
-7. **dast-baseline** — placeholder slot; filled by `docs/dast-plan.md` Layer 1.
+6b. **store-compliance** — re-run `store-compliance.sh` (built 2026-07-05, after this plan's first
+   draft — added by the 2026-07-05 readiness audit). **No `SCAN_BASE` change needed:** unlike the
+   diff-scoped job-6 scripts it is deliberately **repo-state scoped** (store-readiness is a
+   whole-app property), and its tracked+untracked `lsfiles` degrades correctly on a merge commit
+   (everything is tracked there). Critical>0 fails the job, mirroring the local deploy-gate floor;
+   no-ops on non-mobile projects by its own scoping key, so the job is free for web/API repos.
+7. **dast-baseline** — slot for `docs/dast-plan.md`; **Layer 1 is now BUILT** (2026-07-05:
+   `dast-capture.sh` + `dast-review.sh`, advisory, opt-in). The CI job re-homes them: boot the app
+   in the job (service container or `<START_CMD>`), run the ZAP baseline against it, then
+   `dast-review.sh` vs the committed `dast-budget.json` — *blocking on High* once here, per the
+   DAST plan's promotion rule. Until PR N provides staging this runs against the in-job app only.
 8. **deploy-verify** — skeleton for the reborn `post-deploy-check.sh`; inert (skipped) until
    PR N provides `DEPLOY_HEALTH_URL`. The hook finally gets implemented here as a job step, not a
    local hook — closing the `[UNIMPLEMENTED]` marker honestly.

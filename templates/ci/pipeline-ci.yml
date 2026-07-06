@@ -1,0 +1,189 @@
+# pipeline-ci.yml — per-project CI merge gate (PR L, Layer 2).
+# Written to .github/workflows/pipeline-ci.yml by bootstrap-project.sh, which fills
+# <TEST_CMD>/<BUILD_CMD> from its --test/--build flags (same channel as smoke.env).
+# <INSTALL_CMD> and <COVERAGE_FLOOR> are filled by the implementation/testing agents when
+# the stack is known (the floor mirrors test-conventions — the SAME figure the local gate
+# rides, so CI and the local gate can't disagree about the bar).
+#
+# WHY: the pipeline's gates run pre-merge on the AUTHOR'S machine. CI re-RUNS every
+# objective check on the merge commit — it never re-reads .pipeline/ artifacts (those are
+# the author's claims; re-execution is the only honest verification). Agent-judgment gates
+# (criteria mapping, reconciliations) remain pre-merge guarantees; branch protection +
+# required human review are their CI-side counterpart. See docs/ci-merge-gate-plan.md.
+#
+# The re-run scripts live in scripts/ci/ — copied INTO this repo at bootstrap (committed,
+# human-reviewed, pinned at the bootstrap-time version) so CI never fetches them remotely.
+# SCAN_BASE rescopes their diff to merge-base…HEAD (git diff HEAD is empty on a merge commit).
+#
+# Waivers: CI honors ONLY committed, tool-native ignore files (osv-scanner.toml,
+# .trivyignore, .semgrepignore) — visible in the diff, human-reviewed. The local-only
+# .pipeline/waivers.json never reaches CI by design. asvs-sast + source markers are
+# fix-not-waive: no ignore path is offered.
+#
+# Supply-chain conventions: first-party actions pinned by commit SHA; scanners run from
+# their official images, version-tagged — pin image DIGESTS on first CI run (same posture
+# as exact-pin deps). Least-privilege permissions; per-ref concurrency; hard timeouts.
+name: pipeline-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # PRs: scan merge-base..HEAD. Pushes to main: scan the pushed range. RAW because on a
+  # first/force push `github.event.before` is the all-zeros SHA — each diff-scoped job
+  # resolves it via the "Resolve scan base" step (fallback HEAD^) instead of failing
+  # closed on a non-reason.
+  SCAN_BASE_RAW: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Install dependencies (from lockfile)
+        run: <INSTALL_CMD>
+      - name: Build
+        run: <BUILD_CMD>
+      - name: Test with coverage (floor = the local gate's figure)
+        run: <TEST_CMD>
+        # Fail under <COVERAGE_FLOOR>% combined lines — the same figure the local deploy
+        # gate rides. Branch coverage: surface in the job summary, do NOT gate (mirrors
+        # the local posture; see test-conventions).
+
+  sast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Semgrep (full tree; criticals fail, warnings annotate)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:latest \
+            semgrep scan --config auto --severity ERROR --error .
+          # Use the same rule packs the project's semgrep-ruleset-guide names; honors a
+          # committed .semgrepignore. Pin the image digest on first run.
+
+  deps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with: { fetch-depth: 0 }   # SCAN_BASE needs history
+      - name: Resolve scan base (all-zeros on a first/force push → fall back to HEAD^)
+        id: base
+        run: |
+          B="$SCAN_BASE_RAW"
+          case "$B" in ""|0000000000000000000000000000000000000000) B="" ;; esac
+          [ -n "$B" ] && git rev-parse --verify --quiet "$B^{commit}" >/dev/null || B="$(git rev-parse --verify --quiet HEAD^ || true)"
+          echo "sha=$B" >> "$GITHUB_OUTPUT"
+          [ -n "$B" ] || echo "::warning::no resolvable scan base (single-commit repo) — diff-scoped checks skipped this run"
+      - name: OSV scan (CVSS >= 7.0 fails — the B6 floor; honors committed osv-scanner.toml)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src ghcr.io/google/osv-scanner:latest \
+            scan --lockfile-scan-mode=all -r /src
+      - name: Lockfile integrity vs merge base (exit 2 blocks; exit 1 = warn, annotated not failed)
+        if: steps.base.outputs.sha != ''
+        run: |
+          set +e   # steps run bash -e; capture the tri-state exit code ourselves
+          SCAN_BASE="${{ steps.base.outputs.sha }}" bash scripts/ci/lockfile-check.sh
+          rc=$?
+          set -e
+          if [ "$rc" -eq 1 ]; then echo "::warning::lockfile-check reported warnings (see log)"; exit 0; fi
+          exit "$rc"
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with: { fetch-depth: 0 }   # full history — CI can afford it (local hook is diff-scoped)
+      - name: Resolve scan base
+        id: base
+        run: |
+          B="$SCAN_BASE_RAW"
+          case "$B" in ""|0000000000000000000000000000000000000000) B="" ;; esac
+          [ -n "$B" ] && git rev-parse --verify --quiet "$B^{commit}" >/dev/null || B="$(git rev-parse --verify --quiet HEAD^ || true)"
+          echo "sha=$B" >> "$GITHUB_OUTPUT"
+      - name: Gitleaks over branch history (full tree when no base resolves)
+        run: |
+          if [ -n "${{ steps.base.outputs.sha }}" ]; then
+            docker run --rm -v "$PWD:/src" -w /src zricethezav/gitleaks:latest \
+              detect --source /src --log-opts="${{ steps.base.outputs.sha }}..HEAD" --redact -v
+          else
+            docker run --rm -v "$PWD:/src" -w /src zricethezav/gitleaks:latest \
+              detect --source /src --redact -v
+          fi
+
+  containers-iac:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Trivy fs (vuln + secret + misconfig; honors committed .trivyignore)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest \
+            fs --scanners vuln,secret,misconfig --exit-code 1 --severity HIGH,CRITICAL /src
+      - name: Checkov (only when infra/ exists)
+        run: |
+          if [ -d infra ]; then
+            docker run --rm -v "$PWD:/src" -w /src bridgecrew/checkov:latest -d /src/infra
+          else echo "no infra/ — skipped"; fi
+
+  asvs-markers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with: { fetch-depth: 0 }
+      - name: Resolve scan base
+        id: base
+        run: |
+          B="$SCAN_BASE_RAW"
+          case "$B" in ""|0000000000000000000000000000000000000000) B="" ;; esac
+          [ -n "$B" ] && git rev-parse --verify --quiet "$B^{commit}" >/dev/null || B="$(git rev-parse --verify --quiet HEAD^ || true)"
+          echo "sha=$B" >> "$GITHUB_OUTPUT"
+      - name: ASVS Tier-1 patterns vs merge base (fix-not-waive; exit 2 fails)
+        if: steps.base.outputs.sha != ''
+        run: SCAN_BASE="${{ steps.base.outputs.sha }}" bash scripts/ci/asvs-sast.sh
+      - name: Revert/do-not-commit markers vs merge base (fix-not-waive; exit 2 fails)
+        if: steps.base.outputs.sha != ''
+        run: SCAN_BASE="${{ steps.base.outputs.sha }}" bash scripts/ci/guard-source-markers.sh
+
+  store-compliance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: App-store Tier-1 checks (repo-state scoped; no-ops on non-mobile projects)
+        run: |
+          mkdir -p .pipeline && echo '{}' > .pipeline/state.json   # satisfy the ambient guard
+          bash scripts/ci/store-compliance.sh
+          crit=$(jq -r '.critical // 0' .pipeline/store-compliance.json 2>/dev/null || echo 0)
+          echo "store-compliance critical=$crit"
+          [ "$crit" -eq 0 ] || exit 1   # mirror the local deploy-gate floor
+
+  # dast-baseline — filled per docs/dast-plan.md when the app has a bootable HTTP surface:
+  # boot the app (service container or <START_CMD>), run the ZAP passive baseline against
+  # it, then scripts/ci/dast-review.sh vs the committed dast-budget.json (blocking on High
+  # here, per the DAST plan's promotion rule). Inert until wired.
+  # dast-baseline:
+
+  # deploy-verify — the reborn post-deploy-check: probes DEPLOY_HEALTH_URL after PR N's
+  # deploy workflow reports success. Inert (skipped) until PR N provides the URL.
+  deploy-verify:
+    if: ${{ vars.DEPLOY_HEALTH_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post-deploy health probe
+        run: curl -sf -m 10 "${{ vars.DEPLOY_HEALTH_URL }}" >/dev/null

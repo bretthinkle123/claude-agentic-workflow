@@ -57,6 +57,34 @@ threat model in `.pipeline/plan.md`, notable decisions, and test/coverage
 highlights. The deployment gate checks this file exists. See
 `pr-description-template.md`.
 
+## Design-record retention (`docs/decisions/`) — before the hash
+
+`.pipeline/` is per-feature and gitignored; the design record must outlive it. Copy,
+per feature branch, into the project:
+
+```
+docs/decisions/<feature-branch>/
+├── plan.md            ← always
+├── acceptance.md      ← always
+├── plan-audit.md      ← always
+├── security-report.md ← always
+├── design-spec.md     ← when the run had a design source
+└── run-summary.json   ← when present (written at GREEN, before documentation)
+```
+
+- **Order matters:** copy *before* running `write-review-manifest.sh`, so the recorded
+  hash — and the human's diff approval — covers the record (`compute-change-hash.sh`
+  includes untracked files, so the new copies enter the change set automatically).
+- **Redaction:** the reports are secret-free by the security agent's rules; re-scan the
+  copies anyway — they are about to be committed.
+- **Not machine-gated:** evidence for humans, audits, and CI-era reviewers; no gate or
+  CI job reads it.
+- **Waivers that must survive into CI** live in **committed, tool-native ignore files**
+  (`osv-scanner.toml`, `.trivyignore`, `.semgrepignore`) — visible in the diff, so
+  human-reviewed at the diff checkpoint. A local-only `.pipeline/waivers.json` entry
+  that never lands in a committed ignore file will (correctly) fail the CI re-run —
+  the committed file IS the CI-side waiver record.
+
 ## Record the reviewed-state hash — LAST
 
 After every README / `system_architecture.md` / source edit is written, record

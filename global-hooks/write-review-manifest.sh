@@ -14,6 +14,6 @@ set -euo pipefail
 # not the CWD, so the recorded hash still matches deployment-gate.sh's recompute.
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p .pipeline
-HASH=$("$HOOK_DIR/compute-change-hash.sh")
+HASH=$(bash "$HOOK_DIR/compute-change-hash.sh")
 printf '{"reviewed_change_hash":"%s","ran_at":"%s"}\n' "$HASH" "$(date -u +%FT%TZ)" > .pipeline/review-manifest.json
 echo "[write-review-manifest] reviewed_change_hash=$HASH"

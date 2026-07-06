@@ -16,11 +16,30 @@
 #       (a manifest changed without its lockfile).
 set -uo pipefail
 
-# Pipeline-project guard: no-op outside a bootstrapped pipeline project.
-[ -f .pipeline/state.json ] || exit 0
+# CI re-run mode (PR L, job 3): SCAN_BASE=<ref> rescopes the change set to
+# `git diff SCAN_BASE...HEAD` and the "was it new / what did deps look like before"
+# comparisons to the base ref — on a merge commit `git diff HEAD` is empty and
+# .pipeline/state.json absent, so a naive CI re-run passes vacuously. Fail-closed on a
+# bad ref. Exit codes (0/1/2) already carry the verdict, so CI needs no separate path.
+BASE_REF="HEAD"
+if [ -n "${SCAN_BASE:-}" ]; then
+  git rev-parse --verify --quiet "$SCAN_BASE^{commit}" >/dev/null 2>&1 || {
+    echo "[lockfile-check] SCAN_BASE '$SCAN_BASE' does not resolve to a commit — failing closed." >&2
+    exit 2
+  }
+  BASE_REF="$SCAN_BASE"
+else
+  # Pipeline-project guard: no-op outside a bootstrapped pipeline project.
+  [ -f .pipeline/state.json ] || exit 0
+fi
 
-# Change set = tracked diff + untracked files vs HEAD (see diff-scoping-conventions).
-CHANGED="$( { git diff HEAD --name-only 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | LC_ALL=C sort -u )"
+# Change set = tracked diff + untracked files vs HEAD (see diff-scoping-conventions);
+# diff-vs-merge-base (committed files only — a CI tree is clean) in CI mode.
+if [ -n "${SCAN_BASE:-}" ]; then
+  CHANGED="$(git diff "$SCAN_BASE...HEAD" --name-only 2>/dev/null | LC_ALL=C sort -u)"
+else
+  CHANGED="$( { git diff HEAD --name-only 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null; } | LC_ALL=C sort -u )"
+fi
 [ -n "$CHANGED" ] || { echo "[lockfile-check] clean — empty change set."; exit 0; }
 
 changed_has() { printf '%s\n' "$CHANGED" | grep -qiE "(^|/)$1$"; }
@@ -28,8 +47,12 @@ changed_has() { printf '%s\n' "$CHANGED" | grep -qiE "(^|/)$1$"; }
 block=0; warn=0
 say() { echo "[lockfile-check] $1"; }
 
-# A manifest is "new" if it isn't tracked at HEAD (a brand-new dependency file).
-manifest_is_new() { ! git ls-files --error-unmatch "$1" >/dev/null 2>&1; }
+# A manifest is "new" if it isn't tracked at HEAD (a brand-new dependency file);
+# in CI mode, "new" means it didn't exist at the merge base.
+manifest_is_new() {
+  if [ -n "${SCAN_BASE:-}" ]; then ! git cat-file -e "$SCAN_BASE:$1" 2>/dev/null
+  else ! git ls-files --error-unmatch "$1" >/dev/null 2>&1; fi
+}
 # npm dependency maps only (sorted) — so a scripts/name/version-only edit doesn't
 # look like a dependency change.
 npm_dep_maps() { jq -cS '{d:(.dependencies//{}),e:(.devDependencies//{}),p:(.peerDependencies//{}),o:(.optionalDependencies//{})}' 2>/dev/null; }
@@ -46,7 +69,7 @@ while IFS= read -r pj; do
   if manifest_is_new "$pj"; then
     say "BLOCK: new $pj declares dependencies with no lockfile (package-lock.json / yarn.lock / pnpm-lock.yaml) in the change set — commit the lockfile."; block=1
   elif command -v jq >/dev/null 2>&1 \
-       && [ "$(git show "HEAD:$pj" 2>/dev/null | npm_dep_maps)" != "$(npm_dep_maps < "$pj")" ]; then
+       && [ "$(git show "$BASE_REF:$pj" 2>/dev/null | npm_dep_maps)" != "$(npm_dep_maps < "$pj")" ]; then
     say "BLOCK: $pj dependencies changed but no lockfile update in the change set — dependencies are unlocked. Commit the updated lockfile."; block=1
   fi
 done <<< "$(printf '%s\n' "$CHANGED" | grep -iE '(^|/)package\.json$')"

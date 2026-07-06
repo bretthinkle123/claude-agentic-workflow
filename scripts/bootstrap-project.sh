@@ -114,6 +114,28 @@ else
   note "[new]  CLAUDE.md (fill remaining <placeholders>)"
 fi
 
+# --- CI merge gate (PR L Layer 2) ---------------------------------------------
+# Writes the pipeline-ci workflow + copies the CI-re-runnable check scripts INTO the
+# project (scripts/ci/ — committed, human-reviewed, pinned at bootstrap-time version, so
+# CI never fetches them remotely). The workflow re-RUNS the objective gates on the merge
+# commit; it never re-reads .pipeline/ artifacts. See docs/ci-merge-gate-plan.md.
+if [[ -f "$TARGET/.github/workflows/pipeline-ci.yml" ]]; then
+  note "[skip] .github/workflows/pipeline-ci.yml already exists"
+elif [[ -f "$TEMPLATES/ci/pipeline-ci.yml" ]]; then
+  mkdir -p "$TARGET/.github/workflows" "$TARGET/scripts/ci"
+  cp "$TEMPLATES/ci/pipeline-ci.yml" "$TARGET/.github/workflows/pipeline-ci.yml"
+  # Fill test/build from the same flags that populate smoke.env (values must not contain | or &).
+  [[ -n "$TEST"  ]] && sed -i "s|<TEST_CMD>|$TEST|"  "$TARGET/.github/workflows/pipeline-ci.yml"
+  [[ -n "$BUILD" ]] && sed -i "s|<BUILD_CMD>|$BUILD|" "$TARGET/.github/workflows/pipeline-ci.yml"
+  for s in asvs-sast.sh guard-source-markers.sh lockfile-check.sh store-compliance.sh dast-review.sh; do
+    [[ -f "${HOME}/.claude/hooks/$s" ]] && cp "${HOME}/.claude/hooks/$s" "$TARGET/scripts/ci/$s"
+  done
+  chmod +x "$TARGET/scripts/ci/"*.sh 2>/dev/null || true
+  note "[new]  .github/workflows/pipeline-ci.yml + scripts/ci/ (fill remaining <placeholders>; apply the branch-protection checklist in the ci-conventions skill)"
+else
+  note "[skip] CI template not found in $TEMPLATES/ci — re-run install-global.sh"
+fi
+
 # --- PROJECT.md stub ---------------------------------------------------------
 if [[ -f "$TARGET/PROJECT.md" ]]; then
   note "[skip] PROJECT.md already exists"
