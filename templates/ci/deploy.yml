@@ -66,9 +66,12 @@ jobs:
         run: |
           ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
           REGISTRY="$ACCOUNT.dkr.ecr.<AWS_REGION>.amazonaws.com"
+          # `|| true`: describe-images throws (non-zero) for an absent tag; without it the step's
+          # bash -e would exit HERE, bypassing the friendly guard below (which also handles the
+          # not-containerized case — build-provenance "succeeds" by skipping, so no image exists).
           DIGEST="$(aws ecr describe-images --repository-name <ECR_REPOSITORY> \
-            --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text)"
-          [ -n "$DIGEST" ] && [ "$DIGEST" != "None" ] || { echo "no image for $SHA — was build-provenance green?" >&2; exit 1; }
+            --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          [ -n "$DIGEST" ] && [ "$DIGEST" != "None" ] || { echo "no image for $SHA — was build-provenance green with a Dockerfile?" >&2; exit 1; }
           DIGEST_REF="$REGISTRY/<ECR_REPOSITORY>@$DIGEST"
           aws ecr get-login-password --region <AWS_REGION> | \
             docker login --username AWS --password-stdin "$REGISTRY"
@@ -164,22 +167,39 @@ jobs:
           <MIGRATE_CMD>
       - name: Canary — 10% → 50% → 100% by ALB weights, alarm-watched; rollback on ALARM
         run: |
-          set -uo pipefail
+          # -E so the ERR trap fires inside functions; the trap makes ANY unhandled failure
+          # during the canary revert to blue — without it, a transient AWS API error mid-soak
+          # would exit the step (bash -e) leaving prod STUCK at a partial canary weight.
+          set -Eeuo pipefail
           GREEN_UP() {  # <green-weight>  — shift listener-rule weights (blue gets the rest)
             aws elbv2 modify-rule --rule-arn <LISTENER_RULE_ARN> --actions \
               "Type=forward,ForwardConfig={TargetGroups=[{TargetGroupArn=<TG_BLUE_ARN>,Weight=$((100-$1))},{TargetGroupArn=<TG_GREEN_ARN>,Weight=$1}]}"
           }
           ROLLBACK() {
-            echo "::error::alarm during canary — rolling back to blue (weights 100/0)"
+            echo "::error::canary aborting — rolling back to blue (weights 100/0)"
             GREEN_UP 0 || true
             exit 1
           }
-          SOAK() {  # <seconds> — poll the prod alarms; any ALARM state → rollback
-            local end=$(( $(date +%s) + $1 ))
+          trap 'ROLLBACK' ERR   # any unhandled failure below → revert traffic to blue, fail loudly
+          POLL_ALARMS() {  # echo firing-alarm count; a single transient read blip retries so it
+                           # doesn't false-rollback, but a PERSISTENT unreadable state returns 1 →
+                           # the caller rolls back (can't confirm health ⇒ don't trust the canary).
+            local out
+            for _ in 1 2 3; do
+              out="$(aws cloudwatch describe-alarms --alarm-names <PROD_ALARM_NAMES> \
+                --state-value ALARM --query 'MetricAlarms | length(@)' --output text 2>/dev/null)" \
+                && [ -n "$out" ] && { printf '%s' "$out"; return 0; }
+              sleep 5
+            done
+            return 1
+          }
+          SOAK() {  # <seconds> — poll the prod alarms; a firing alarm OR a persistent read
+                    # failure → rollback (via explicit call / the ERR trap respectively).
+            local end firing
+            end=$(( $(date +%s) + $1 ))
             while [ "$(date +%s)" -lt "$end" ]; do
-              FIRING="$(aws cloudwatch describe-alarms --alarm-names <PROD_ALARM_NAMES> \
-                --state-value ALARM --query 'MetricAlarms | length(@)' --output text)"
-              [ "$FIRING" -eq 0 ] || ROLLBACK
+              firing="$(POLL_ALARMS)"          # persistent-unreadable → non-zero → ERR trap → ROLLBACK
+              [ "$firing" -eq 0 ] || ROLLBACK  # a genuinely firing alarm → explicit rollback
               sleep 30
             done
           }
@@ -193,7 +213,10 @@ jobs:
           NEW_TD="$(aws ecs register-task-definition --cli-input-json file://td.json --query 'taskDefinition.taskDefinitionArn' --output text)"
           aws ecs update-service --cluster <ECS_CLUSTER_PROD> --service <ECS_SERVICE_GREEN> --task-definition "$NEW_TD" >/dev/null
           aws ecs wait services-stable --cluster <ECS_CLUSTER_PROD> --services <ECS_SERVICE_GREEN>
-          GREEN_UP 10 && SOAK 300
-          GREEN_UP 50 && SOAK 300
-          GREEN_UP 100 && SOAK 600
+          # `;` not `&&`: under -e a failed GREEN_UP now trips the ERR trap → rollback, instead
+          # of silently skipping the soak and shifting more traffic to an unverified green.
+          GREEN_UP 10; SOAK 300
+          GREEN_UP 50; SOAK 300
+          GREEN_UP 100; SOAK 600
+          trap - ERR   # canary succeeded — disarm before the (successful) step exits
           echo "canary complete — green at 100%"
