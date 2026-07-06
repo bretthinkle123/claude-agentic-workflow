@@ -1,6 +1,7 @@
 # Plan — delivery & operations (PRs M–P): from a green merge to a live, operated app
 
-> **Status: SPEC — not built, awaiting approval.** The "last 40%" (`pipeline-june-analysis.md` §7
+> **Status: BUILT — merged as PRs #29 (M), #30 (N), #31 (O), #32 (P), 2026-07-06.** The "last 40%"
+> (`pipeline-june-analysis.md` §7
 > Phases 2–5, §10 rows M–P). Turns a gate-verified merge commit into a signed artifact, deploys it
 > through staging to production with progressive delivery and automated rollback, observes it in
 > operation, and validates it holds under load with a tested recovery path. Chains onto
@@ -8,6 +9,12 @@
 > staging env PR N builds), `docs/pipeline-deployment-targets.md` (existing recipes this operationalizes),
 > and the skills `iac-conventions`, `deployment-checklist-and-rollback`, `logging-conventions`,
 > `containerization-conventions`, `secrets-management`, `ddia-patterns` (all already shipped).
+>
+> **Label legend:** tags like **S2/S3/S4, R1/R2/R3, A3** are short local labels carried over from an
+> in-chat pipeline audit (2026-07-05) that was never committed — they resolve to no file in this
+> repo. Each is named in place wherever it appears (S2 continuous vulnerability management ·
+> S3 WAF/edge protection · S4 container hardening · R1 feature flags · R2 graceful shutdown ·
+> R3 synthetic monitoring · A3 mobile crash reporting); read the name, treat the tag as a label.
 
 ## Goal, honest scope & mental model
 
@@ -168,5 +175,6 @@ first deployable repo.
 Chains onto `docs/ci-merge-gate-plan.md`; operationalizes the recipes in
 `docs/pipeline-deployment-targets.md`; consumes `generate-sbom.sh` (PR I) and every infra/logging/
 deploy skill already shipped; provides the staging target `docs/dast-plan.md` needs. Update
-`pipeline-june-analysis.md` §10 rows M–P (and add the S2/S3/R1/R2/R3 audit items as sub-bullets)
+`pipeline-june-analysis.md` §10 rows M–P (and add the named audit items — continuous vuln, WAF/edge,
+feature flags, graceful shutdown, synthetics — as sub-bullets)
 when each moves from spec to build.

@@ -1,6 +1,6 @@
 # Plan — read-only production triage agent (PR O kickoff design)
 
-> **Status: KICKOFF DESIGN — the new-pipeline-surface half of PR O.** This is the dedicated design
+> **Status: BUILT — merged as PR #31 (2026-07-06). The new-pipeline-surface half of PR O.** This is the dedicated design
 > `docs/delivery-operations-plan.md` requires before the triage agent is built, with the PR-K-level
 > threat model a new agent surface deserves. The *other* half of PR O — the observability wiring
 > itself (Sentry SDK, OTel→CloudWatch, SLO burn-rate alarms, synthetics, dSYM/source-map upload) —

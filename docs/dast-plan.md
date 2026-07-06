@@ -1,6 +1,6 @@
 # Plan — DAST / runtime security testing (dynamic analysis against a running app)
 
-> **Status: Layer 1 BUILT (2026-07-05); Layers 2–4 SPEC.** Closes the biggest security gap named in the
+> **Status: Layers 1–4 BUILT (L1 2026-07-05 PR #26; L2/L3/L4 2026-07-06 PR #33). L2/L3 are `templates/ci/dast-staging.yml`, inert until a staging env + `DAST_STAGING_ENABLED=true`; first real run is M3 Phase B.** Closes the biggest security gap named in the
 > 2026-07-05 audit: every existing security control (Semgrep/OSV/Trivy/Gitleaks/ASVS-DET/ASVS-6g)
 > analyzes code **at rest, pre-merge**; nothing ever attacks the **running** app. Companions:
 > `docs/ci-merge-gate-plan.md` (PR L — provides the CI runner and the job slot this fills),
@@ -82,16 +82,25 @@ like `semgrep-scan.sh` and folds into a CI job's pass/fail. No new gate *hook*; 
    ui-capture). **This is the path that needs no CI and no staging.** When PR L lands, the *same*
    scanner re-homes into the reserved `dast-baseline` CI job (SARIF to the Security tab) and can be
    promoted to **blocking on High**. **S–M — done.**
-2. **Layer 2 — Schemathesis API fuzz (active, gates).** When the app publishes an OpenAPI schema
-   (planning records this; most pipeline apps have one), run Schemathesis against staging with a
-   test auth token. `--checks all` (status-code conformance, response-schema conformance, server
-   errors). A 500 or a schema violation fails the job. This is the highest-value layer — it uses the
-   app's own contract as the oracle, so coverage scales with the API. **M.**
-3. **Layer 3 — ZAP active scan (authenticated, gates on High).** Full active scan with an
-   authenticated session context (ZAP auth script + a seeded test user), against staging only (never
-   a shared env — active scan sends real attack payloads). Gated on High severity; Medium annotates.
-   Scheduled (nightly) **and** on-demand rather than every merge, because active scans are slow —
-   this is the "recurring automated pentest," complementing the every-merge baseline. **M–L.**
+2. **Layer 2 — Schemathesis API fuzz (active, gates) — ✅ BUILT (2026-07-06, PR #33).** The
+   `api-fuzz` job in `templates/ci/dast-staging.yml`: Schemathesis `run <schema> --checks all`
+   (status-code conformance, response-schema conformance, server errors) against staging with the
+   seeded DAST test-user's token (SSM via the staging OIDC role). A 500 or a schema violation fails
+   the job. Highest-value layer — the app's own contract is the oracle, so coverage scales with the
+   API. Consumes the DAST-1 (served schema) + DAST-2/3 (test user + auth) criteria Layer 4 emits.
+   **M.**
+3. **Layer 3 — ZAP active scan (authenticated, gates on High) — ✅ BUILT (2026-07-06, PR #33).** The
+   `active-scan` job in the same workflow: `zap-full-scan.py` with the test-user token injected as an
+   `Authorization` header via ZAP's replacer, against staging only (never a shared env — active scan
+   sends real attack payloads). A deterministic jq gate (same severity semantics as `dast-review.sh`)
+   **fails on High, annotates Medium**; a missing report is treated as failure, never silently clean.
+   Scheduled nightly **and** dispatchable rather than every merge, because active scans are slow —
+   the "recurring automated pentest," complementing the every-merge baseline. **M–L.**
+
+Both jobs are **inert until `DAST_STAGING_ENABLED=true`** (deploy.yml opt-in pattern) and a staging
+env exists — they self-skip otherwise, costing nothing. Lint- and (schema/manifest) shape-verified;
+their **first true execution needs a real staging environment** (M3 Phase B), the same honest limit
+every Track-2 deploy template carries.
 4. **Layer 4 — the `dast-conventions` skill + planning hooks.** Planning, for an app with an HTTP
    surface, emits: the OpenAPI-schema-exists expectation, a seeded DAST test-user requirement, and
    the auth-context config as acceptance criteria (so a missing schema/test-user is a plan-audit
@@ -121,11 +130,12 @@ staging (PR N) exists long before it; ZAP baseline is ~a day once N is up.
 2. **Layer 4 (planning hooks + skill)** — next, *before* Layer 2, so apps arrive at the fuzz layer
    already carrying an OpenAPI schema + a seeded test-user (a missing one becomes a plan-audit flag,
    not a broken job). Content-only — also buildable today.
-3. **Layer 2 (Schemathesis)** — once staging (PR N) exists; the highest-value gating layer.
-4. **Layer 3 (authenticated active scan)** — last; scheduled nightly against staging, gated on High.
-   Layer 5 (Nuclei) optional, advisory, any time after Layer 1.
+3. **Layer 2 (Schemathesis)** — ✅ built (template); the highest-value gating layer. Runs once
+   staging (PR N) exists and the operator opts in.
+4. **Layer 3 (authenticated active scan)** — ✅ built (template); scheduled nightly against staging,
+   gated on High. Layer 5 (Nuclei) optional, advisory, any time after Layer 1.
 
-Dependency order overall: **(Layer 1 + Layer 4, today) → L (re-home Layer 1 to CI) → N → (Layer 2, then Layer 3)**.
+Dependency order overall: **(Layer 1 + Layer 4, done) → L (re-home Layer 1 to CI, done) → N (staging) → (Layer 2 + Layer 3 templates, done — execute at M3 Phase B)**.
 
 ## Non-goals
 

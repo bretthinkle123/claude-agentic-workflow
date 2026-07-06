@@ -105,6 +105,72 @@ assert_eq 0 "$(store_scan '.critical' \
   debug   { debuggable true }
 } }' AndroidManifest.xml '<manifest><application/></manifest>')" "unbalanced { in a release string + debug debuggable → 0 critical (no false positive)"
 
+# (2b) SC-9 — Required-Reason API ↔ PrivacyInfo.xcprivacy category compare (the Layer-C follow-up)
+#   UserDefaults used, manifest exists WITHOUT the category → critical.
+SC9_JSON="$(store_scan '{c:.critical,rules:[.findings[].rule]}' \
+  App.xcodeproj/project.pbxproj '//' \
+  Prefs.swift 'import Foundation
+let d = UserDefaults.standard' \
+  PrivacyInfo.xcprivacy '<plist><dict/></plist>' \
+  Info.plist '<plist><dict><key>ITSAppUsesNonExemptEncryption</key><false/></dict></plist>')"
+assert_eq "true" "$(printf '%s' "$SC9_JSON" | jq -r '.rules|index("SC-9")!=null')" "SC-9: UserDefaults w/o declared category → fires"
+#   Category declared → must NOT fire (the compare, not presence, is the check).
+assert_eq 0 "$(store_scan '.critical' \
+  App.xcodeproj/project.pbxproj '//' \
+  Prefs.swift 'let d = UserDefaults.standard' \
+  PrivacyInfo.xcprivacy '<key>NSPrivacyAccessedAPICategoryUserDefaults</key>' \
+  Info.plist '<plist><dict/></plist>')" "SC-9: category declared → 0 critical (no false positive)"
+#   Manifest ABSENT → SC-9 must NOT double-count on top of SC-1 (exactly the 1 SC-1 critical).
+assert_eq 1 "$(store_scan '.critical' \
+  App.xcodeproj/project.pbxproj '//' \
+  Prefs.swift 'let d = UserDefaults.standard' \
+  Info.plist '<plist><dict/></plist>')" "SC-9: manifest absent → only SC-1 fires (no double critical)"
+#   Test-code exclusion: the API only under a Tests/ dir → must NOT fire (tests don't ship).
+assert_eq 0 "$(store_scan '.critical' \
+  App.xcodeproj/project.pbxproj '//' \
+  'AppTests/PrefsTests.swift' 'let d = UserDefaults.standard' \
+  PrivacyInfo.xcprivacy '<plist><dict/></plist>' \
+  Info.plist '<plist><dict/></plist>')" "SC-9: API only in Tests/ → not fired (release source only)"
+
+# (2c) SC-6 — Android permission declared-vs-used (advisory, both directions)
+assert_eq "true" "$(store_scan '.findings|map(.rule)|index("SC-6")!=null' \
+  AndroidManifest.xml '<manifest><application/></manifest>' \
+  Cam.kt 'val mgr = getSystemService(CameraManager::class.java)' \
+  build.gradle.kts 'android { targetSdk = 35 }')" "SC-6: camera API used, permission undeclared → warning fires"
+assert_eq "true" "$(store_scan '.findings|map(.rule)|index("SC-6")!=null' \
+  AndroidManifest.xml '<manifest><uses-permission android:name="android.permission.CAMERA"/><application/></manifest>' \
+  Main.kt 'fun main() {}' \
+  build.gradle.kts 'android { targetSdk = 35 }')" "SC-6: CAMERA declared, no API use → warning fires (Data-safety red flag)"
+assert_eq 0 "$(store_scan '[.findings[]|select(.rule=="SC-6")]|length' \
+  AndroidManifest.xml '<manifest><uses-permission android:name="android.permission.CAMERA"/><application/></manifest>' \
+  Cam.kt 'val mgr = getSystemService(CameraManager::class.java)' \
+  build.gradle.kts 'android { targetSdk = 35 }')" "SC-6: declared AND used → no finding (reconciled)"
+#   Multi-line manifest regression: Android Studio's default formatting puts android:name= on its
+#   own line — the declaration must still be seen (flattened grep), or a declared permission reads
+#   as undeclared (advisory false positive).
+assert_eq 0 "$(store_scan '[.findings[]|select(.rule=="SC-6")]|length' \
+  AndroidManifest.xml '<manifest>
+  <uses-permission
+      android:name="android.permission.CAMERA" />
+  <application/></manifest>' \
+  Cam.kt 'val mgr = getSystemService(CameraManager::class.java)' \
+  build.gradle.kts 'android { targetSdk = 35 }')" "SC-6: multi-line <uses-permission> formatting still counts as declared (no false positive)"
+
+# (2d) SC-7 — debug-log flood / test endpoint (advisory)
+LOGSPAM="$(for i in $(seq 1 12); do echo "Log.d(\"t\", \"m$i\")"; done)"
+assert_eq "true" "$(store_scan '.findings|map(.rule)|index("SC-7")!=null' \
+  AndroidManifest.xml '<manifest><application/></manifest>' \
+  Spam.kt "$LOGSPAM" \
+  build.gradle.kts 'android { targetSdk = 35 }')" "SC-7: 12 Log.d lines (> flood threshold) → warning fires"
+assert_eq 0 "$(store_scan '[.findings[]|select(.rule=="SC-7")]|length' \
+  AndroidManifest.xml '<manifest><application/></manifest>' \
+  Few.kt 'Log.d("t", "one")' \
+  build.gradle.kts 'android { targetSdk = 35 }')" "SC-7: a single Log.d (below threshold) → no finding (no noise)"
+assert_eq "true" "$(store_scan '.findings|map(.rule)|index("SC-7")!=null' \
+  AndroidManifest.xml '<manifest><application/></manifest>' \
+  Api.kt 'val base = "http://10.0.2.2:8000/api"' \
+  build.gradle.kts 'android { targetSdk = 35 }')" "SC-7: hardcoded emulator endpoint (10.0.2.2) → warning fires"
+
 # (3) gate floor on the critical count
 gate_store() {  # <want-exit> <desc> <json|''>
   local want="$1" desc="$2" j="$3" w; w="$(mk_fixture)"

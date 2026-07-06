@@ -1,0 +1,119 @@
+# dast-staging.yml — DAST Layers 2 + 3 (docs/dast-plan.md): the staging-bound runtime-security
+# jobs. NOT in the PR path (staging reflects merged main, and the active scan is slow); nightly
+# scheduled + manually dispatchable, ALWAYS against STAGING — never prod, never a shared env
+# (the active scan sends real attack payloads).
+#
+# INERT until the operator sets the repo variable DAST_STAGING_ENABLED=true (deploy.yml pattern) —
+# the schedule fires but both jobs self-skip, so the template costs nothing until a staging
+# environment (PR N) actually exists.
+#
+#   api-fuzz (Layer 2)   — Schemathesis with --checks all, driven by the app's own OpenAPI schema
+#                          (the DAST-1 acceptance criterion guarantees it exists): every documented
+#                          endpoint is fuzzed for 5xx + contract violations. The app's contract is
+#                          the oracle, so coverage scales with the API. A failure FAILS the job.
+#   active-scan (Layer 3) — ZAP FULL active scan with an authenticated session (the DAST-2/3 seeded
+#                          test user's token). Deterministic gate: High findings fail the job;
+#                          Medium annotates (::warning). The "recurring automated pentest."
+#
+# Auth: the seeded DAST test user's token is fetched from SSM (<DAST_TOKEN_SSM_PARAM>) via the
+# staging OIDC role — no long-lived secrets (iac-conventions posture). For a wholly-unauthenticated
+# API, delete the two "auth token" steps and the -H/replacer arguments (documented, like codeql).
+#
+# Scanner images run version-tagged from their official registries — pin image DIGESTS on the
+# first real run (same posture as pipeline-ci's scanners).
+#
+# Placeholders: <AWS_REGION> <STAGING_ROLE_ARN> <STAGING_BASE_URL> <OPENAPI_SCHEMA_URL>
+#   <DAST_TOKEN_SSM_PARAM>   (e.g. /meterly/staging/dast-test-user-token)
+name: dast-staging
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 3 * * *'   # nightly 03:23 UTC — off-peak; complements the every-merge passive baseline
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-staging
+  cancel-in-progress: true
+
+jobs:
+  api-fuzz:
+    # Layer 2 — the highest-value gating layer: the schema is the oracle.
+    if: ${{ vars.DAST_STAGING_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write   # OIDC → staging role, token fetch only
+    steps:
+      - name: Assume staging role (OIDC)
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <STAGING_ROLE_ARN>
+          aws-region: <AWS_REGION>
+      - name: Fetch DAST test-user token (seeded per the DAST-2 acceptance criterion)
+        run: |
+          TOKEN="$(aws ssm get-parameter --name '<DAST_TOKEN_SSM_PARAM>' --with-decryption --query Parameter.Value --output text)"
+          echo "::add-mask::$TOKEN"
+          echo "DAST_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+      - name: Schemathesis vs staging (--checks all; 5xx or contract violation fails)
+        env:
+          BASE_URL: <STAGING_BASE_URL>
+          SCHEMA_URL: <OPENAPI_SCHEMA_URL>
+        run: |
+          # The job gates on the EXIT CODE only (a finding → non-zero → fail), so no report flag is
+          # needed — omitting it also avoids Schemathesis's version-sensitive report syntax. Pin the
+          # image tag → digest on the first real run.
+          docker run --rm schemathesis/schemathesis:stable \
+            run "$SCHEMA_URL" --base-url "$BASE_URL" --checks all \
+            -H "Authorization: Bearer $DAST_TOKEN" \
+            --max-failures 20
+          # Non-zero exit = a 5xx / response-schema violation / status-code nonconformance on a
+          # documented endpoint — a real finding; it re-enters the pipeline as a normal fix run.
+
+  active-scan:
+    # Layer 3 — authenticated ZAP FULL scan. Staging only BY DESIGN: real attack payloads.
+    if: ${{ vars.DAST_STAGING_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120   # full active scans are slow — that is WHY this is nightly, not per-merge
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Assume staging role (OIDC)
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <STAGING_ROLE_ARN>
+          aws-region: <AWS_REGION>
+      - name: Fetch DAST test-user token
+        run: |
+          TOKEN="$(aws ssm get-parameter --name '<DAST_TOKEN_SSM_PARAM>' --with-decryption --query Parameter.Value --output text)"
+          echo "::add-mask::$TOKEN"
+          echo "DAST_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+      - name: ZAP full active scan (authenticated via header injection)
+        env:
+          BASE_URL: <STAGING_BASE_URL>
+        run: |
+          mkdir -p zapwork && chmod 777 zapwork
+          # The whole -z value is ONE arg; do NOT put literal single quotes around "Bearer " (they'd
+          # become part of the header value). ZAP's replacer injects `Authorization: Bearer <token>`
+          # on every request. Build it on one logical line so the YAML block scalar stays indented.
+          P="-config replacer.full_list(0)"
+          ZAP_AUTH="$P.description=dastauth $P.enabled=true $P.matchtype=REQ_HEADER $P.matchstr=Authorization $P.replacement=Bearer ${DAST_TOKEN}"
+          # -I: don't let ZAP's own warn/fail thresholds decide — the deterministic jq gate below
+          # does (High fails, Medium annotates), mirroring dast-review.sh's severity semantics.
+          docker run --rm -v "$PWD/zapwork:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable \
+            zap-full-scan.py -t "$BASE_URL" -J dast-active.json -I -z "$ZAP_AUTH"
+      - name: Gate — High fails, Medium annotates (deterministic, dast-review.sh semantics)
+        run: |
+          R=zapwork/dast-active.json
+          [ -f "$R" ] || { echo "::error::active scan produced no report — treat as failure (never silently clean)"; exit 1; }
+          # ZAP emits riskcode/count as STRINGS — coerce (same as dast-review.sh).
+          HIGH=$(jq '[.site[]?.alerts[]? | select((.riskcode|tostring)=="3") | (.count|tostring|tonumber? // 1)] | add // 0' "$R")
+          MED=$(jq '[.site[]?.alerts[]? | select((.riskcode|tostring)=="2") | (.count|tostring|tonumber? // 1)] | add // 0' "$R")
+          echo "active-scan: high=$HIGH medium=$MED"
+          [ "$MED" -gt 0 ] && echo "::warning::$MED Medium-risk active-scan findings — triage in the next pipeline run"
+          [ "$HIGH" -gt 0 ] && { echo "::error::$HIGH High-risk active-scan findings"; exit 1; }
+          exit 0
