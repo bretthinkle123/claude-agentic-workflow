@@ -8,15 +8,21 @@
 # to run on a schedule. A failure here means the recovery path is broken BEFORE a real disaster
 # needs it, which is the entire point.
 #
+# SAFETY: the teardown deletes `steps.restore.outputs.id`, which is ALWAYS `dr-drill-<timestamp>`
+# (hardcoded prefix — never <PROD_DB_IDENTIFIER>), so prod cannot be the target. Defense in depth:
+# scope the DR role's `rds:DeleteDBInstance` (and RebootDBInstance/etc.) by resource ARN to
+# `arn:aws:rds:<region>:<acct>:db:dr-drill-*` so even a logic bug in this file cannot delete a real
+# database at the IAM layer. `restore`/`describe` may be broader; `delete` must be dr-drill-* only.
+#
 # Scheduled monthly + on-demand. Placeholders:
-#   <AWS_REGION> <DR_ROLE_ARN>            (least-privilege: rds describe/restore/delete + the
-#                                          verify query's data path; NO prod write)
+#   <AWS_REGION> <DR_ROLE_ARN>            (least-privilege: rds describe/restore + DELETE scoped to
+#                                          db:dr-drill-* by ARN; read the verify SSM params; NO prod write)
 #   <PROD_DB_IDENTIFIER>                  (source of the automated snapshots)
 #   <RPO_HOURS> <RTO_MINUTES>             (the documented budgets this asserts against)
 #   <DR_SUBNET_GROUP> <DR_SECURITY_GROUP> (network for the throwaway restore)
-#   <DB_ENGINE_PORT>                      (e.g. 5432) + <VERIFY_SQL> (a cheap SELECT that proves
-#                                          the data is really there, e.g. "SELECT count(*) FROM users")
-#   <DB_URL_SSM_FOR_RESTORE>             (SSM param holding the restored-instance connection user/pw)
+#   <DB_ENGINE_PORT>                      (e.g. 5432) + <VERIFY_SQL> (a POSITIVE-expected count that
+#                                          proves the data is really there, e.g. "SELECT count(*) FROM users")
+#   <DB_USER_SSM> <DB_PASSWORD_SSM>       (SSM params: the restored instance's master user + password)
 name: dr-drill
 
 on:
@@ -83,14 +89,23 @@ jobs:
           set -Eeuo pipefail
           ENDPOINT="$(aws rds describe-db-instances --db-instance-identifier "${{ steps.restore.outputs.id }}" \
             --query 'DBInstances[0].Endpoint.Address' --output text)"
-          CREDS="$(aws ssm get-parameter --with-decryption --name <DB_URL_SSM_FOR_RESTORE> --query Parameter.Value --output text)"
-          [ -n "$CREDS" ] && [ "$CREDS" != "None" ] || { echo "::error::restore-verify creds not resolved from SSM" >&2; exit 1; }
-          # psql image; swap for the engine's client if not Postgres. VERIFY_SQL must return a row.
-          docker run --rm -e PGPASSWORD="${CREDS##*:}" postgres:16 \
-            psql "host=$ENDPOINT port=<DB_ENGINE_PORT> user=${CREDS%%:*} dbname=postgres sslmode=require" \
-            -tAc "<VERIFY_SQL>" | grep -qE '^[0-9]+$' \
-            || { echo "::error::verify query returned no usable rows — the restored data is not intact" >&2; exit 1; }
-          echo "verify query succeeded — restored data is intact"
+          # Credentials from TWO separate SSM params (no fragile user:pass split — a ':' in the
+          # password would corrupt it). psql reads PGUSER/PGPASSWORD from the env.
+          PGUSER="$(aws ssm get-parameter --with-decryption --name <DB_USER_SSM> --query Parameter.Value --output text)"
+          PGPASSWORD="$(aws ssm get-parameter --with-decryption --name <DB_PASSWORD_SSM> --query Parameter.Value --output text)"
+          { [ -n "$PGUSER" ] && [ "$PGUSER" != None ] && [ -n "$PGPASSWORD" ] && [ "$PGPASSWORD" != None ]; } \
+            || { echo "::error::restore-verify credentials not resolved from SSM" >&2; exit 1; }
+          export PGUSER PGPASSWORD
+          # <VERIFY_SQL> must be a COUNT that is EXPECTED TO BE POSITIVE (e.g.
+          # "SELECT count(*) FROM users"). A restore that produced an EMPTY database returns 0 and
+          # MUST fail — "a number came back" is not "the data is intact". Swap the psql image for
+          # the engine's client if not Postgres.
+          COUNT="$(docker run --rm -e PGUSER -e PGPASSWORD postgres:16 \
+            psql "host=$ENDPOINT port=<DB_ENGINE_PORT> dbname=postgres sslmode=require" -tAc "<VERIFY_SQL>" | tr -d '[:space:]')"
+          echo "verify query returned: '$COUNT'"
+          case "$COUNT" in ''|*[!0-9]*) echo "::error::verify query did not return a numeric count — restore not verifiable" >&2; exit 1 ;; esac
+          [ "$COUNT" -gt 0 ] || { echo "::error::verify count is 0 — the restored data is NOT intact (empty/corrupt restore)" >&2; exit 1; }
+          echo "verify OK — restored data is intact ($COUNT rows)"
 
       - name: Assert RTO budget (fail the drill if recovery is too slow)
         run: |
