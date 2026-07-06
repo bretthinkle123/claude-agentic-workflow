@@ -1,0 +1,107 @@
+# dr-drill.yml — executed backup/restore + DR drill (PR P, docs/delivery-operations-plan.md §P).
+# Written by bootstrap-project.sh. INERT until the operator sets DR_DRILL_ENABLED=true.
+#
+# "A backup you have never restored is a hope, not a backup." This drill RESTORES the latest
+# automated RDS snapshot into a THROWAWAY instance, runs a verification query, measures the
+# restore time (RTO), checks the snapshot age against the RPO budget, then tears the throwaway
+# down. It touches NOTHING in staging or prod — a fresh isolated instance only — so it is safe
+# to run on a schedule. A failure here means the recovery path is broken BEFORE a real disaster
+# needs it, which is the entire point.
+#
+# Scheduled monthly + on-demand. Placeholders:
+#   <AWS_REGION> <DR_ROLE_ARN>            (least-privilege: rds describe/restore/delete + the
+#                                          verify query's data path; NO prod write)
+#   <PROD_DB_IDENTIFIER>                  (source of the automated snapshots)
+#   <RPO_HOURS> <RTO_MINUTES>             (the documented budgets this asserts against)
+#   <DR_SUBNET_GROUP> <DR_SECURITY_GROUP> (network for the throwaway restore)
+#   <DB_ENGINE_PORT>                      (e.g. 5432) + <VERIFY_SQL> (a cheap SELECT that proves
+#                                          the data is really there, e.g. "SELECT count(*) FROM users")
+#   <DB_URL_SSM_FOR_RESTORE>             (SSM param holding the restored-instance connection user/pw)
+name: dr-drill
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '23 4 1 * *'   # 04:23 UTC on the 1st — monthly recovery rehearsal
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dr-drill        # never two restores at once
+  cancel-in-progress: false
+
+jobs:
+  restore-verify-teardown:
+    if: ${{ vars.DR_DRILL_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <DR_ROLE_ARN>
+          aws-region: <AWS_REGION>
+
+      - name: Find the latest automated snapshot + check RPO (age <= budget)
+        id: snap
+        run: |
+          set -Eeuo pipefail
+          SNAP_ARN="$(aws rds describe-db-snapshots --db-instance-identifier <PROD_DB_IDENTIFIER> \
+            --snapshot-type automated --query 'reverse(sort_by(DBSnapshots,&SnapshotCreateTime))[0].DBSnapshotArn' --output text)"
+          SNAP_TIME="$(aws rds describe-db-snapshots --db-instance-identifier <PROD_DB_IDENTIFIER> \
+            --snapshot-type automated --query 'reverse(sort_by(DBSnapshots,&SnapshotCreateTime))[0].SnapshotCreateTime' --output text)"
+          [ -n "$SNAP_ARN" ] && [ "$SNAP_ARN" != "None" ] || { echo "::error::no automated snapshot found — backups may be disabled" >&2; exit 1; }
+          AGE_H=$(( ( $(date -u +%s) - $(date -u -d "$SNAP_TIME" +%s) ) / 3600 ))
+          RPO_H=<RPO_HOURS>   # documented RPO budget (hours)
+          echo "latest snapshot $SNAP_ARN is ${AGE_H}h old (RPO budget ${RPO_H}h)"
+          [ "$AGE_H" -le "$RPO_H" ] || { echo "::error::RPO breach — newest backup is ${AGE_H}h old, budget is ${RPO_H}h" >&2; exit 1; }
+          echo "arn=$SNAP_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Restore into a throwaway instance and MEASURE the restore time (RTO)
+        id: restore
+        run: |
+          set -Eeuo pipefail
+          DR_ID="dr-drill-$(date -u +%Y%m%d%H%M%S)"
+          echo "id=$DR_ID" >> "$GITHUB_OUTPUT"
+          START=$(date -u +%s)
+          aws rds restore-db-instance-from-db-snapshot \
+            --db-instance-identifier "$DR_ID" \
+            --db-snapshot-identifier "${{ steps.snap.outputs.arn }}" \
+            --db-subnet-group-name <DR_SUBNET_GROUP> \
+            --vpc-security-group-ids <DR_SECURITY_GROUP> \
+            --no-multi-az --no-publicly-accessible >/dev/null
+          aws rds wait db-instance-available --db-instance-identifier "$DR_ID"
+          RTO_MIN=$(( ( $(date -u +%s) - START ) / 60 ))
+          echo "restored in ${RTO_MIN}m (RTO budget <RTO_MINUTES>m)"
+          echo "rto_min=$RTO_MIN" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the data is really there (the drill's whole point)
+        run: |
+          set -Eeuo pipefail
+          ENDPOINT="$(aws rds describe-db-instances --db-instance-identifier "${{ steps.restore.outputs.id }}" \
+            --query 'DBInstances[0].Endpoint.Address' --output text)"
+          CREDS="$(aws ssm get-parameter --with-decryption --name <DB_URL_SSM_FOR_RESTORE> --query Parameter.Value --output text)"
+          [ -n "$CREDS" ] && [ "$CREDS" != "None" ] || { echo "::error::restore-verify creds not resolved from SSM" >&2; exit 1; }
+          # psql image; swap for the engine's client if not Postgres. VERIFY_SQL must return a row.
+          docker run --rm -e PGPASSWORD="${CREDS##*:}" postgres:16 \
+            psql "host=$ENDPOINT port=<DB_ENGINE_PORT> user=${CREDS%%:*} dbname=postgres sslmode=require" \
+            -tAc "<VERIFY_SQL>" | grep -qE '^[0-9]+$' \
+            || { echo "::error::verify query returned no usable rows — the restored data is not intact" >&2; exit 1; }
+          echo "verify query succeeded — restored data is intact"
+
+      - name: Assert RTO budget (fail the drill if recovery is too slow)
+        run: |
+          RTO_M=<RTO_MINUTES>   # documented RTO budget (minutes)
+          RTO_ACTUAL="${{ steps.restore.outputs.rto_min }}"
+          [ "$RTO_ACTUAL" -le "$RTO_M" ] \
+            || { echo "::error::RTO breach — restore took ${RTO_ACTUAL}m, budget is ${RTO_M}m" >&2; exit 1; }
+
+      - name: Always tear down the throwaway instance (cost + hygiene)
+        if: always() && steps.restore.outputs.id != ''
+        run: |
+          aws rds delete-db-instance --db-instance-identifier "${{ steps.restore.outputs.id }}" \
+            --skip-final-snapshot --delete-automated-backups >/dev/null 2>&1 || true
+          echo "requested teardown of ${{ steps.restore.outputs.id }}"

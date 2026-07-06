@@ -1,0 +1,20 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "//": "PR P / audit S2 — continuous dependency updates. Written to renovate.json by bootstrap. Enable Renovate (or Dependabot) on the repo; its update PRs flow through pipeline-ci and every normal gate, so an update is verified before it merges. Pairs with scheduled-rescan.yml (which DETECTS new CVEs; Renovate REMEDIATES).",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "//cooldown": "14d floor aligns with plan-audit's version policy (14-30d minor cooldown); CVE fixes bypass via vulnerabilityAlerts.minimumReleaseAge below (the 0-7d CVE fast path).",
+  "minimumReleaseAge": "14 days",
+  "//lockfile": "Keep lockfiles in sync so lockfile-check.sh (pipeline-ci job 3) stays green.",
+  "rangeStrategy": "pin",
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "minimumReleaseAge": "0 days"
+  },
+  "osvVulnerabilityAlerts": true
+}
