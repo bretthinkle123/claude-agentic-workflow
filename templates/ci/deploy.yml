@@ -1,0 +1,234 @@
+# deploy.yml — environments + progressive delivery (PR N, docs/environments-delivery-plan.md).
+# Written to .github/workflows/deploy.yml by bootstrap-project.sh. INERT until the operator
+# sets the repo variable DEPLOY_ENABLED=true (gh variable set DEPLOY_ENABLED --body true) —
+# so it ships to every project costlessly, like build-provenance's Dockerfile gate.
+#
+# The chain (each link refuses if the previous one lied):
+#   pipeline-ci (merge gate) → build-provenance (signed artifact) → THIS
+#   1. verify-artifact — cosign verify, identity-pinned to OUR build-provenance workflow.
+#      An unsigned or foreign-identity image is REFUSED (verify-before-rollout — the rule
+#      that makes signing more than theater). Deploys reference the DIGEST from here on.
+#   2. deploy-staging — terraform apply envs/staging → snapshot → migrate → rollout →
+#      health probe. Staging eats every mistake first (same shape as prod, smaller size).
+#   3. deploy-prod — GitHub environment `production` (protection rule = the human
+#      approval; no TTY marker exists post-merge, this IS the checkpoint) → snapshot →
+#      migrate → CANARY 10% → 50% → 100% by ALB target-group weights, each step soaking
+#      against CloudWatch alarms; any ALARM → weights back to 0/100 → job fails loudly.
+#
+# Sequencing per envs plan D2: snapshot BEFORE migrate (backup-before-migrate made
+# executable), staging before prod, expand/contract enforced upstream by plan-audit.
+# Residual (stated): the migrate step needs a network path from the runner to the DB; for
+# a VPC-isolated DB switch to the ECS run-task form (see delivery-conventions).
+#
+# Placeholders: <AWS_REGION> <STAGING_ROLE_ARN> <PROD_ROLE_ARN> <ECR_REPOSITORY>
+#   <ECS_CLUSTER_STAGING> <ECS_SERVICE_STAGING> <ECS_CLUSTER_PROD> <ECS_SERVICE_GREEN>
+#   <APP_CONTAINER_NAME>   (the app container in the task def — NOT assumed to be index 0)
+#   <LISTENER_RULE_ARN> <TG_BLUE_ARN> <TG_GREEN_ARN> <PROD_ALARM_NAMES>
+#   <STAGING_DB_IDENTIFIER> <PROD_DB_IDENTIFIER> <MIGRATE_CMD>
+#   <STAGING_DB_URL_SSM> <PROD_DB_URL_SSM> <STAGING_HEALTH_URL>
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [build-provenance]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy          # one deploy at a time, globally — never interleave rollouts
+  cancel-in-progress: false
+
+env:
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  AWS_REGION: <AWS_REGION>
+
+jobs:
+  verify-artifact:
+    if: ${{ vars.DEPLOY_ENABLED == 'true' && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      digest_ref: ${{ steps.verify.outputs.digest_ref }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <STAGING_ROLE_ARN>
+          aws-region: <AWS_REGION>
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Resolve digest for this SHA and VERIFY the signature (refuse unsigned)
+        id: verify
+        run: |
+          ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+          REGISTRY="$ACCOUNT.dkr.ecr.<AWS_REGION>.amazonaws.com"
+          # `|| true`: describe-images throws (non-zero) for an absent tag; without it the step's
+          # bash -e would exit HERE, bypassing the friendly guard below (which also handles the
+          # not-containerized case — build-provenance "succeeds" by skipping, so no image exists).
+          DIGEST="$(aws ecr describe-images --repository-name <ECR_REPOSITORY> \
+            --image-ids imageTag="$SHA" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          [ -n "$DIGEST" ] && [ "$DIGEST" != "None" ] || { echo "no image for $SHA — was build-provenance green with a Dockerfile?" >&2; exit 1; }
+          DIGEST_REF="$REGISTRY/<ECR_REPOSITORY>@$DIGEST"
+          aws ecr get-login-password --region <AWS_REGION> | \
+            docker login --username AWS --password-stdin "$REGISTRY"
+          # Identity pin: only an image signed by THIS repo's build-provenance workflow, via
+          # GitHub's OIDC issuer, passes. Anything else — unsigned, resigned elsewhere,
+          # another repo's workflow — is refused before any environment is touched.
+          cosign verify \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/\.github/workflows/build-provenance\.yml@refs/heads/main$" \
+            "$DIGEST_REF"
+          echo "digest_ref=$DIGEST_REF" >> "$GITHUB_OUTPUT"
+
+  deploy-staging:
+    needs: verify-artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ env.SHA }}
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <STAGING_ROLE_ARN>
+          aws-region: <AWS_REGION>
+      - name: Terraform apply — staging (auto; staging eats mistakes first)
+        run: |
+          if [ -d infra/envs/staging ]; then
+            cd infra/envs/staging && terraform init -input=false && terraform apply -input=false -auto-approve
+          else echo "no infra/envs/staging — skipped"; fi
+      - name: Snapshot BEFORE migrate (backup-before-migrate, executable)
+        run: |
+          SNAP="pre-migrate-$SHA-$(date -u +%Y%m%d%H%M%S)"
+          aws rds create-db-snapshot --db-instance-identifier <STAGING_DB_IDENTIFIER> --db-snapshot-identifier "$SNAP"
+          aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAP"
+          echo "snapshot $SNAP available"
+      - name: Migrate staging (expand/contract enforced upstream by plan-audit)
+        run: |
+          DATABASE_URL="$(aws ssm get-parameter --with-decryption --name <STAGING_DB_URL_SSM> --query Parameter.Value --output text)"
+          [ -n "$DATABASE_URL" ] && [ "$DATABASE_URL" != "None" ] || { echo "staging DB URL not resolved from SSM — refusing to migrate" >&2; exit 1; }
+          export DATABASE_URL
+          <MIGRATE_CMD>
+      - name: Roll out the verified digest to the staging service
+        run: |
+          TD_ARN="$(aws ecs describe-services --cluster <ECS_CLUSTER_STAGING> --services <ECS_SERVICE_STAGING> --query 'services[0].taskDefinition' --output text)"
+          TD_JSON="$(aws ecs describe-task-definition --task-definition "$TD_ARN" --query taskDefinition)"
+          # Select the app container BY NAME, not index [0]: a sidecar (otel/log-router/envoy) can
+          # occupy [0], and updating its image instead of the app's is a silent bad deploy. Fail
+          # loud if the named container is absent (typo/misconfig guard).
+          printf '%s' "$TD_JSON" | jq -e --arg n "<APP_CONTAINER_NAME>" 'any(.containerDefinitions[]; .name==$n)' >/dev/null \
+            || { echo "container <APP_CONTAINER_NAME> not in the task definition — check APP_CONTAINER_NAME" >&2; exit 1; }
+          printf '%s' "$TD_JSON" \
+            | jq --arg img "${{ needs.verify-artifact.outputs.digest_ref }}" --arg n "<APP_CONTAINER_NAME>" \
+                 '(.containerDefinitions[] | select(.name==$n)).image = $img
+                  | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
+            > td.json
+          NEW_TD="$(aws ecs register-task-definition --cli-input-json file://td.json --query 'taskDefinition.taskDefinitionArn' --output text)"
+          aws ecs update-service --cluster <ECS_CLUSTER_STAGING> --service <ECS_SERVICE_STAGING> --task-definition "$NEW_TD" >/dev/null
+          aws ecs wait services-stable --cluster <ECS_CLUSTER_STAGING> --services <ECS_SERVICE_STAGING>
+      - name: Staging health probe (fail here, not in prod)
+        run: curl -sf -m 10 "<STAGING_HEALTH_URL>" >/dev/null
+
+  deploy-prod:
+    needs: [verify-artifact, deploy-staging]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # The GitHub `production` environment carries the protection rule (required reviewer =
+    # the operator). This is the post-merge human checkpoint — deliberately environment
+    # config, not a TTY marker (none can exist in CI; see ci-merge-gate-plan honest scope).
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ env.SHA }}
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <PROD_ROLE_ARN>
+          aws-region: <AWS_REGION>
+      - name: Terraform apply — prod (already human-gated by the environment rule)
+        run: |
+          if [ -d infra/envs/prod ]; then
+            cd infra/envs/prod && terraform init -input=false && terraform apply -input=false -auto-approve
+          else echo "no infra/envs/prod — skipped"; fi
+      - name: Snapshot BEFORE migrate (prod)
+        run: |
+          SNAP="pre-migrate-$SHA-$(date -u +%Y%m%d%H%M%S)"
+          aws rds create-db-snapshot --db-instance-identifier <PROD_DB_IDENTIFIER> --db-snapshot-identifier "$SNAP"
+          aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAP"
+      - name: Migrate prod
+        run: |
+          DATABASE_URL="$(aws ssm get-parameter --with-decryption --name <PROD_DB_URL_SSM> --query Parameter.Value --output text)"
+          [ -n "$DATABASE_URL" ] && [ "$DATABASE_URL" != "None" ] || { echo "prod DB URL not resolved from SSM — refusing to migrate" >&2; exit 1; }
+          export DATABASE_URL
+          <MIGRATE_CMD>
+      - name: Canary — 10% → 50% → 100% by ALB weights, alarm-watched; rollback on ALARM
+        run: |
+          # -E so the ERR trap fires inside functions; the trap makes ANY unhandled failure
+          # during the canary revert to blue — without it, a transient AWS API error mid-soak
+          # would exit the step (bash -e) leaving prod STUCK at a partial canary weight.
+          set -Eeuo pipefail
+          GREEN_UP() {  # <green-weight>  — shift listener-rule weights (blue gets the rest)
+            aws elbv2 modify-rule --rule-arn <LISTENER_RULE_ARN> --actions \
+              "Type=forward,ForwardConfig={TargetGroups=[{TargetGroupArn=<TG_BLUE_ARN>,Weight=$((100-$1))},{TargetGroupArn=<TG_GREEN_ARN>,Weight=$1}]}"
+          }
+          ROLLBACK() {
+            echo "::error::canary aborting — rolling back to blue (weights 100/0)"
+            GREEN_UP 0 || true
+            exit 1
+          }
+          trap 'ROLLBACK' ERR   # any unhandled failure below → revert traffic to blue, fail loudly
+          POLL_ALARMS() {  # echo firing-alarm count; a single transient read blip retries so it
+                           # doesn't false-rollback, but a PERSISTENT unreadable state returns 1 →
+                           # the caller rolls back (can't confirm health ⇒ don't trust the canary).
+            local out
+            for _ in 1 2 3; do
+              out="$(aws cloudwatch describe-alarms --alarm-names <PROD_ALARM_NAMES> \
+                --state-value ALARM --query 'MetricAlarms | length(@)' --output text 2>/dev/null)" \
+                && [ -n "$out" ] && { printf '%s' "$out"; return 0; }
+              sleep 5
+            done
+            return 1
+          }
+          SOAK() {  # <seconds> — poll the prod alarms; a firing alarm OR a persistent read
+                    # failure → rollback (via explicit call / the ERR trap respectively).
+            local end firing
+            end=$(( $(date +%s) + $1 ))
+            while [ "$(date +%s)" -lt "$end" ]; do
+              firing="$(POLL_ALARMS)"          # persistent-unreadable → non-zero → ERR trap → ROLLBACK
+              [ "$firing" -eq 0 ] || ROLLBACK  # a genuinely firing alarm → explicit rollback
+              sleep 30
+            done
+          }
+          # New version → the green service, then weight-shift with soaks between steps.
+          TD_ARN="$(aws ecs describe-services --cluster <ECS_CLUSTER_PROD> --services <ECS_SERVICE_GREEN> --query 'services[0].taskDefinition' --output text)"
+          TD_JSON="$(aws ecs describe-task-definition --task-definition "$TD_ARN" --query taskDefinition)"
+          # App container BY NAME, not index [0] (see the staging step) — no traffic is on green
+          # yet, so a missing-name failure here safely aborts with blue still at 100%.
+          printf '%s' "$TD_JSON" | jq -e --arg n "<APP_CONTAINER_NAME>" 'any(.containerDefinitions[]; .name==$n)' >/dev/null \
+            || { echo "container <APP_CONTAINER_NAME> not in the task definition — check APP_CONTAINER_NAME" >&2; exit 1; }
+          printf '%s' "$TD_JSON" \
+            | jq --arg img "${{ needs.verify-artifact.outputs.digest_ref }}" --arg n "<APP_CONTAINER_NAME>" \
+                 '(.containerDefinitions[] | select(.name==$n)).image = $img
+                  | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
+            > td.json
+          NEW_TD="$(aws ecs register-task-definition --cli-input-json file://td.json --query 'taskDefinition.taskDefinitionArn' --output text)"
+          aws ecs update-service --cluster <ECS_CLUSTER_PROD> --service <ECS_SERVICE_GREEN> --task-definition "$NEW_TD" >/dev/null
+          aws ecs wait services-stable --cluster <ECS_CLUSTER_PROD> --services <ECS_SERVICE_GREEN>
+          # `;` not `&&`: under -e a failed GREEN_UP now trips the ERR trap → rollback, instead
+          # of silently skipping the soak and shifting more traffic to an unverified green.
+          GREEN_UP 10; SOAK 300
+          GREEN_UP 50; SOAK 300
+          GREEN_UP 100; SOAK 600
+          trap - ERR   # canary succeeded — disarm before the (successful) step exits
+          echo "canary complete — green at 100%"

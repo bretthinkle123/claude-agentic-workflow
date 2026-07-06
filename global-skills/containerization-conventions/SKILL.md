@@ -43,6 +43,21 @@ is genuinely warranted, say what specifically requires it.
 - A **`.dockerignore`** to keep the build context (and image) small.
 - **Deterministic dependency installs** from lockfiles.
 
+## Runtime lifecycle — graceful shutdown & health split (PR N — R2)
+
+A progressive rollout (canary/blue-green) stops old tasks *while requests are in flight*; a
+container that doesn't drain cleanly turns every deploy into dropped requests. Required once
+the app runs behind a load balancer:
+
+- **Handle `SIGTERM`:** stop accepting new work, finish in-flight requests, close DB/pool
+  connections, then exit — within the orchestrator's grace period (ECS
+  `stopTimeout`, default 30s; raise it if requests run longer).
+- **Separate readiness from liveness.** *Readiness* gates traffic (fail it during startup and
+  during drain so the LB stops routing before the process dies); *liveness* only restarts a
+  wedged process. Collapsing them causes needless restarts or traffic to a draining task.
+- **Readiness must reflect real dependencies** (DB reachable, migrations applied) — a
+  readiness endpoint that returns 200 unconditionally defeats the canary health gate.
+
 ## Threat-model touchpoints (feed into the STRIDE step)
 
 - Base-image and OS-package **CVEs**.
