@@ -63,10 +63,13 @@ jobs:
           BASE_URL: <STAGING_BASE_URL>
           SCHEMA_URL: <OPENAPI_SCHEMA_URL>
         run: |
+          # The job gates on the EXIT CODE only (a finding → non-zero → fail), so no report flag is
+          # needed — omitting it also avoids Schemathesis's version-sensitive report syntax. Pin the
+          # image tag → digest on the first real run.
           docker run --rm schemathesis/schemathesis:stable \
             run "$SCHEMA_URL" --base-url "$BASE_URL" --checks all \
             -H "Authorization: Bearer $DAST_TOKEN" \
-            --max-failures 20 --report junit --report-junit-path /dev/null
+            --max-failures 20
           # Non-zero exit = a 5xx / response-schema violation / status-code nonconformance on a
           # documented endpoint — a real finding; it re-enters the pipeline as a normal fix run.
 
