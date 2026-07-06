@@ -139,9 +139,12 @@ documents it, the operator runs it, and the checklist is the auditable record. *
 CodeQL (roadmap row CQ) is deliberately **not** part of this PR — but the template reserves the job
 name and the skill documents where it lands, so CQ becomes a one-job diff once L is live.
 
-> **Landed (2026-07-06):** the `codeql` job now ships in `templates/ci/pipeline-ci.yml` — matrix
-> over `<CODEQL_LANGUAGES>`, `build-mode: none`, security-extended queries, SHA-pinned
-> (`codeql-action` v4.36.3). Alert-only by default (the job fails on analysis error, not findings);
+> **Landed (2026-07-06):** the `codeql` job now ships in `templates/ci/pipeline-ci.yml` — a
+> per-language matrix `include` pairing `<CODEQL_LANGUAGE>` with `<CODEQL_BUILD_MODE>` (`none`
+> where supported: interpreted + c-cpp/csharp/java-kotlin/rust; `autobuild` for go; Swift is
+> macOS-bound), security-extended queries, SHA-pinned
+> (`codeql-action` v4.36.2 — v4.36.3 was 4 days old, inside the dependency cooldown).
+> Alert-only by default (the job fails on analysis error, not findings);
 > `ci-conventions` documents how to make it blocking and the public/GHAS licensing constraint.
 > The engine repo itself doesn't run it — CodeQL has no bash support; the harness (`eval`) is the
 > engine's gate.

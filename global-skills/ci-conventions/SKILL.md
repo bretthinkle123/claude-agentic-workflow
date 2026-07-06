@@ -70,10 +70,13 @@ JSON
 For the engine repo itself, the single required context is `eval` (Layer 1's workflow).
 
 `codeql` is deliberately **not** in the required contexts above — it's alert-only assurance by
-default. To make deep SAST blocking, add its matrix contexts (`codeql (<language>)`) or enable a
-code-scanning merge-protection rule. Prerequisite either way: fill `<CODEQL_LANGUAGES>` in the
-template; CodeQL is free on public repos, needs GitHub Advanced Security on private ones — delete
-the job if neither applies (the Semgrep/ASVS jobs still run).
+default. To make deep SAST blocking, add its matrix contexts (`codeql (<language>, <build-mode>)`)
+or enable a code-scanning merge-protection rule. Prerequisite either way: fill the
+`<CODEQL_LANGUAGE>`/`<CODEQL_BUILD_MODE>` matrix entry (one include entry per language;
+`build-mode: none` for interpreted + c-cpp/csharp/java-kotlin/rust, `autobuild` for go; Swift is
+macOS-bound — iOS row); CodeQL is free on public repos, needs GitHub Advanced Security on private
+ones — delete the job if neither applies (the Semgrep/ASVS jobs still run). If the repo has CodeQL
+**default setup** enabled, disable it first — it rejects advanced-configuration uploads.
 
 ## Workflow conventions (baked into the template)
 
