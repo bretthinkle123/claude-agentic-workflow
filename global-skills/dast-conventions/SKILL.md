@@ -16,12 +16,19 @@ flag today**, not a broken scan job later.
 | Layer | What runs | Guarantee | Status |
 |---|---|---|---|
 | 1 — ZAP passive baseline | post-GREEN, local Docker, opt-in via `.pipeline/dast.env` | response-observable classes only (headers, cookies, info leaks) — **advisory, never a gate** | built (PR #26) |
-| 2 — Schemathesis API fuzz | CI, against staging, driven by the OpenAPI schema | every documented endpoint fuzzed for 5xx/contract violations; **needs the schema + test user this skill's ACs guarantee** | spec (needs staging) |
-| 3 — ZAP active scan (authenticated) | nightly vs staging, never a shared env | real attack payloads with a session context; gates on High | spec |
+| 2 — Schemathesis API fuzz | `dast-staging.yml` `api-fuzz` job, nightly vs staging, driven by the OpenAPI schema | every documented endpoint fuzzed for 5xx/contract violations; **needs the schema + test user this skill's ACs guarantee**; a finding fails the job | built template (needs staging to run) |
+| 3 — ZAP active scan (authenticated) | `dast-staging.yml` `active-scan` job, nightly vs staging, never a shared env | real attack payloads with a session context; deterministic gate — **High fails, Medium annotates** | built template (needs staging to run) |
 | 4 — this skill + the planning ACs | planning time | the readiness contract below | built |
 
 Promotion rule: Layer 1 is advisory locally; when re-homed into CI (`pipeline-ci.yml`'s reserved
 `dast-baseline` job) it may go **blocking-on-High** — never stricter than High, and only in CI.
+
+Layers 2 + 3 ship as `templates/ci/dast-staging.yml` (nightly + dispatch), **inert until the
+operator sets `DAST_STAGING_ENABLED=true`** and a staging environment (PR N) exists — both jobs
+self-skip otherwise, so the template costs nothing. The seeded DAST test user's token is fetched
+from SSM via the staging OIDC role (no long-lived secrets). Both are staging-only **by design**:
+the active scan sends real attack payloads and must never touch prod or a shared env. Layer 3's
+High-fails/Medium-annotates gate uses the same severity semantics as `dast-review.sh`.
 
 ## DAST-readiness acceptance criteria (planning emits these for any served HTTP surface)
 

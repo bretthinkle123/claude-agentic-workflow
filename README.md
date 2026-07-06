@@ -17,7 +17,7 @@ into a project.
 | `global-hooks/` — 26 gate/telemetry/scanner scripts | `~/.claude/hooks/` | `.pipeline/state.json` |
 | `global-skills/` — 21 global skills | `~/.claude/skills/` | `.pipeline/smoke.env` |
 | `global-project-skills/` — 8 project skill templates | `~/.claude/pipeline-templates/project-skills/` | `.claude/skills/` |
-| `templates/` — CLAUDE.md, settings, state, mcp.json, ui/dast opt-ins + budgets, renovate.json, `ci/` workflow chain | `~/.claude/pipeline-templates/` | `CLAUDE.md`, `PROJECT.md`, `.gitignore`, `.github/workflows/`, `scripts/ci/` |
+| `templates/` — CLAUDE.md, settings, state, mcp.json, ui/dast opt-ins + budgets, renovate.json, `ci/` workflow chain (incl. dast-staging) | `~/.claude/pipeline-templates/` | `CLAUDE.md`, `PROJECT.md`, `.gitignore`, `.github/workflows/`, `scripts/ci/` |
 
 Edit files in their repo source directory, then re-run `install-global.sh` to publish.
 

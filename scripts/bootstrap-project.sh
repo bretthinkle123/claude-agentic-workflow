@@ -124,9 +124,9 @@ if [[ -f "$TARGET/.github/workflows/pipeline-ci.yml" ]]; then
 elif [[ -f "$TEMPLATES/ci/pipeline-ci.yml" ]]; then
   mkdir -p "$TARGET/.github/workflows" "$TARGET/scripts/ci"
   # Every workflow template rides in: pipeline-ci (merge gate) + the post-merge chain
-  # build-provenance (PR M) / deploy / load-campaign (PR N) / dr-drill / scheduled-rescan (PR P).
-  # All self-skip or are opt-in (DEPLOY_ENABLED / DR_DRILL_ENABLED / no Dockerfile), so they cost
-  # nothing until wired.
+  # build-provenance (PR M) / deploy / load-campaign (PR N) / dr-drill / scheduled-rescan (PR P) /
+  # dast-staging (DAST Layers 2+3). All self-skip or are opt-in (DEPLOY_ENABLED / DR_DRILL_ENABLED /
+  # DAST_STAGING_ENABLED / no Dockerfile), so they cost nothing until wired.
   cp "$TEMPLATES/ci/"*.yml "$TARGET/.github/workflows/"
   # Fill test/build from the same flags that populate smoke.env (values must not contain | or &).
   [[ -n "$TEST"  ]] && sed -i "s|<TEST_CMD>|$TEST|"  "$TARGET/.github/workflows/pipeline-ci.yml"

@@ -224,7 +224,8 @@ claude-agentic-workflow/
 │       ├── deploy.yml              opt-in (DEPLOY_ENABLED): cosign verify-before-rollout → staging (snapshot→migrate→rollout) → prod behind the GitHub production rule → weighted canary + burn-rate auto-rollback
 │       ├── load-campaign.yml       dispatch+weekly vs staging: k6 thresholds from the acceptance budget + failover drill + scale-ceiling ramp (proves autoscaling fires)
 │       ├── dr-drill.yml            monthly opt-in: executed restore into a throwaway instance, positive-count verify, RTO/RPO asserted, teardown
-│       └── scheduled-rescan.yml    weekly OSV+Trivy re-scan of the shipped artifact (continuous vuln management)
+│       ├── scheduled-rescan.yml    weekly OSV+Trivy re-scan of the shipped artifact (continuous vuln management)
+│       └── dast-staging.yml        DAST Layers 2+3 (opt-in DAST_STAGING_ENABLED): nightly Schemathesis API fuzz + authenticated ZAP active scan vs staging; High fails, Medium annotates
 │
 ├── scripts/
 │   ├── install-global.sh       Publishes global-agents, global-hooks, global-skills, templates → ~/.claude/
