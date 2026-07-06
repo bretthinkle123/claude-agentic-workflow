@@ -1,6 +1,6 @@
 # Plan — app-store compliance gate (Apple App Store + Google Play), project-scoped via PROJECT.md
 
-> **Status: Layers A–E BUILT (2026-07-05); SC-6/7/9 (Layer C follow-up) remain.** All five layers
+> **Status: Layers A–E BUILT (2026-07-05, PR #27); SC-6/7/9 (Layer C follow-up) BUILT (2026-07-06, PR #33) — the plan is fully delivered.** All five layers
 > are shipped and harness-green: E (Android reduced-assurance stamp), C (deterministic
 > `store-compliance.sh` + deploy-gate floor + 15-assertion suite, first cut), A
 > (`google-play-submission-requirements` skill), B (planning store-target routing + store ACs), D

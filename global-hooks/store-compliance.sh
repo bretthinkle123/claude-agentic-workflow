@@ -20,10 +20,15 @@
 #   SC-2  Apple    a capability API used without its NS…UsageDescription string             (critical)
 #   SC-3  Apple    App Transport Security disabled (NSAllowsArbitraryLoads = true)          (warning)
 #   SC-8  Apple    export-compliance key (ITSAppUsesNonExemptEncryption) absent             (warning)
+#   SC-9  Apple    Required-Reason API used without its declared reason category            (critical)
 #   SC-4  Android  targetSdk below Google Play's floor (literal; indirection ⇒ advisory)    (critical)
 #   SC-5  Android  debuggable / cleartext traffic in a release build                        (critical/warn)
-# Deferred to a Layer-C follow-up (higher false-positive risk — used-API↔declaration compares):
-#   SC-6 permission declared-vs-used, SC-7 debug logging in release, SC-9 Required-Reason API compare.
+#   SC-6  Android  permission declared-vs-used mismatch (conservative API↔permission map)   (warning)
+#   SC-7  Both     debug-log flood / hardcoded localhost-emulator endpoint in release src   (warning)
+# SC-6/7/9 are the Layer-C follow-up (used-API↔declaration compares). They keep the favour-FN
+# posture: SC-9 is the only critical among them (it is what Apple's upload tooling hard-enforces)
+# and runs only against an EXISTING privacy manifest (absence is already SC-1's critical); SC-6/7
+# are advisory-only because their API maps are heuristic.
 set -uo pipefail
 [ -f .pipeline/state.json ] || exit 0          # ambient no-op outside a bootstrapped project
 command -v jq >/dev/null 2>&1 || exit 0
@@ -61,6 +66,18 @@ add() {  # store rule sev "message"
 
 # Policy floors — POLICY-PINNED, verify annually (the stores change these on their schedule, not ours).
 ANDROID_TARGET_SDK_FLOOR=35   # Google Play required targetSdk. # policy floor — verify annually
+SC7_LOG_FLOOD=10              # SC-7: debug-log lines in release source above this count ⇒ advisory
+
+# relsrc <path-ERE> — like readfiles, but EXCLUDES test/debug source sets (paths under a directory
+# named *test*/*tests*/androidTest/debug): SC-7/SC-9 reason about what SHIPS in the release binary,
+# and test code doesn't. Comment-stripped like the SC-2 scan (same favour-FN rationale) — but the
+# strip is ://-AWARE (`//` preceded by `:` survives), or it would eat the very http://localhost /
+# http://10.0.2.2 URLs SC-7's test-endpoint check exists to find.
+relsrc() {
+  lsfiles | grep -iE "$1" | grep -viE '(^|/)[^/]*tests?/|(^|/)(androidtest|debug)/' \
+    | while IFS= read -r f; do [ -f "$f" ] && { cat "$f" 2>/dev/null; printf '\n'; }; done \
+    | sed -E 's#(^|[^:])//.*#\1#'
+}
 
 # readfiles <grep-ERE> — concatenate the content of every working-tree file whose PATH matches the
 # ERE, safe against spaces in filenames (`My App.xcodeproj`): reads the path list line-by-line with
@@ -107,6 +124,37 @@ if [ "$APPLE" = true ]; then
   # SC-8 (advisory) — export-compliance key absent → a manual question on EVERY upload.
   printf '%s' "$cfgflat" | grep -qi 'ITSAppUsesNonExemptEncryption' || \
     add apple SC-8 warning "ITSAppUsesNonExemptEncryption absent — set it (usually false) to skip the export-compliance question on every upload"
+
+  # SC-9 — a Required-Reason API used without its reason category declared in PrivacyInfo.xcprivacy.
+  # THIS compare — not SC-1's mere manifest presence — is what Apple's upload tooling hard-enforces.
+  # Runs only when a manifest EXISTS (an absent manifest is already SC-1's critical; no double-count)
+  # and only over RELEASE source (relsrc — test code doesn't ship). The API surface is conservative:
+  # only unambiguous, case-sensitive identifiers; bare .creationDate/.modificationDate are omitted
+  # (common on photo/calendar objects — a critical false positive would block a deploy; favour-FN).
+  privtext=$(readfiles '(^|/)PrivacyInfo\.xcprivacy$')
+  if [ -n "$privtext" ]; then
+    relsw=$(relsrc '\.(swift|m|mm)$')
+    rra() {  # api-ERE  category  human
+      printf '%s' "$relsw" | grep -qE "$1" || return 0
+      printf '%s' "$privtext" | grep -qi "$2" || \
+        add apple SC-9 critical "$3 Required-Reason API used but $2 is not declared in PrivacyInfo.xcprivacy (App Store automated rejection)"
+    }
+    rra '\bUserDefaults\b|\bNSUserDefaults\b'                                            'NSPrivacyAccessedAPICategoryUserDefaults'    'UserDefaults'
+    rra 'fileModificationDate|creationDateKey|contentModificationDateKey|getattrlist|\bfstatat?\(|\blstat\(' 'NSPrivacyAccessedAPICategoryFileTimestamp' 'File-timestamp'
+    rra 'volumeAvailableCapacity|systemFreeSize|\bstatv?fs\(|\bfstatfs\('                'NSPrivacyAccessedAPICategoryDiskSpace'       'Disk-space'
+    rra '\bactiveInputModes\b'                                                           'NSPrivacyAccessedAPICategoryActiveKeyboards' 'Active-keyboard'
+    rra '\bsystemUptime\b|\bmach_absolute_time\('                                        'NSPrivacyAccessedAPICategorySystemBootTime'  'System-boot-time'
+  fi
+
+  # SC-7 (advisory) — debug-log flood / test endpoints in release source. iOS has no release/debug
+  # source-set split, so "release source" = everything outside test dirs. A handful of prints is
+  # normal; only a FLOOD (> $SC7_LOG_FLOOD lines) or a hardcoded localhost endpoint is surfaced.
+  relsw_sc7=${relsw:-$(relsrc '\.(swift|m|mm)$')}
+  ioslogs=$(printf '%s' "$relsw_sc7" | grep -cE '\bprint\(|\bdebugPrint\(|\bNSLog\(' || true)
+  [ "${ioslogs:-0}" -gt "$SC7_LOG_FLOOD" ] 2>/dev/null && \
+    add apple SC-7 warning "$ioslogs debug-log lines (print/debugPrint/NSLog) in release source (> $SC7_LOG_FLOOD) — strip or wrap in #if DEBUG before store review"
+  printf '%s' "$relsw_sc7" | grep -qE 'https?://(localhost|127\.0\.0\.1)' && \
+    add apple SC-7 warning "hardcoded localhost endpoint in release source — a leftover test hook is store-review noise and dead in production"
 fi
 
 # ---------- Android ----------
@@ -166,6 +214,36 @@ if [ "$ANDROID" = true ]; then
     add android SC-5 critical 'debuggable enabled in the release buildType (Gradle) — must be false/absent for a release build'
   printf '%s' "$mtext" | grep -qiE 'android:usesCleartextTraffic[[:space:]]*=[[:space:]]*"true"' && \
     add android SC-5 warning 'android:usesCleartextTraffic="true" — disable cleartext traffic for release'
+
+  # SC-6 (advisory) — permission declared-vs-used mismatch, BOTH directions, over a CONSERVATIVE
+  # API↔permission map (only unambiguous framework classes; a permission outside the map is never
+  # judged). used-but-undeclared = a runtime failure waiting; declared-but-unused = a Play
+  # Data-safety red flag (reviewers compare the form against the manifest). Advisory only — the
+  # map is heuristic (reflection, libraries, and dynamic requests are invisible to a grep).
+  droidsrc=$(relsrc '\.(kt|java)$')
+  perm() {  # api-ERE  manifest-perm-ERE  human
+    local used=false decl=false
+    printf '%s' "$droidsrc" | grep -qE "$1" && used=true
+    printf '%s' "$mtext" | grep -qiE "uses-permission[^>]*android\.permission\.($2)" && decl=true
+    if [ "$used" = true ] && [ "$decl" = false ]; then
+      add android SC-6 warning "$3 API used but no matching <uses-permission> in AndroidManifest.xml (runtime failure + Data-safety mismatch)"
+    elif [ "$used" = false ] && [ "$decl" = true ]; then
+      add android SC-6 warning "$3 permission declared in AndroidManifest.xml but no matching API use found — unused permissions are a Play Data-safety red flag"
+    fi
+  }
+  perm '\bCameraManager\b|\bcamera2\b|\bCamera\.open\('            'CAMERA'                        'Camera'
+  perm '\bAudioRecord\b|\bMediaRecorder\b'                         'RECORD_AUDIO'                  'Record-audio'
+  perm '\bFusedLocationProviderClient\b|\bLocationManager\b'       'ACCESS_(FINE|COARSE)_LOCATION' 'Location'
+  perm '\bContactsContract\b'                                      'READ_CONTACTS'                 'Contacts'
+  perm '\bBluetoothAdapter\b|\bBluetoothManager\b'                 'BLUETOOTH(_CONNECT|_SCAN)?'    'Bluetooth'
+
+  # SC-7 (advisory) — debug-log flood / emulator-endpoint in release source sets (test/androidTest/
+  # debug source sets are excluded by relsrc; 10.0.2.2 is the Android-emulator host alias).
+  droidlogs=$(printf '%s' "$droidsrc" | grep -cE '\bLog\.[dv]\(' || true)
+  [ "${droidlogs:-0}" -gt "$SC7_LOG_FLOOD" ] 2>/dev/null && \
+    add android SC-7 warning "$droidlogs Log.d/Log.v lines in release source (> $SC7_LOG_FLOOD) — strip or guard with BuildConfig.DEBUG before release"
+  printf '%s' "$droidsrc" | grep -qE 'https?://(localhost|127\.0\.0\.1|10\.0\.2\.2)' && \
+    add android SC-7 warning "hardcoded localhost/emulator (10.0.2.2) endpoint in release source — a leftover test hook is dead in production"
 fi
 
 CRIT=$(jq '[.[]|select(.severity=="critical")]|length' <<<"$findings" 2>/dev/null || echo 0)
@@ -176,5 +254,5 @@ jq -n --argjson f "$findings" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
       --argjson c "${CRIT:-0}" --argjson w "${WARN:-0}" --arg scope "$TARGETS" \
   '{ran_at:$t, scope:$scope, critical:$c, warning:$w, findings:$f}' > "$OUT"
 
-echo "[store-compliance] targets=$TARGETS — ${CRIT:-0} critical, ${WARN:-0} warning (Apple: manifest/SC-1, usage-strings/SC-2, ATS/SC-3, export/SC-8; Android: targetSdk/SC-4, debuggable-cleartext/SC-5) — see $OUT"
+echo "[store-compliance] targets=$TARGETS — ${CRIT:-0} critical, ${WARN:-0} warning (Apple: manifest/SC-1, usage-strings/SC-2, ATS/SC-3, export/SC-8, required-reason/SC-9; Android: targetSdk/SC-4, debuggable-cleartext/SC-5, permissions/SC-6; both: debug-log/SC-7) — see $OUT"
 exit 0
