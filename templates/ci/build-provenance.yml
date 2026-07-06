@@ -1,0 +1,121 @@
+# build-provenance.yml — build + artifact provenance (PR M, docs/delivery-operations-plan.md).
+# Written to .github/workflows/build-provenance.yml by bootstrap-project.sh. Chains onto the
+# merge gate: runs only after pipeline-ci succeeds on main (workflow_run), so an artifact can
+# only exist for a commit every objective check re-verified. Self-skips when the repo has no
+# Dockerfile — costless until the app is containerized.
+#
+# What it guarantees (and what it doesn't): the pushed image is TRACEABLE (tagged by the exact
+# commit SHA — never `latest` in the deploy path), SIGNED (cosign keyless via this workflow's
+# OIDC identity — no long-lived keys, same posture as iac-conventions), carries an SBOM
+# (CycloneDX, attested to the registry), and has SLSA build provenance (GitHub attestation).
+# PR N's deploy step VERIFIES the signature before rollout — an unsigned/mismatched image is
+# refused. It does NOT prove the image is safe — that's the merge gate's job upstream.
+#
+# Placeholders (fill when the app targets AWS): <AWS_REGION>, <AWS_ROLE_ARN> (the OIDC deploy
+# role, least-privilege ECR push only), <ECR_REPOSITORY>. Set the ECR repo to immutable tags.
+name: build-provenance
+
+on:
+  workflow_run:
+    workflows: [pipeline-ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-provenance-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false   # never cancel a half-pushed artifact
+
+jobs:
+  build-sign-push:
+    # The dispatch arm is REF-GUARDED to main: without it, dispatching from a feature branch
+    # would build + SIGN + attest unreviewed code under this workflow's OIDC identity —
+    # breaking the guarantee that a signed artifact implies a merge-gate-verified commit.
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write       # OIDC: assumes the AWS role AND signs keyless with cosign
+      attestations: write   # SLSA build-provenance attestation
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ env.SHA }}
+
+      - name: Skip when not containerized
+        id: gate
+        run: |
+          if [ -f Dockerfile ]; then echo "run=true" >> "$GITHUB_OUTPUT";
+          else echo "run=false" >> "$GITHUB_OUTPUT"; echo "no Dockerfile — build-provenance skipped"; fi
+
+      # --- container hardening (audit S4): lint the Dockerfile BEFORE building ---
+      - name: hadolint (Dockerfile lint — errors fail)
+        if: steps.gate.outputs.run == 'true'
+        run: docker run --rm -i hadolint/hadolint < Dockerfile
+
+      - name: Configure AWS credentials (OIDC — no long-lived keys)
+        if: steps.gate.outputs.run == 'true'
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <AWS_ROLE_ARN>
+          aws-region: <AWS_REGION>
+
+      - name: Build (immutable SHA tag) and login to ECR
+        if: steps.gate.outputs.run == 'true'
+        id: build
+        run: |
+          # Account ID via STS (allowed for any assumed role) — NOT ecr:DescribeRegistry,
+          # which a least-privilege push-only role deliberately lacks.
+          REGISTRY="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.<AWS_REGION>.amazonaws.com"
+          IMAGE="$REGISTRY/<ECR_REPOSITORY>:$SHA"
+          aws ecr get-login-password --region <AWS_REGION> | docker login --username AWS --password-stdin "$REGISTRY"
+          docker build -t "$IMAGE" .
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: dockle (built-image hardening — non-root, no secrets in layers)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            goodwithtech/dockle:latest --exit-code 1 --exit-level fatal "${{ steps.build.outputs.image }}"
+
+      - name: Image SBOM (CycloneDX)
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --format cyclonedx --output /dev/stdout \
+            "${{ steps.build.outputs.image }}" > sbom.image.cdx.json
+          echo "SBOM components: $(jq '.components | length' sbom.image.cdx.json)"
+
+      - name: Push and resolve immutable digest
+        if: steps.gate.outputs.run == 'true'
+        id: push
+        run: |
+          docker push "${{ steps.build.outputs.image }}"
+          DIGEST_REF="$(docker inspect --format='{{index .RepoDigests 0}}' "${{ steps.build.outputs.image }}")"
+          echo "ref=$DIGEST_REF" >> "$GITHUB_OUTPUT"                 # repo@sha256:… (cosign)
+          echo "digest=${DIGEST_REF##*@}" >> "$GITHUB_OUTPUT"        # bare sha256:… (attestation)
+          echo "name=${DIGEST_REF%%@*}" >> "$GITHUB_OUTPUT"          # repo w/o tag (attestation)
+          echo "pushed $DIGEST_REF"
+
+      - name: Install cosign
+        if: steps.gate.outputs.run == 'true'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign (keyless OIDC) + attest the SBOM to the registry
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          cosign sign --yes "${{ steps.push.outputs.ref }}"
+          cosign attest --yes --type cyclonedx --predicate sbom.image.cdx.json "${{ steps.push.outputs.ref }}"
+
+      - name: SLSA build provenance (GitHub attestation)
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-name: ${{ steps.push.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
