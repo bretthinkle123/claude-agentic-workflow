@@ -22,6 +22,7 @@
 #
 # Placeholders: <AWS_REGION> <STAGING_ROLE_ARN> <PROD_ROLE_ARN> <ECR_REPOSITORY>
 #   <ECS_CLUSTER_STAGING> <ECS_SERVICE_STAGING> <ECS_CLUSTER_PROD> <ECS_SERVICE_GREEN>
+#   <APP_CONTAINER_NAME>   (the app container in the task def — NOT assumed to be index 0)
 #   <LISTENER_RULE_ARN> <TG_BLUE_ARN> <TG_GREEN_ARN> <PROD_ALARM_NAMES>
 #   <STAGING_DB_IDENTIFIER> <PROD_DB_IDENTIFIER> <MIGRATE_CMD>
 #   <STAGING_DB_URL_SSM> <PROD_DB_URL_SSM> <STAGING_HEALTH_URL>
@@ -119,9 +120,15 @@ jobs:
       - name: Roll out the verified digest to the staging service
         run: |
           TD_ARN="$(aws ecs describe-services --cluster <ECS_CLUSTER_STAGING> --services <ECS_SERVICE_STAGING> --query 'services[0].taskDefinition' --output text)"
-          aws ecs describe-task-definition --task-definition "$TD_ARN" --query taskDefinition \
-            | jq --arg img "${{ needs.verify-artifact.outputs.digest_ref }}" \
-                 '.containerDefinitions[0].image = $img
+          TD_JSON="$(aws ecs describe-task-definition --task-definition "$TD_ARN" --query taskDefinition)"
+          # Select the app container BY NAME, not index [0]: a sidecar (otel/log-router/envoy) can
+          # occupy [0], and updating its image instead of the app's is a silent bad deploy. Fail
+          # loud if the named container is absent (typo/misconfig guard).
+          printf '%s' "$TD_JSON" | jq -e --arg n "<APP_CONTAINER_NAME>" 'any(.containerDefinitions[]; .name==$n)' >/dev/null \
+            || { echo "container <APP_CONTAINER_NAME> not in the task definition — check APP_CONTAINER_NAME" >&2; exit 1; }
+          printf '%s' "$TD_JSON" \
+            | jq --arg img "${{ needs.verify-artifact.outputs.digest_ref }}" --arg n "<APP_CONTAINER_NAME>" \
+                 '(.containerDefinitions[] | select(.name==$n)).image = $img
                   | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
             > td.json
           NEW_TD="$(aws ecs register-task-definition --cli-input-json file://td.json --query 'taskDefinition.taskDefinitionArn' --output text)"
@@ -205,9 +212,14 @@ jobs:
           }
           # New version → the green service, then weight-shift with soaks between steps.
           TD_ARN="$(aws ecs describe-services --cluster <ECS_CLUSTER_PROD> --services <ECS_SERVICE_GREEN> --query 'services[0].taskDefinition' --output text)"
-          aws ecs describe-task-definition --task-definition "$TD_ARN" --query taskDefinition \
-            | jq --arg img "${{ needs.verify-artifact.outputs.digest_ref }}" \
-                 '.containerDefinitions[0].image = $img
+          TD_JSON="$(aws ecs describe-task-definition --task-definition "$TD_ARN" --query taskDefinition)"
+          # App container BY NAME, not index [0] (see the staging step) — no traffic is on green
+          # yet, so a missing-name failure here safely aborts with blue still at 100%.
+          printf '%s' "$TD_JSON" | jq -e --arg n "<APP_CONTAINER_NAME>" 'any(.containerDefinitions[]; .name==$n)' >/dev/null \
+            || { echo "container <APP_CONTAINER_NAME> not in the task definition — check APP_CONTAINER_NAME" >&2; exit 1; }
+          printf '%s' "$TD_JSON" \
+            | jq --arg img "${{ needs.verify-artifact.outputs.digest_ref }}" --arg n "<APP_CONTAINER_NAME>" \
+                 '(.containerDefinitions[] | select(.name==$n)).image = $img
                   | del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)' \
             > td.json
           NEW_TD="$(aws ecs register-task-definition --cli-input-json file://td.json --query 'taskDefinition.taskDefinitionArn' --output text)"
