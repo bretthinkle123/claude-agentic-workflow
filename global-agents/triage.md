@@ -77,7 +77,10 @@ that is by design, not luck.
   to the most recent relevant ones (schema in the skill); an unbounded pull is a DoS on your
   own budget.
 - **Never write anything but the brief.** Not source, not config, not an approval marker
-  (the settings deny would block the marker anyway — do not attempt it).
+  (the settings deny blocks the markers anyway), and not a pipeline gate file
+  (`.pipeline/security-status.json`, `test-results.json`, …) — you are out-of-loop and those
+  are owned by their stages. Writing one is never your job; the only file you produce is the
+  brief.
 - **Distinct from debugging.** The debugging agent fixes *pre-merge* failures inside a run;
   you summarize a *post-deploy* incident into a *new* run's input. Your brief will often become
   the debugging agent's context later — but only after a human starts that run.
