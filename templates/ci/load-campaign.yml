@@ -1,0 +1,102 @@
+# load-campaign.yml — sustained load + failover validation (PR N / M3, N4).
+# NOT in the PR path (a campaign in every PR is cost without signal). Manually dispatched,
+# plus weekly scheduled, ALWAYS against STAGING — never prod, never localhost.
+#
+# This is where F1 finally gets REAL numbers: the local perf gate could only PAIR a budget
+# with a measurement; here k6 ramps to the budget's stated RPS and measures BOTH p95 under
+# load AND throughput — the two the serial-loop run couldn't produce. A threshold breach is
+# a FINDING that re-enters the pipeline (campaigns run post-merge by construction), not a
+# deploy blocker.
+#
+# The failover job proves multi-AZ by ACTION (kill a task, assert recovery) instead of
+# Checkov asserting the config — the M3 "validated, not asserted" bar.
+#
+# Placeholders: <AWS_REGION> <STAGING_ROLE_ARN> <STAGING_BASE_URL>
+#   <ECS_CLUSTER_STAGING> <ECS_SERVICE_STAGING> <TARGET_RPS> <P95_MS_BUDGET>
+name: load-campaign
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_rps:
+        description: sustained requests/sec (default from the acceptance budget)
+        required: false
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays 06:17 UTC — off-peak weekly signal
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-campaign
+  cancel-in-progress: true
+
+jobs:
+  campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: k6 sustained campaign vs staging (p95 + throughput thresholds from the budget)
+        env:
+          TARGET_RPS: ${{ github.event.inputs.target_rps || '<TARGET_RPS>' }}
+          BASE_URL: <STAGING_BASE_URL>
+          P95_MS: <P95_MS_BUDGET>
+        run: |
+          # Encode the acceptance budget as k6 thresholds — the run FAILS if p95 or the
+          # achieved rate misses, so the number can't be quietly a best case (F1/WS3-3).
+          cat > campaign.js <<'JS'
+          import http from 'k6/http';
+          import { check } from 'k6';
+          const RPS  = Number(__ENV.TARGET_RPS);
+          const P95  = Number(__ENV.P95_MS);
+          const BASE = __ENV.BASE_URL;
+          export const options = {
+            scenarios: { steady: {
+              executor: 'constant-arrival-rate',
+              rate: RPS, timeUnit: '1s', duration: '10m',
+              preAllocatedVUs: Math.max(50, RPS * 2), maxVUs: RPS * 10,
+            }},
+            thresholds: {
+              http_req_duration: [`p(95)<${P95}`],
+              http_req_failed:   ['rate<0.01'],
+              http_reqs:         [`rate>${RPS * 0.95}`],  // actually SUSTAINED the rate
+            },
+          };
+          export default function () {
+            check(http.get(BASE), { '2xx/3xx': r => r.status < 400 });
+          }
+          JS
+          docker run --rm -i -e TARGET_RPS -e P95_MS -e BASE_URL -v "$PWD:/w" -w /w \
+            grafana/k6:latest run campaign.js
+
+  failover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <STAGING_ROLE_ARN>
+          aws-region: <AWS_REGION>
+      - name: Kill a task mid-service and assert the service self-heals (multi-AZ proof)
+        run: |
+          set -uo pipefail
+          TASK="$(aws ecs list-tasks --cluster <ECS_CLUSTER_STAGING> --service-name <ECS_SERVICE_STAGING> \
+            --query 'taskArns[0]' --output text)"
+          [ -n "$TASK" ] && [ "$TASK" != "None" ] || { echo "no running task to kill" >&2; exit 1; }
+          echo "stopping $TASK"
+          aws ecs stop-task --cluster <ECS_CLUSTER_STAGING> --task "$TASK" --reason "failover drill" >/dev/null
+          # The service must return to steady state on its own within the wait window.
+          aws ecs wait services-stable --cluster <ECS_CLUSTER_STAGING> --services <ECS_SERVICE_STAGING>
+          RUNNING="$(aws ecs describe-services --cluster <ECS_CLUSTER_STAGING> --services <ECS_SERVICE_STAGING> \
+            --query 'services[0].runningCount' --output text)"
+          DESIRED="$(aws ecs describe-services --cluster <ECS_CLUSTER_STAGING> --services <ECS_SERVICE_STAGING> \
+            --query 'services[0].desiredCount' --output text)"
+          echo "recovered running=$RUNNING desired=$DESIRED"
+          [ "$RUNNING" = "$DESIRED" ] || { echo "::error::service did not self-heal to desired count" >&2; exit 1; }

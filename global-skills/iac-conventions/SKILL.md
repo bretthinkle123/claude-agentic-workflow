@@ -57,6 +57,42 @@ Availability concerns — surfaced at the human checkpoint via `.pipeline/infra-
 the deterministic ones (Multi-AZ RDS, deletion protection) ride Checkov. Skip for a
 one-off job, a static asset bucket, or any stack with no always-on service.
 
+## Environments split (PR N — D1)
+
+When a project deploys through staging to prod (`docs/environments-delivery-plan.md`), the
+`infra/` facade grows an environment axis — **same modules, two thin instantiations**:
+
+```
+infra/
+├── modules/            ← the real resources — authored ONCE
+├── envs/
+│   ├── staging/main.tf ← small sizing; single-AZ RDS allowed; no CloudFront/WAF
+│   └── prod/main.tf    ← full sizing; multi-AZ; deletion protection; CloudFront+WAF
+```
+
+- **Shape-parity, not scale-parity.** Staging mirrors prod's service topology, migration
+  path, and LB/health wiring (so results transfer) at reduced size (so it's cheap). Scale
+  truth is bought only in the N4 load campaign.
+- **Separate state per env** — two keys in the one S3 bucket + the one DynamoDB lock table.
+  **Not** Terraform workspaces: two explicit `envs/` dirs are greppable and diff-reviewable;
+  a workspace is implicit and easy to `apply` against the wrong env.
+- `deploy.yml` applies `envs/staging` automatically and `envs/prod` only behind the GitHub
+  `production` environment's required-reviewer rule.
+
+## Deploy alarms (PR N — the auto-rollback signal)
+
+Prod's module set defines the **minimum three** CloudWatch alarms the canary soak watches
+(and PR O later upgrades to SLO burn-rate alarms): **5xx rate**, **p95 target-response
+latency**, **unhealthy-host count**. `deploy.yml` rolls back on any `ALARM` — so these alarm
+names are a delivery dependency, not just observability nicety.
+
+## Prod edge / WAF (PR N — D5, audit S3)
+
+Prod (only) fronts the ALB with **CloudFront → AWS WAF** (managed core + known-bad-inputs
+rule groups); Shield Standard is implicit. Staging skips it (cost) — the app-level
+`api-edge-conventions` rate limiting still applies there, so staging isn't naked. Residual,
+stated: WAF managed rules are generic; app-specific abuse remains the app's rate-limiting job.
+
 ## Where it threads through the stages
 
 - **planning** names provider + services, declares Terraform under `infra/`, adds

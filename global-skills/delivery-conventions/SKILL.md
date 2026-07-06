@@ -62,8 +62,60 @@ ECR by default (AWS posture). Push happens via the **OIDC-assumed role** in
 AWS keys, mirroring `iac-conventions`. The cosign identity is the same OIDC token; nothing
 to rotate, nothing to leak.
 
-## Deferred to PR N (do not improvise here)
+## Progressive delivery — the deploy path (PR N)
 
-The migration-executor sequence, canary-vs-blue/green rubric, rollback automation, and
-feature-flag conventions are **PR N** decisions — already made in
-`docs/environments-delivery-plan.md` (D2/D3); their sections land here when N builds.
+Mechanism: `.github/workflows/deploy.yml` (bootstrap writes it; **inert until the operator
+sets `DEPLOY_ENABLED=true`**). It chains `pipeline-ci → build-provenance → deploy` and each
+link refuses if the prior lied.
+
+### Verify-before-rollout (the rule, now enforced)
+
+`deploy.yml`'s first job runs `cosign verify` with `--certificate-oidc-issuer
+https://token.actions.githubusercontent.com` and a `--certificate-identity-regexp` pinned to
+**this repo's `build-provenance.yml@refs/heads/main`**. An unsigned image, one signed by
+another repo/workflow, or one resigned elsewhere is **refused before any environment is
+touched**. Every later job deploys the verified **digest**, never a tag.
+
+### D2 — migration sequence (staging-first, snapshot-gated)
+
+Fixed order, both environments: **`snapshot → migrate → roll out → health`**, and staging
+fully before prod.
+- **Snapshot before migrate** is `aws rds create-db-snapshot` + `wait` — backup-before-migrate
+  made executable. A backup you can't restore is a hope; PR P drills the restore.
+- **Expand/contract** stays enforced *upstream* (plan-audit flags a destructive migration
+  coupled to same-release code); the workflow's staging-first run is the runtime backstop.
+- **Runner→DB reachability** is the one real constraint: the inline `<MIGRATE_CMD>` step
+  assumes the runner can reach the DB. For a VPC-isolated DB, run the migration as an **ECS
+  `run-task`** on the app image inside the VPC instead — same sequence, different executor.
+
+### D3 — progressive delivery rubric + rollback
+
+- **Default: ALB weighted target groups** — new version to the green service, then
+  `10% → 50% → 100%` by listener-rule weights, a soak between each step. **Auto-rollback is
+  alarm-driven:** the soak polls the prod CloudWatch alarms; any `ALARM` → weights back to
+  `100/0` (blue) → the job fails loudly. No metrics dashboard-watching by a human.
+- **Escalate to ECS blue/green via CodeDeploy** when the app needs instant all-or-nothing
+  cutover (schema-coupled release), sub-minute automated rollback, or listener-level test
+  traffic. Same decision style as the containerization Docker-vs-serverless rubric.
+- **Rollback runbook:** automated rollback reverts *traffic weight*, not the *migration* —
+  which is why expand/contract matters (the old image must run against the new schema). If a
+  migration itself is bad, that's the snapshot's job: restore from the pre-migrate snapshot,
+  a **manual, human-decided** step (a forward-only migration can lose data — never automate
+  it). The rollback path is a first-class part of the plan, not an afterthought.
+
+### Feature flags (R1) + graceful shutdown (R2)
+
+- **Flags:** env/SSM-Parameter-backed booleans read at request time (no vendor at this
+  scale). Risky features ship **dark behind a flag**, so "roll back" is usually "flip the
+  flag," not "redeploy" — the enabler that makes canaries safe.
+- **Graceful shutdown** (drain on SIGTERM, readiness-vs-liveness split) is a
+  `containerization-conventions` rule — a rollout must not drop in-flight requests.
+
+## Load + failover validation (N4 / M3)
+
+`load-campaign.yml` (dispatch + weekly, **against staging**): k6 `constant-arrival-rate` to
+the budget's RPS for 10 min, with p95 / error-rate / sustained-rate **thresholds encoded
+from the acceptance budget** — the run fails if the number is a best case (closes F1). A
+breach re-enters the pipeline as a finding (post-merge by construction), never blocks a
+deploy. The `failover` job **kills a task and asserts self-heal to desired count** — multi-AZ
+proven by action, not asserted by Checkov.

@@ -77,8 +77,11 @@ first run); `permissions: contents: read` default with per-job elevation; per-re
 
 ## How delivery chains on (PR M/N)
 
-Deploy workflows trigger via `workflow_run` on this workflow's success on `main` —
-**`build-provenance.yml`** (PR M: build → sign → SBOM/SLSA-attest → push; see
-`delivery-conventions`), then staging → progressive prod delivery (PR N,
-`docs/environments-delivery-plan.md`). The reserved `dast-baseline` job slot is filled per
-`docs/dast-plan.md`; CodeQL (row CQ) lands as one additional job when adopted.
+The workflows chain via `workflow_run` on success on `main`, each refusing if the prior lied:
+**`pipeline-ci`** (merge gate) → **`build-provenance.yml`** (PR M: build → sign →
+SBOM/SLSA-attest → push) → **`deploy.yml`** (PR N: verify signature → staging
+snapshot/migrate/health → prod canary + alarm-driven rollback; inert until the operator sets
+`DEPLOY_ENABLED=true`). Load/failover validation is a separate dispatch/scheduled
+**`load-campaign.yml`**. Rubrics + the rollback runbook live in `delivery-conventions`; the
+`envs/` split, deploy alarms, and prod WAF in `iac-conventions`. The reserved `dast-baseline`
+slot is filled per `docs/dast-plan.md`; CodeQL (row CQ) lands as one added job when adopted.
