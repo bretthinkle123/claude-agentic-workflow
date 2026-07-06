@@ -119,3 +119,30 @@ from the acceptance budget** — the run fails if the number is a best case (clo
 breach re-enters the pipeline as a finding (post-merge by construction), never blocks a
 deploy. The `failover` job **kills a task and asserts self-heal to desired count** — multi-AZ
 proven by action, not asserted by Checkov.
+
+## Scale ceiling + DR drill + continuous vuln (PR P)
+
+- **Scale ceiling** — the `scale-ceiling` job in `load-campaign.yml` ramps *beyond* the budget
+  (k6 `ramping-arrival-rate` to `<CEILING_MAX_RPS>`). k6 aborts at the break point — that abort
+  *is* the ceiling measurement, so it doesn't fail the job; the deterministic assertion is that
+  the service **scaled out** under the ramp (running task count increased). A no-scale-out fails
+  the drill and points at the autoscaling policy/target/cooldown — a broken scale-out found
+  here, not during a real traffic spike.
+- **DR drill** — `dr-drill.yml` (monthly + dispatch, `DR_DRILL_ENABLED`): *a backup you have
+  never restored is a hope, not a backup.* It **restores the latest automated snapshot into a
+  throwaway instance**, runs a verify query proving the data is really there (a **positive**
+  count — an empty restore returning 0 must fail), **measures restore time (RTO)** and **snapshot
+  age (RPO)** against documented budgets, then tears the throwaway down. Touches nothing in
+  staging/prod. Failure = the recovery path is broken *before* a disaster needs it. Document the
+  **RPO/RTO** numbers alongside the workflow; they are a commitment, and the drill keeps them
+  honest. **Bound the blast radius at the IAM layer**, not just in the workflow: the drill's role
+  must scope `rds:DeleteDBInstance` by ARN to `db:dr-drill-*`, so a logic bug can never delete a
+  real database (the teardown target is always `dr-drill-<timestamp>`, but defense in depth
+  assumes the workflow could be wrong). A hard job timeout can orphan a throwaway instance — it's
+  named `dr-drill-*`, so it's greppable and cheap to sweep; cost, not risk.
+- **Continuous vulnerability management (S2)** — secure-at-ship decays. Two halves: **Renovate**
+  (`renovate.json`) opens dependency-update PRs that flow through `pipeline-ci` and every gate
+  (14-day cooldown to match plan-audit's version policy; CVE fixes bypass) — it *remediates*; and
+  `scheduled-rescan.yml` (weekly OSV + Trivy on `main`) *detects* a newly-disclosed CVE in an
+  already-shipped, still-pinned dep and fails loud. Detect + remediate, both looping back through
+  the normal gates.

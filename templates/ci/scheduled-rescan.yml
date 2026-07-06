@@ -1,0 +1,37 @@
+# scheduled-rescan.yml — continuous vulnerability management (PR P / audit S2).
+# Written by bootstrap-project.sh. "Secure at ship" decays: today's clean pinned dep is next
+# month's CVE, and nothing re-checks it. This re-runs the SCA/secret scanners against the tip of
+# main on a schedule (not the PR path) and FAILS — surfacing a new finding as a red check + an
+# alert — so a newly-disclosed CVE in an already-shipped dependency gets noticed. The FIX flows
+# back through the normal pipeline (Renovate opens an update PR → pipeline-ci re-gates it); this
+# workflow only DETECTS. Runs weekly + on demand; costless (public scanner images, no infra).
+name: scheduled-rescan
+
+on:
+  schedule:
+    - cron: '41 5 * * 2'   # Tuesdays 05:41 UTC — a day after Renovate's weekend PRs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-rescan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rescan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: OSV re-scan of main (new CVEs in already-pinned deps; honors osv-scanner.toml)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src ghcr.io/google/osv-scanner:latest \
+            scan --lockfile-scan-mode=all -r /src
+      - name: Trivy image/fs re-scan (HIGH,CRITICAL vuln + new secret patterns)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest \
+            fs --scanners vuln,secret --exit-code 1 --severity HIGH,CRITICAL /src
+      # A failure here is the alert. Wire GitHub → notification (or add an issue-on-failure step)
+      # per the operator's channel; the point is that a stale-dependency CVE stops being invisible.

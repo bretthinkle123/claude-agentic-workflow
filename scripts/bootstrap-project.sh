@@ -123,8 +123,10 @@ if [[ -f "$TARGET/.github/workflows/pipeline-ci.yml" ]]; then
   note "[skip] .github/workflows/pipeline-ci.yml already exists"
 elif [[ -f "$TEMPLATES/ci/pipeline-ci.yml" ]]; then
   mkdir -p "$TARGET/.github/workflows" "$TARGET/scripts/ci"
-  # Every workflow template rides in (pipeline-ci = the merge gate; build-provenance = the
-  # PR M artifact path, self-skipping until a Dockerfile exists).
+  # Every workflow template rides in: pipeline-ci (merge gate) + the post-merge chain
+  # build-provenance (PR M) / deploy / load-campaign (PR N) / dr-drill / scheduled-rescan (PR P).
+  # All self-skip or are opt-in (DEPLOY_ENABLED / DR_DRILL_ENABLED / no Dockerfile), so they cost
+  # nothing until wired.
   cp "$TEMPLATES/ci/"*.yml "$TARGET/.github/workflows/"
   # Fill test/build from the same flags that populate smoke.env (values must not contain | or &).
   [[ -n "$TEST"  ]] && sed -i "s|<TEST_CMD>|$TEST|"  "$TARGET/.github/workflows/pipeline-ci.yml"
@@ -133,7 +135,9 @@ elif [[ -f "$TEMPLATES/ci/pipeline-ci.yml" ]]; then
     [[ -f "${HOME}/.claude/hooks/$s" ]] && cp "${HOME}/.claude/hooks/$s" "$TARGET/scripts/ci/$s"
   done
   chmod +x "$TARGET/scripts/ci/"*.sh 2>/dev/null || true
-  note "[new]  .github/workflows/pipeline-ci.yml + scripts/ci/ (fill remaining <placeholders>; apply the branch-protection checklist in the ci-conventions skill)"
+  # renovate.json (PR P / S2 continuous vuln mgmt) at the repo root — enable Renovate to use it.
+  [[ -f "$TEMPLATES/renovate.json" && ! -f "$TARGET/renovate.json" ]] && cp "$TEMPLATES/renovate.json" "$TARGET/renovate.json"
+  note "[new]  .github/workflows/ (pipeline-ci + M/N/P deploy chain) + scripts/ci/ + renovate.json (fill <placeholders>; apply the branch-protection checklist in ci-conventions)"
 else
   note "[skip] CI template not found in $TEMPLATES/ci — re-run install-global.sh"
 fi

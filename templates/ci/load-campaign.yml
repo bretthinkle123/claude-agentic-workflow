@@ -13,6 +13,7 @@
 #
 # Placeholders: <AWS_REGION> <STAGING_ROLE_ARN> <STAGING_BASE_URL>
 #   <ECS_CLUSTER_STAGING> <ECS_SERVICE_STAGING> <TARGET_RPS> <P95_MS_BUDGET>
+#   <CEILING_MAX_RPS>  (PR P scale-ceiling: top of the ramp, well above <TARGET_RPS>)
 name: load-campaign
 
 on:
@@ -72,6 +73,64 @@ jobs:
           JS
           docker run --rm -i -e TARGET_RPS -e P95_MS -e BASE_URL -v "$PWD:/w" -w /w \
             grafana/k6:latest run campaign.js
+
+  scale-ceiling:
+    # PR P: push BEYOND the budget (a ramp to <CEILING_MAX_RPS>) to find the actual ceiling AND
+    # prove the autoscaling policy fires. k6 aborts when p95/errors break — that abort IS the
+    # measurement (the ceiling), so it does not fail the job; the deterministic check is that the
+    # service SCALED OUT under the ramp (running task count increased).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: <STAGING_ROLE_ARN>
+          aws-region: <AWS_REGION>
+      - name: Ramp to the ceiling and assert the service scales out
+        env:
+          TARGET_RPS: '<TARGET_RPS>'
+          MAX_RPS: '<CEILING_MAX_RPS>'
+          BASE_URL: <STAGING_BASE_URL>
+          P95_MS: <P95_MS_BUDGET>
+        run: |
+          set -uo pipefail
+          BEFORE="$(aws ecs describe-services --cluster <ECS_CLUSTER_STAGING> --services <ECS_SERVICE_STAGING> \
+            --query 'services[0].runningCount' --output text)"
+          echo "running tasks before ramp: $BEFORE"
+          cat > ceiling.js <<'JS'
+          import http from 'k6/http';
+          const RPS = Number(__ENV.TARGET_RPS), MAX = Number(__ENV.MAX_RPS);
+          const P95 = Number(__ENV.P95_MS), BASE = __ENV.BASE_URL;
+          export const options = {
+            scenarios: { ramp: {
+              executor: 'ramping-arrival-rate',
+              startRate: Math.max(1, Math.floor(RPS / 2)), timeUnit: '1s',
+              preAllocatedVUs: 100, maxVUs: MAX * 10,
+              stages: [ { target: RPS, duration: '2m' }, { target: MAX, duration: '8m' } ],
+            }},
+            // abortOnFail: k6 stops at the ceiling — that abort is the SIGNAL, not a job failure.
+            thresholds: {
+              http_req_duration: [{ threshold: `p(95)<${P95}`, abortOnFail: true }],
+              http_req_failed:   [{ threshold: 'rate<0.02',   abortOnFail: true }],
+            },
+          };
+          export default function () { http.get(BASE); }
+          JS
+          # k6 exits non-zero when it aborts at the ceiling — EXPECTED; capture, don't fail on it.
+          docker run --rm -i -e TARGET_RPS -e MAX_RPS -e P95_MS -e BASE_URL -v "$PWD:/w" -w /w \
+            grafana/k6:latest run ceiling.js || echo "k6 reached the ceiling (expected — that is the measurement)"
+          AFTER="$(aws ecs describe-services --cluster <ECS_CLUSTER_STAGING> --services <ECS_SERVICE_STAGING> \
+            --query 'services[0].runningCount' --output text)"
+          echo "running tasks after ramp: $AFTER (before: $BEFORE)"
+          # The drill's deterministic assertion: sustained 2–<CEILING_MAX_RPS>-RPS load MUST have
+          # triggered scale-out. If not, the autoscaling policy/target/cooldown is the suspect.
+          [ "$AFTER" -gt "$BEFORE" ] \
+            || { echo "::error::service did NOT scale out under the ramp ($BEFORE→$AFTER tasks) — check the target-tracking policy, its metric target, and cooldowns" >&2; exit 1; }
+          echo "autoscaling fired: $BEFORE → $AFTER tasks"
 
   failover:
     runs-on: ubuntu-latest

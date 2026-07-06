@@ -93,6 +93,20 @@ rule groups); Shield Standard is implicit. Staging skips it (cost) — the app-l
 `api-edge-conventions` rate limiting still applies there, so staging isn't naked. Residual,
 stated: WAF managed rules are generic; app-specific abuse remains the app's rate-limiting job.
 
+## Cost guardrails (PR P — so scale doesn't silently become a bill)
+
+When a stack provisions long-lived compute/managed services, it also provisions **cost
+visibility + a ceiling**:
+- **AWS Budgets** (`aws_budgets_budget`) per environment with an alert threshold (e.g. 80% +
+  forecasted-over-100%) → an SNS topic the operator watches. A prod deploy that 10×s the bill
+  should page, not surprise you at month end.
+- **Cost-allocation tags** — the `environment` / `service` tags already required (see Tagging)
+  are activated as cost-allocation tags so spend rolls up per env/service. No new tagging work;
+  just switch them on in the billing console (document it in the runbook — it's account config,
+  not Terraform).
+- Right-size from the metrics `observability-conventions` exposes; the load campaign's ceiling
+  (PR P) tells you the headroom you're paying for.
+
 ## Where it threads through the stages
 
 - **planning** names provider + services, declares Terraform under `infra/`, adds
