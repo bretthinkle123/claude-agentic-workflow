@@ -31,7 +31,10 @@ concurrency:
 
 jobs:
   build-sign-push:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # The dispatch arm is REF-GUARDED to main: without it, dispatching from a feature branch
+    # would build + SIGN + attest unreviewed code under this workflow's OIDC identity —
+    # breaking the guarantee that a signed artifact implies a merge-gate-verified commit.
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -67,7 +70,9 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         id: build
         run: |
-          REGISTRY="$(aws ecr describe-registry --query registryId --output text).dkr.ecr.<AWS_REGION>.amazonaws.com"
+          # Account ID via STS (allowed for any assumed role) — NOT ecr:DescribeRegistry,
+          # which a least-privilege push-only role deliberately lacks.
+          REGISTRY="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.<AWS_REGION>.amazonaws.com"
           IMAGE="$REGISTRY/<ECR_REPOSITORY>:$SHA"
           aws ecr get-login-password --region <AWS_REGION> | docker login --username AWS --password-stdin "$REGISTRY"
           docker build -t "$IMAGE" .
