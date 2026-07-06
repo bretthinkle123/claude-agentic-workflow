@@ -146,6 +146,15 @@ When invoked:
        Sign in with Apple is offered alongside it (Guideline 4.8).
      - **SC-T2-4 (store billing)** — the feature **monetizes digital goods**: purchases use StoreKit
        IAP (Apple) / Google Play Billing (Play), not an external processor.
+   - **DAST readiness (MATERIAL only when the feature serves an HTTP surface; dast-plan Layer 4).**
+     When the plan's feature exposes HTTP endpoints the running app will serve, confirm
+     `acceptance.md` carries the DAST-readiness criteria from `dast-conventions`: **DAST-1** a
+     served OpenAPI schema matching the implemented routes (the fuzz layer's driver — an endpoint
+     absent from the schema is never scanned), and — only when endpoints are authenticated —
+     **DAST-2** a seeded non-production DAST test user and **DAST-3** its auth-context config. A
+     served-HTTP plan missing DAST-1 (or missing DAST-2/3 while declaring authenticated endpoints,
+     with no one-line N/A) is a **material** flag: the gap surfaces later as a broken/vacuous
+     runtime scan instead of a plan fix. (Skip entirely for a feature with no served HTTP surface.)
    - **ASVS compliance scoped (MATERIAL for a security-surface feature).** The plan
      carries a **`## ASVS Compliance`** block (per `stride-threat-model-template`)
      listing the **triggered** ASVS 5.0.0 chapters, the **in-scope L3** items chosen

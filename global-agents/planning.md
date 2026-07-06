@@ -33,7 +33,11 @@ feature **stores** user data (classify each stored field → named at-rest contr
 `iac-conventions` when it
 provisions cloud infrastructure; `api-edge-conventions` when the feature exposes
 or consumes an HTTP surface (new routes, public API, webhook receiver, outbound
-third-party calls);
+third-party calls); `dast-conventions` when the feature exposes an HTTP surface the
+running app will serve — emit the DAST-readiness acceptance criteria (a served
+OpenAPI schema matching the implemented routes; a seeded non-production DAST test
+user + auth-context config when endpoints are authenticated) so the app arrives at
+the runtime-scan layers ready, not as a broken scan job;
 `containerization-conventions` when weighing how the app is packaged and run
 (containerized vs. direct process vs. serverless, and Kubernetes vs. a managed
 container runtime); `ci-conventions` when the project has (or the plan adds) a

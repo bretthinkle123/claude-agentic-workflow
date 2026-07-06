@@ -1,6 +1,6 @@
 # Plan — DAST / runtime security testing (dynamic analysis against a running app)
 
-> **Status: Layer 1 BUILT (2026-07-05); Layers 2–4 SPEC.** Closes the biggest security gap named in the
+> **Status: Layers 1 + 4 BUILT (L1 2026-07-05 PR #26; L4 2026-07-06 PR #33 — `dast-conventions` skill + planning ACs + plan-audit flag); Layers 2–3 SPEC (staging-bound).** Closes the biggest security gap named in the
 > 2026-07-05 audit: every existing security control (Semgrep/OSV/Trivy/Gitleaks/ASVS-DET/ASVS-6g)
 > analyzes code **at rest, pre-merge**; nothing ever attacks the **running** app. Companions:
 > `docs/ci-merge-gate-plan.md` (PR L — provides the CI runner and the job slot this fills),
