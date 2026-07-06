@@ -155,7 +155,7 @@ claude-agentic-workflow/
 │   ├── approve-diff.sh         human-only (TTY) M5 checkpoint: writes diff-approved (approved_change_hash); the gate's review + currency anchor
 │   ├── record-waiver.sh        human-only (TTY) waiver recorder: writes .pipeline/waivers.json (osv/asvs); the gate honors only human-recorded waivers (Option B)
 │   ├── asvs-sast.sh            security Stop hook: deterministic ASVS Tier-1 SAST (JWT-none/pw-KDF/CSPRNG/cipher) → asvs-sast.json; gate blocks on critical>0 (ASVS-DET)
-│   ├── store-compliance.sh     security Stop hook: deterministic app-store checks (privacy manifest, usage strings, targetSdk floor, debuggable release) for a declared Apple/Play target → store-compliance.json; gate blocks on critical>0 (store-compliance Layer C); no store target ⇒ no-op
+│   ├── store-compliance.sh     security Stop hook: deterministic app-store checks (privacy manifest, usage strings, Required-Reason API compare, targetSdk floor, debuggable release, permission declared↔used, debug-log flood) for a declared Apple/Play target → store-compliance.json; gate blocks on critical>0 (store-compliance Layer C, SC-1…SC-9); no store target ⇒ no-op
 │   ├── guard-approval-markers.sh  PreToolUse Bash hook on all Bash-carrying subagents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved/design-approved + waivers.json (PR K + Option B + DS structural guard)
 │   ├── guard-source-markers.sh  Stop hook on implementation + debugging AND a deployment-gate hard block (audit E3): greps the change set for revert/do-not-commit-class markers (TEMP-REVERT, DO NOT COMMIT, …) and blocks; plain TODO/FIXME pass
 │   ├── write-review-manifest.sh writes reviewed_change_hash (documentation's record + approve-diff's sanity check); called by documentation agent
@@ -193,6 +193,7 @@ claude-agentic-workflow/
 │   ├── api-edge-conventions/        on-demand: rate limiting, CORS, security headers, idempotency (planning + implementation)
 │   ├── dependency-audit-policy/     on-demand: plan-audit's dependency reality-check + version policy (loaded only when the plan adds deps)
 │   ├── ci-conventions/              on-demand: the per-project CI merge gate — what each pipeline-ci.yml job re-verifies, SCAN_BASE contract, CI waiver channel, branch-protection checklist (PR L)
+│   ├── dast-conventions/            on-demand: DAST layer guarantees + opt-in mechanics + the DAST-readiness ACs planning emits for a served HTTP surface (schema / test user / auth context) + tuning protocol (dast-plan Layer 4)
 │   ├── delivery-conventions/        on-demand: build/tag/sign/provenance rules — immutable SHA tags, cosign, SBOM/SLSA, verify-before-rollout, canary + rollback rubrics (PRs M/N)
 │   ├── observability-conventions/   on-demand: Sentry release-tagging, OTel→CloudWatch/X-Ray, SLO burn-rate alarms (feeds the canary rollback), synthetics, mobile crash reporting (PR O)
 │   └── triage-conventions/          preloaded in triage: incident-brief schema, redaction rule, injection-report format, read-only Sentry MCP checklist (PR O)
@@ -237,7 +238,7 @@ claude-agentic-workflow/
 │   ├── suites/                 21 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
 │   │                           loop-exit-invariant, stamp-ran-at, record-clean, hash-determinism, asvs,
 │   │                           waiver-guard, asvs-sast, design-spec, egress, assurance, design-review, dast-review,
-│   │                           store-compliance, ci-scan-base, triage (355 assertions; run in CI by eval.yml)
+│   │                           store-compliance, ci-scan-base, triage (365 assertions; run in CI by eval.yml)
 │   ├── fixtures/linkly-green/  Golden pipeline snapshot (Linkly, perf corrected to a passing state)
 │   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
 │
@@ -992,6 +993,7 @@ when the feature needs that knowledge.
 | `app-store-submission-requirements` | on-demand (planning, deployment — Apple App Store target) | Signing, privacy manifest, data-use declarations — emitted as acceptance criteria early |
 | `google-play-submission-requirements` | on-demand (planning, deployment — Google Play target) | Data safety form, targetSdk floor, permission justifications, in-app + web account deletion, Play Billing — emitted as acceptance criteria early (store-compliance Layer A) |
 | `ci-conventions` | on-demand (planning — when the project has or needs GitHub Actions CI) | The per-project CI merge gate: what each `pipeline-ci.yml` job re-verifies, the SCAN_BASE re-run contract, the CI waiver channel, branch-protection checklist (PR L) |
+| `dast-conventions` | on-demand (planning — when the feature exposes a served HTTP surface) | DAST layer guarantees, `dast.env`/`dast-budget.json` opt-in mechanics, the DAST-readiness acceptance criteria (served OpenAPI schema; seeded test user + auth context when authenticated), tuning/false-positive protocol (dast-plan Layer 4) |
 | `delivery-conventions` | on-demand (planning — when the change ships a container image or touches a deploy workflow) | Tag/digest rules, cosign keyless signing, SBOM + SLSA attestation, verify-before-rollout, D2 migration sequence, D3 canary rubric + rollback runbook, continuous vuln management (PRs M/N) |
 | `observability-conventions` | on-demand (planning — when a change ships to a real environment or defines SLOs) | Sentry release-tagging, OTel→CloudWatch/X-Ray, SLO burn-rate alarms (the signal `deploy.yml`'s canary rollback consumes), synthetics, mobile crash reporting (PR O) |
 | `triage-conventions` | triage | Incident-brief schema, redaction rule, provenance + injection-report format, read-only Sentry MCP setup/scope checklist (PR O) |

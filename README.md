@@ -1,9 +1,9 @@
 # claude-agentic-workflow
 
-A reusable multi-agent SDLC pipeline built entirely in Claude Code. Nine specialized
+A reusable multi-agent SDLC pipeline built entirely in Claude Code. Ten specialized
 subagents (an optional design-spec stage → planning → plan-audit → implementation →
-security → testing → documentation → deployment, with a debugging loop) handle one stage
-each. Tuned for token efficiency on the Pro plan.
+security → testing → documentation → deployment, with a debugging loop, plus a standalone
+read-only triage agent) handle one stage each. Tuned for token efficiency on the Pro plan.
 
 ## How it works: global runtime, per-project config
 
@@ -13,11 +13,11 @@ into a project.
 
 | This repo (source of truth) | Published to `~/.claude/` once | Written per project by bootstrap |
 | --- | --- | --- |
-| `global-agents/` — 9 pipeline subagents (incl. conditional design-spec) | `~/.claude/agents/` | `.claude/settings.json` |
-| `global-hooks/` — 25 gate/telemetry/scanner scripts | `~/.claude/hooks/` | `.pipeline/state.json` |
-| `global-skills/` — 16 global skills | `~/.claude/skills/` | `.pipeline/smoke.env` |
+| `global-agents/` — 10 pipeline subagents (incl. conditional design-spec + standalone triage) | `~/.claude/agents/` | `.claude/settings.json` |
+| `global-hooks/` — 26 gate/telemetry/scanner scripts | `~/.claude/hooks/` | `.pipeline/state.json` |
+| `global-skills/` — 21 global skills | `~/.claude/skills/` | `.pipeline/smoke.env` |
 | `global-project-skills/` — 8 project skill templates | `~/.claude/pipeline-templates/project-skills/` | `.claude/skills/` |
-| `templates/` — CLAUDE.md, settings, state, mcp.json, ui.env + design-budget.json | `~/.claude/pipeline-templates/` | `CLAUDE.md`, `PROJECT.md`, `.gitignore` |
+| `templates/` — CLAUDE.md, settings, state, mcp.json, ui/dast opt-ins + budgets, renovate.json, `ci/` workflow chain | `~/.claude/pipeline-templates/` | `CLAUDE.md`, `PROJECT.md`, `.gitignore`, `.github/workflows/`, `scripts/ci/` |
 
 Edit files in their repo source directory, then re-run `install-global.sh` to publish.
 
