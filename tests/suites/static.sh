@@ -39,4 +39,11 @@ else
   _ok "shellcheck not installed — skipped (optional)"
 fi
 
+# Committed executable bits. The repo is authored on Windows (core.fileMode=false), where
+# a script committed 0644 looks fine locally but a fresh Linux checkout gets "Permission
+# denied" on any DIRECT invocation — the deployment gate then blocks a green state (found
+# by eval.yml's first CI run: every gate-passes assertion failed on the runner only).
+NOEXEC="$(cd "$REPO_ROOT" && git ls-files -s | grep -E '\.sh$' | grep -v '^100755' | awk '{print $4}')"
+assert_eq "" "$NOEXEC" "every committed .sh has the executable bit (100755) — Windows fileMode regression guard"
+
 finish static

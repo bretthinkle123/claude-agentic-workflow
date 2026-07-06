@@ -30,13 +30,5 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - name: DEBUG — gate on a green fixture, stderr visible (temporary)
-        run: |
-          source tests/helpers/assert.sh
-          w="$(mk_fixture)"
-          echo "fixture at $w"; ls -la "$w/.pipeline" | head -20
-          cd "$w"
-          bash "$REPO_ROOT/global-hooks/deployment-gate.sh"; echo "gate exit=$?"
-          echo "--- env candidates ---"; git --version; jq --version; echo "TMPDIR=${TMPDIR:-unset}"; git rev-parse --show-toplevel 2>&1 || true
       - name: Run the eval harness
         run: bash tests/run-eval.sh

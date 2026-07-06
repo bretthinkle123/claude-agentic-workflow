@@ -188,7 +188,11 @@ fi
 # Reverted / do-not-commit source markers (audit E3). A reverted money-path fix once
 # passed build-green and nearly shipped; this makes the signal deterministic. The guard
 # no-ops on a clean change set and self-skips outside a pipeline project.
-if ! "$HOOK_DIR/guard-source-markers.sh"; then
+# Invoked via `bash` explicitly (not the +x bit): the repo is authored on Windows
+# (core.fileMode=false), where a lost executable bit is invisible locally but breaks a
+# fresh Linux checkout with "Permission denied" — which this gate would report as a
+# BLOCK on a perfectly green state (found by eval.yml's first CI run).
+if ! bash "$HOOK_DIR/guard-source-markers.sh"; then
   exit 2   # guard already printed the offending lines to stderr
 fi
 
@@ -250,7 +254,7 @@ if [ -n "$(git status --porcelain)" ]; then
   # Shared change-set hash helper: approve-diff.sh records approved_change_hash via this
   # same script, so the two match byte-for-byte (see the diff-scoping-conventions skill).
   # On an empty repo (no HEAD) both sides hash the untracked tree identically.
-  CURRENT=$("$HOOK_DIR/compute-change-hash.sh")
+  CURRENT=$(bash "$HOOK_DIR/compute-change-hash.sh")
   if [ -z "$APPROVED" ] || [ "$APPROVED" = "null" ] || [ "$APPROVED" != "$CURRENT" ]; then
     echo "Blocked: working tree does not match the human-approved diff ($DIFF_APPROVED approved_change_hash). Something changed after approval — re-review and re-run approve-diff.sh." >&2
     exit 2

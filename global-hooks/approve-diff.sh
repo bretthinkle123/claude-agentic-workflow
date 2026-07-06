@@ -34,7 +34,7 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 command -v jq >/dev/null 2>&1 || { echo "approve-diff: jq not found on PATH." >&2; exit 2; }
 
-CURRENT="$("$HOOK_DIR/compute-change-hash.sh")"
+CURRENT="$(bash "$HOOK_DIR/compute-change-hash.sh")"
 
 # Sanity: you should be approving exactly what documentation finalized. If the tree
 # has drifted from documentation's reviewed_change_hash, re-run documentation first.
