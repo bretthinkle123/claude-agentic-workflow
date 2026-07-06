@@ -95,6 +95,17 @@ string and those files — never assume it can see the conversation.
      -> ADVISORY only: design-review.json never gates and is NOT in the loop-exit predicate (visual
         diff is too brittle to block on; the human design-approved checkpoint is the teeth).
         documentation surfaces any over-budget screen/a11y breach in the PR.
+4e. DAST STAGE (DAST Layer 1 — CONDITIONAL, advisory, HTTP-surface only; skipped otherwise):
+     run iff .pipeline/dast.env exists (the project opted into runtime scanning). Boots an ephemeral
+     instance, runs OWASP ZAP's PASSIVE baseline against it (headers/cookies/info-leaks as SERVED),
+     then compares findings to the per-severity budget:
+          bash ~/.claude/hooks/dast-capture.sh   # RUNTIME-BOUND (Docker+ZAP); no dast.env / no Docker ⇒ no-op
+          bash ~/.claude/hooks/dast-review.sh     # deterministic budget compare → .pipeline/dast-review.json
+     -> ADVISORY only: dast-review.json never gates and is NOT in the loop-exit predicate (a passive
+        baseline is a signal, and it runs post-GREEN outside the security loop; the pre-merge scanners
+        + human diff review stay the teeth). documentation surfaces any over-budget severity in the PR.
+        The gating DAST layers (authenticated + active fuzz) live in CI against staging, not here
+        (docs/dast-plan.md Layers 2-3).
 
 5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
 5b. HARD HUMAN DIFF-REVIEW CHECKPOINT (M5) — the deploy-side counterpart to plan-approved:
@@ -182,6 +193,7 @@ reset`** so the circuit-breaker starts the next feature with a fresh budget.
 | `test-quality.json` | testing | documentation (surfaces mutation score + adversarial gaps). Score/gaps advisory; the deploy gate reads it for ONE deploy-only honesty check (WS3-1): `quality_ok:true` must not claim a scope it didn't mutate, absent a `quality_waiver` |
 | `loop-state.json` | loop-guard.sh (`reset`/`tick`/`done`) | loop-guard.sh (feature-level cycle/wall-clock budget; independent of `record-clean.sh`). Terminal `status`: `capped` (cap-out) or `completed` (`done`, on GREEN exit); left `running` only mid-loop |
 | `design-review.json` | design-review stage (`design-review-check.sh`, from `ui-capture.sh`'s `ui-capture.json`) | documentation (surfaces over-budget screens/a11y in the PR). **Advisory — never gates, not in loop-exit** (FE Layer 4) |
+| `dast-review.json` | DAST stage (`dast-review.sh`, from `dast-capture.sh`'s raw ZAP `dast-capture.json`) | documentation (surfaces over-budget severity bands in the PR). **Advisory — never gates, not in loop-exit** (DAST Layer 1; runtime-bound + opt-in via `dast.env`, no-op otherwise) |
 | `pr-description.md` | documentation | deployment, gate |
 | `diff-approved` | human (via `approve-diff.sh`, TTY-only) | deployment-gate.sh (**the M5 human-review gate + F3 currency anchor**: gate requires it + commit-hash == `approved_change_hash`) |
 | `review-manifest.json` | documentation | approve-diff.sh (sanity: tree == reviewed hash). **No longer the gate's currency anchor** — `diff-approved` is (F3) |

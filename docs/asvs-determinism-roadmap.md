@@ -6,7 +6,7 @@
 > **T2-1…T2-6** ship as plan-audit **material flags** + `test-conventions` adversarial shapes, riding
 > `criteria_covered`. All rows below are ✅. Only genuinely-judgment (Tier-3) items remain under 6g.
 
-**Status: roadmap/spec, partially built (see the banner + ✅ marks).** Companion to the ASVS 5.0.0
+**Status: delivered — all Tier-1 and Tier-2 rows are built (see the banner + ✅ marks); only Tier-3 judgment items remain agent-reasoned, by design.** Companion to the ASVS 5.0.0
 verification layer (security step 6g + `asvs-5.0-checklist.md`). Today 6g is **agent-reasoned**: the
 security agent (Opus) judges whether each ASVS L1/L2 requirement is met and folds misses into
 `critical_count` / `asvs.reconciled` (the deploy gate then blocks deterministically on the *result*).
@@ -22,6 +22,10 @@ Three tiers (from the design discussion):
 - **Tier 3 — genuinely not checkable** (judgment items). Stay agent-reasoned under 6g; no promotion.
 
 This doc lists the **specific** promotions worth making, what's already covered, and the sequencing.
+
+> **Related (out of scope here):** app-store compliance (Apple/Google submission requirements as a
+> PROJECT.md-scoped gate) reuses this doc's Tier 1/2/3 promotion pattern but is a separate
+> workstream — see `docs/store-compliance-plan.md`.
 
 ---
 
@@ -52,13 +56,14 @@ under-report it). Rules are stack-aware (Python/JS defaults). Priority order:
 | **T1-2 ✅** | **11.4.2** | Passwords stored with a fast hash instead of a slow KDF | a value named `password`/`passwd`/`passphrase` in proximity to `md5`/`sha1`/`sha256`/… `(` | **Critical** — offline cracking · **DONE** |
 | **T1-3 ✅** | **11.5.1** | Non-CSPRNG for security values | `random.random/randint/randrange` or `Math.random()` directly assigned to `token`/`secret`/`nonce`/`otp`/`key`/`session`/`reset`/`salt` | **Critical** — predictable tokens · **DONE** |
 | **T1-4 ✅** | **11.3.1 / 11.3.2** | Insecure cipher/mode/padding | `MODE_ECB`/`AES/ECB`, `DES`/`RC4`/`ARC4`, `PKCS1v15` | **Critical** · **DONE** |
-| T1-5 | **3.3.1 / 3.3.4** | Cookies missing `Secure` / `HttpOnly` / `SameSite` | `set_cookie` / `res.cookie(...)` without the flags (framework-aware) | High (session theft) |
-| T1-6 | **13.4.2 / 16.5.1** | Debug mode on in prod; stack traces to client | `debug=True`, `app.run(debug=True)`, `DEBUG = True`; returning exception/traceback text in a response body | Medium |
-| T1-7 | **3.4.x** | Missing security headers (HSTS/CSP/`X-Content-Type-Options`/`frame-ancestors`) | presence of a security-headers middleware/config for the default stack (overlaps `api-edge-conventions`) | Medium (config-presence → keep advisory-leaning where framework-ambiguous) |
-| T1-8 | **14.2.1** | Sensitive data in URL/query or logged full URLs | query params named `password`/`token`/`ssn`/`card`; logging of full request URLs | Low–Med (heuristic) |
+| **T1-5 ✅** | **3.3.1 / 3.3.4** | Cookies missing `Secure` / `HttpOnly` / `SameSite` | explicit `HttpOnly`/`Secure` **disable** on a cookie (precise explicit-bad pattern) | High (session theft) · **DONE** (2026-07-05, critical — blocks) |
+| **T1-6 ✅** | **13.4.2 / 16.5.1** | Debug mode on in prod; stack traces to client | `debug=True`, `app.run(debug=True)`, `DEBUG = True`; returning exception/traceback text in a response body | Medium · **DONE** (2026-07-05, **advisory warning** — framework-ambiguous) |
+| **T1-7 ✅** | **3.4.x** | CORS wildcard, `unsafe-inline` CSP, `X-Frame-Options: ALLOWALL` (explicit-bad headers, not config-presence) | precise explicit-bad patterns, favouring false negatives (overlaps `api-edge-conventions`) | Medium · **DONE** (2026-07-05, **advisory warning**) |
+| **T1-8 ✅** | **14.2.1** | Sensitive data in URL/query | a secret/token/password placed in a URL query string | Low–Med · **DONE** (2026-07-05, **advisory warning**) |
 
-**First slice = T1-1…T1-4** (crypto/auth, highest value, cleanest to write as precise Semgrep rules,
-lowest false-positive risk). T1-5/T1-6 next; T1-7/T1-8 last (framework-ambiguous → tune to avoid noise).
+**Sequencing as delivered:** T1-1…T1-4 first (crypto/auth, lowest false-positive risk, all critical);
+T1-5 next (critical); T1-6/T1-7/T1-8 last, shipped as **advisory warnings** (framework-ambiguous —
+precise explicit-bad patterns only, tuned to favour false negatives over noise).
 
 ---
 
@@ -72,13 +77,14 @@ Enforced the proven way: **plan-audit raises a material flag** when a triggering
 |---|---|---|---|
 | **T2-1 ✅** | **6.2.x / 8.2.1** | An **unauthenticated** request to each auth-required endpoint returns 401/403 | the feature has any authenticated endpoint (complements 8.2.2). **DONE** (plan-audit material flag + `test-conventions` shape) |
 | **T2-2 ✅** | **16.5.1 / 16.5.3** | A forced error returns a **generic** body — no stack trace / SQL / secret; no fail-open | any feature with server-side error paths. **DONE** (plan-audit material flag + `test-conventions` shape) |
-| T2-3 | **9.2.1 / 9.2.3** | An **expired** token and a **wrong-audience** token are both rejected | the feature issues or consumes self-contained tokens |
-| T2-4 | **7.2.4 / 7.4.1** | Session token **rotates on authentication**; **logout invalidates** the session | the feature manages sessions |
-| T2-5 | **2.3.3** | A mid-transaction failure **rolls back** (no partial write) | a multi-write / money / ledger operation (overlaps the concurrency mode — make explicit) |
-| T2-6 | **6.2.4 / 6.2.12** | A known-**breached password** is rejected at registration/change | the feature has password registration |
+| **T2-3 ✅** | **9.2.1 / 9.2.3** | An **expired** token and a **wrong-audience** token are both rejected | the feature issues or consumes self-contained tokens. **DONE** (2026-07-05) |
+| **T2-4 ✅** | **7.2.4 / 7.4.1** | Session token **rotates on authentication**; **logout invalidates** the session | the feature manages sessions. **DONE** (2026-07-05) |
+| **T2-5 ✅** | **2.3.3** | A mid-transaction failure **rolls back** (no partial write) | a multi-write / money / ledger operation (overlaps the concurrency mode — make explicit). **DONE** (2026-07-05) |
+| **T2-6 ✅** | **6.2.4 / 6.2.12** | A known-**breached password** is rejected at registration/change | the feature has password registration. **DONE** (2026-07-05) |
 
-**First slice = T2-1 (auth-required test) + T2-2 (generic-error test)** — highest value, cleanest to
-require, apply to almost every real feature. T2-3…T2-6 as their triggers appear.
+**Sequencing as delivered:** T2-1 (auth-required test) + T2-2 (generic-error test) first — highest
+value, apply to almost every real feature; T2-3…T2-6 followed in Slice C. All ride the existing
+`criteria_covered` gate via plan-audit material flags + `test-conventions` adversarial shapes.
 
 ---
 

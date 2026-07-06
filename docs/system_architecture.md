@@ -96,7 +96,13 @@ flowchart TD
     GREEN -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 30]
     DB2 -->|fix applied\nretry count++| LG
     DB2 -->|cap hit or unpatchable| HC
-    GREEN -->|yes\nrecord-clean.sh resets counters| DOC[documentation agent\nhaiku · maxTurns 25]
+    GREEN -->|yes\nrecord-clean.sh resets counters\nloop-guard done + run-summary.sh| DR{.pipeline/ui.env present?\nFE Layer 4 — conditional}
+    DR -->|yes| UIC[ui-capture.sh → design-review-check.sh\nadvisory design-review.json\nnever a gate]
+    UIC --> DA
+    DR -->|no| DA{.pipeline/dast.env present?\nDAST Layer 1 — conditional}
+    DA -->|yes| DAC[dast-capture.sh → dast-review.sh\nZAP passive baseline\nadvisory dast-review.json · never a gate]
+    DAC --> DOC
+    DA -->|no| DOC[documentation agent\nhaiku · maxTurns 25]
     DOC -->|writes| DOCS[README updates\npr-description.md\nreview-manifest.json]
     DOCS --> CR["/code-review — standard automated pre-step\nreview-only triage of the diff"]
     CR --> HARDCK{Human diff-review checkpoint M5\nreview diff + code-review findings + reports\nrun approve-diff.sh — TTY-only, writes diff-approved}
@@ -115,6 +121,7 @@ flowchart TD
 ```
 claude-agentic-workflow/
 ├── global-agents/          Nine subagent definitions (incl. conditional design-spec) — the source of truth for agent behavior
+│   ├── design-spec.md
 │   ├── planning.md
 │   ├── plan-audit.md
 │   ├── implementation.md
@@ -124,7 +131,7 @@ claude-agentic-workflow/
 │   ├── documentation.md
 │   └── deployment.md
 │
-├── global-hooks/           Sixteen deterministic scripts — zero LLM cost
+├── global-hooks/           Twenty-five deterministic scripts (+ the ui-capture.mjs Node helper) — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
@@ -135,6 +142,7 @@ claude-agentic-workflow/
 │   ├── record-waiver.sh        human-only (TTY) waiver recorder: writes .pipeline/waivers.json (osv/asvs); the gate honors only human-recorded waivers (Option B)
 │   ├── asvs-sast.sh            security Stop hook: deterministic ASVS Tier-1 SAST (JWT-none/pw-KDF/CSPRNG/cipher) → asvs-sast.json; gate blocks on critical>0 (ASVS-DET)
 │   ├── guard-approval-markers.sh  PreToolUse Bash hook on all Bash-carrying subagents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved/design-approved + waivers.json (PR K + Option B + DS structural guard)
+│   ├── guard-source-markers.sh  Stop hook on implementation + debugging AND a deployment-gate hard block (audit E3): greps the change set for revert/do-not-commit-class markers (TEMP-REVERT, DO NOT COMMIT, …) and blocks; plain TODO/FIXME pass
 │   ├── write-review-manifest.sh writes reviewed_change_hash (documentation's record + approve-diff's sanity check); called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
@@ -147,6 +155,8 @@ claude-agentic-workflow/
 │   ├── egress-allowlist.txt    the default-deny egress ACL (single source of truth); egress-proxy/ = the operator-provisioned Layer-2 proxy recipe (Docker/WSL2)
 │   ├── ui-capture.sh + .mjs    FE Layer 4 (runtime-bound): Playwright render → screenshot → pixelmatch diff vs baseline → axe → .pipeline/ui-capture.json (no ui.env/Playwright ⇒ no-op)
 │   ├── design-review-check.sh  FE Layer 4 (deterministic): compares ui-capture.json to the design budget → advisory .pipeline/design-review.json (never a gate)
+│   ├── dast-capture.sh         DAST Layer 1 (runtime-bound): boots the app + runs OWASP ZAP passive baseline in Docker → raw .pipeline/dast-capture.json (opt-in via dast.env; no dast.env/Docker ⇒ no-op)
+│   ├── dast-review.sh          DAST Layer 1 (deterministic): tallies dast-capture.json alerts by severity vs .pipeline/dast-budget.json → advisory .pipeline/dast-review.json (never a gate)
 │   └── post-deploy-check.sh    [UNIMPLEMENTED] CI hook — runs after PR merges, not in pipeline
 │
 ├── global-skills/          Reference knowledge preloaded into agents that need it
@@ -170,37 +180,57 @@ claude-agentic-workflow/
 │
 ├── global-project-skills/  Per-project skill templates (installed alongside global-skills)
 │   ├── semgrep-ruleset-guide/  which Semgrep rule sets to apply per language/framework (fill <STACK CONFIGS>)
-│   └── test-conventions/       project test structure, runner, coverage thresholds (fill per project)
+│   ├── test-conventions/       project test structure, runner, coverage thresholds (fill per project)
+│   ├── design-system-conventions/  design-spec's extraction schema (screens/components/tokens, needs-native-mapping)
+│   ├── swift-conventions/          iOS: SwiftUI architecture, state model, XCTest + the web→SwiftUI mapping cheat-sheet
+│   ├── apple-hig-compliance/       iOS: native nav patterns, Dynamic Type, dark mode — the web→native design seam
+│   ├── claude-design-to-swiftui/   iOS: Claude Design export → faithful SwiftUI replication recipe
+│   └── app-store-submission-requirements/  iOS: signing, privacy manifest, data-use — planning emits them as ACs
 │
 ├── templates/
 │   ├── CLAUDE.md               Seed for the per-project CLAUDE.md (fill in stack + run commands)
 │   ├── mcp.json                Sample .mcp.json for projects that opt into MCP servers
 │   ├── project-settings.json   Pipeline command allow-list (becomes .claude/settings.json per project)
-│   └── state.json              Seed .pipeline/state.json written by bootstrap
+│   ├── state.json              Seed .pipeline/state.json written by bootstrap
+│   ├── ui.env                  FE Layer 4 opt-in: copy to .pipeline/ui.env to declare the servable UI (base URL + screens) — its presence activates the design-review stage
+│   ├── design-budget.json      FE Layer 4: copy to .pipeline/design-budget.json — per-screen visual-diff tolerance + a11y violation caps
+│   ├── dast.env                DAST Layer 1 opt-in: copy to .pipeline/dast.env to declare the scan target + boot command — its presence activates the post-GREEN DAST stage
+│   └── dast-budget.json        DAST Layer 1: copy to .pipeline/dast-budget.json — per-severity ZAP finding caps
 │
 ├── scripts/
 │   ├── install-global.sh       Publishes global-agents, global-hooks, global-skills, templates → ~/.claude/
 │   ├── bootstrap-project.sh    Per-project bootstrap; also installed to ~/.claude/pipeline-templates/
-│   └── run-log-digest.sh       Zero-LLM run-log.jsonl summary + inverted-pyramid flag; → ~/.claude/pipeline-templates/
+│   ├── run-log-digest.sh       Zero-LLM run-log.jsonl summary + inverted-pyramid flag; → ~/.claude/pipeline-templates/
+│   ├── run-summary.sh          Writes .pipeline/run-summary.json at GREEN (per-stage attempts/models from the run log + loop journal, plus the reduced-assurance stamp); → ~/.claude/pipeline-templates/
+│   └── list-skills.sh          Repo-side tool: classifies every SKILL.md as preloaded vs on-demand from agent frontmatter (the authoritative view; --annotate writes breadcrumbs)
 │
 ├── tests/                  Eval/regression harness (M8) — deterministic, zero-LLM; run `bash tests/run-eval.sh`
 │   ├── run-eval.sh             Entry: runs every suite against golden fixtures; exit 0 iff all pass (CI-ready)
-│   ├── suites/                 gate, loop-guard, loop-exit-invariant, stamp-ran-at, record-clean, static
+│   ├── suites/                 18 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
+│   │                           loop-exit-invariant, stamp-ran-at, record-clean, hash-determinism, asvs,
+│   │                           waiver-guard, asvs-sast, design-spec, egress, assurance, design-review, dast-review
 │   ├── fixtures/linkly-green/  Golden pipeline snapshot (Linkly, perf corrected to a passing state)
 │   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
 │
 ├── docs/
-│   ├── agentic-pipeline-plan.md      Full design doc — orientation guide, rationale, appendix
+│   ├── agentic-pipeline-plan.md      Full design doc — chronological design log (historical; lags the live pipeline)
 │   ├── system_architecture.md        This file
+│   ├── pipeline-threat-model.md      Engine-scope STRIDE model (PR K) — the pipeline itself as target
+│   ├── asvs-determinism-roadmap.md   ASVS-DET: agent-reasoned checks promoted to deterministic gates (Slices A–D shipped)
+│   ├── design-spec-stage-plan.md     DS side-track plan — design bundle → vouched design-spec.md (Layers 0–4 built)
+│   ├── ios-swiftui-target-plan.md    iOS side-track plan (skills/planning layers built; Layer 3 gate adapters macOS-bound)
+│   ├── data-protection-enforcement-plan.md  DP side-track plan — per-field at-rest accountability (built)
+│   ├── egress-control-plan.md        EG side-track plan — default-deny egress (deterministic slices built; proxy operator-provisioned)
 │   ├── pipeline-alternatives.md      Non-default stack scaffolds (Cognito, GCP, JS backend)
 │   ├── pipeline-deployment-targets.md  CI/CD patterns for after the PR merges
 │   ├── pipeline-mcp-config.md        MCP server wiring per agent
-│   └── pipeline-refinement-loops.md  [UNIMPLEMENTED] How to evolve the pipeline over time
+│   ├── pipeline-code-quality-audit.md  [DESIGN, not built] code-audit stage spec
+│   └── pipeline-refinement-loops.md  Candidate refinement loops (the planning loop shipped; the rest are designs)
 │
 ├── memory/                 Auto-memory persisted across Claude Code sessions
-│   ├── MEMORY.md           Index
 │   ├── brett-profile.md    Brett's preferences, default stack, collaboration style
 │   ├── project-context.md  Pipeline architecture, settled decisions, build status
+│   ├── testing-coverage-contract.md  test_strategy/coverage schema + skill preload-vs-on-demand contract
 │   └── audit-prompt.md     Saved prompt for a pre-build readiness audit session (read-only, report only)
 │
 └── README.md               Install and bootstrap instructions (entry point for new machines)
@@ -311,7 +341,7 @@ the checkpoint.
 | Tools | Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `code-standards` |
 | On-demand skills | `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions` |
-| Stop hooks (in order) | `smoke-check.sh`, `infra-validate.sh`, `log-run.sh implementation` |
+| Stop hooks (in order) | `smoke-check.sh`, `infra-validate.sh`, `guard-source-markers.sh`, `log-run.sh implementation` |
 
 **Responsibility:** Verify `plan-approved` exists, read `plan.md`, write code. Runs a
 diff-vs-plan check and a security quick scan before reporting done. Creates database migration files
@@ -323,8 +353,10 @@ not need Opus's open-ended reasoning, and as the highest-volume stage it stays o
 Sonnet weekly pool. Sonnet at high effort handles well-specified build tasks efficiently.
 
 **What fires when it stops:** `smoke-check.sh` boots the app and hits `/health`. If that passes,
-`infra-validate.sh` checks for an `infra/` directory and runs `terraform validate` if found. Then
-`log-run.sh` appends a line to `run-log.jsonl` with `status` derived from `smoke-status.json`.
+`infra-validate.sh` checks for an `infra/` directory and runs `terraform validate` if found;
+`guard-source-markers.sh` then blocks if the change set still carries a revert/do-not-commit-class
+marker. Then `log-run.sh` appends a line to `run-log.jsonl` with `status` derived from
+`smoke-status.json`.
 
 ---
 
@@ -337,7 +369,7 @@ Sonnet weekly pool. Sonnet at high effort handles well-specified build tasks eff
 | maxTurns | 30 |
 | Tools | Read, Write, Edit, Bash, Grep |
 | Preloaded skills | `debugging-escalation-protocol` |
-| Stop hook | `log-run.sh debugging` |
+| Stop hooks (in order) | `guard-source-markers.sh`, `log-run.sh debugging` |
 
 **Responsibility:** Fix specific, reported problems — reproduce-first, author a failing→passing
 regression test (its `Write` tool authors the new test file and `.pipeline/debug-notes.md`),
@@ -371,7 +403,7 @@ fixes, not just symptoms. It fires only on failure, so the Opus cost is small in
 | Tools | Read, Edit, Bash, Grep, Write, Skill |
 | Preloaded skills | `semgrep-ruleset-guide`, `diff-scoping-conventions` |
 | On-demand skills | `iac-conventions` (only when `infra/` exists) |
-| Stop hooks (in order) | `stamp-ran-at.sh security`, `log-run.sh security` |
+| Stop hooks (in order) | `asvs-sast.sh`, `egress-check.sh`, `stamp-ran-at.sh security`, `log-run.sh security` |
 
 **Responsibility:** Scan the working-tree change set (tracked diff + untracked files since last
 commit), fix exploitable vulnerabilities (any severity) and critical/high hygiene findings
@@ -545,13 +577,15 @@ and are the pipeline's mechanism for deterministic enforcement. Published to `~/
 **Two hook event types used by this pipeline:**
 
 - **`Stop` (declared in agent frontmatter)** — fires when that agent finishes, as a
-  `SubagentStop` event. Used for: smoke check, infra validate, record-clean, log-run.
+  `SubagentStop` event. Used for: smoke check, infra validate, source-marker guard,
+  ASVS Tier-1 SAST, egress detection, ran-at stamping, record-clean, log-run.
 - **`PreToolUse` (declared in agent frontmatter)** — fires before a specific tool runs. Used
   for: the deployment gate (blocks the git commit Bash call) and `guard-approval-markers.sh`
   (on all 7 Bash-carrying agents — blocks a subagent from forging a human approval marker).
 
 **Global safety rule:** every ambient Stop hook (smoke-check, record-clean, infra-validate,
-log-run) — and the orchestrator-invoked `loop-guard.sh` — opens with
+log-run, stamp-ran-at, asvs-sast, egress-check, guard-source-markers, ui-capture,
+design-review-check, dast-capture, dast-review) — and the orchestrator-invoked `loop-guard.sh` — opens with
 `[ -f .pipeline/state.json ] || exit 0` so it no-ops instantly in any repo that hasn't been
 bootstrapped. The deployment gate has no such guard — it fails closed when interlock files are
 absent.
@@ -636,6 +670,11 @@ that ships with the autonomous loop** (PR C).
 is **independent of** the per-cycle `debug_retry_count` that `record-clean.sh` resets on every clean
 pass. That independence is what lets the breaker bound a thrashing loop the per-cycle counters can't.
 
+**Durable journal:** every `reset` / cap-out / `done` also appends a line to
+`.pipeline/loop-events.jsonl`, so a later `reset` can never erase the record of a prior cap-out.
+`loop-state.json` is the current view; the journal is the durable history (`run-summary.sh` reads
+both to report honest attempt counts even when a capped stage's Stop hook never fired).
+
 ---
 
 ### deployment-gate.sh
@@ -682,7 +721,12 @@ pass. That independence is what lets the breaker bound a thrashing loop the per-
    — a fabricated waiver blocks, closing the "agent self-waives to go green" vector. A second
    deploy-only floor is **ASVS Tier-1 SAST (ASVS-DET):** `.pipeline/asvs-sast.json` `critical > 0`
    → block (an unfixed JWT-none / fast-hash-password / non-CSPRNG / insecure-cipher finding);
-   also not in the loop-exit predicate (absent file ⇒ 0 ⇒ no-op).
+   also not in the loop-exit predicate (absent file ⇒ 0 ⇒ no-op). Two more deploy-only blocks
+   ride here: **source markers (E3)** — the gate invokes `guard-source-markers.sh`, so a
+   revert/do-not-commit-class marker (TEMP-REVERT, DO NOT COMMIT, …) left anywhere in the change
+   set blocks; and the **mutation-scope honesty check (WS3-1)** — a `test-quality.json` that claims
+   `quality_ok: true` while its mutation run did not cover the configured scope (and no
+   `quality_waiver` is recorded) blocks. An honest `quality_ok: false` stays advisory and ships.
 5. `pr-description.md` exists.
 6. **Human diff approval + currency (M5 + F3).** If the working tree is dirty (change not yet
    committed): `.pipeline/diff-approved` must exist (a human ran `approve-diff.sh`, which refuses
@@ -825,7 +869,18 @@ commit; until then, all changes live in the working tree.
 | `smoke-status.json` | smoke-check.sh | log-run.sh (implementation status) | `{"status":"pass|fail","ran_at":"..."}` |
 | `smoke.env` | bootstrap-project.sh | smoke-check.sh | Per-project start/health/build commands (gitignored, local only) |
 | `infra-plan.txt` | infra-validate.sh | human review | `terraform plan` output for the human checkpoint |
-| `run-log.jsonl` | log-run.sh (each agent's Stop hook) | you (metrics) | Append-only telemetry: one JSON line per stage per run |
+| `run-log.jsonl` | log-run.sh (each agent's Stop hook) | you (metrics), run-summary.sh | Append-only telemetry: one JSON line per stage per run |
+| `loop-events.jsonl` | loop-guard.sh (`reset`/cap-out/`done`) | run-summary.sh | Append-only cap-out/reset/complete journal — a `reset` can never erase a prior cap-out |
+| `run-summary.json` | run-summary.sh (orchestrator, at GREEN after `loop-guard.sh done`) | documentation + the retrospective (must quote per-stage models/costs from it, never hand-write them), orchestrator (assurance) | Deterministic machine summary of the run (per-stage invocations/attempts/caps/models); carries **`assurance`** — `"standard"`, or `"reduced (swift adapters absent)"` on a Swift/iOS target without Swift gate adapters, in which case the run must never be described as "gate-verified" |
+| `egress-log.jsonl` | operator-provisioned Layer-2 egress proxy (EG) | egress-check.sh (security Stop hook) | ALLOWED/DENIED outbound-host log; any DENIED host surfaces as a security warning (signal, not a gate); absent ⇒ no-op |
+| `ui.env` | operator (copied from `templates/ui.env`) | ui-capture.sh | FE Layer 4 opt-in: declares the servable UI (base URL, screens, start command); its presence activates the design-review stage (4d) |
+| `design-budget.json` | operator (copied from `templates/design-budget.json`) | design-review-check.sh | Per-screen visual-diff tolerance + a11y violation caps — the budget the review compares against |
+| `ui-capture.json` | ui-capture.sh + ui-capture.mjs (runtime-bound: Playwright render → screenshot → pixelmatch diff vs baseline → axe) | design-review-check.sh | Per-screen `{diff_pct, axe_violations}`; no ui.env / no Playwright ⇒ fail-safe no-op (file absent) |
+| `design-review.json` | design-review-check.sh (deterministic budget compare) | documentation (surfaces over-budget screens/a11y in the PR) | **Advisory — never a gate, not in loop-exit** (FE Layer 4); malformed ui-capture.json ⇒ clean no-op rather than an invalid file |
+| `dast.env` | operator (copied from `templates/dast.env`) | dast-capture.sh | DAST Layer 1 opt-in: declares the target URL + how to boot the app for the scan; its presence activates the post-GREEN DAST stage (4e). Kept local/untracked (git-tracked copy refused, smoke.env posture) |
+| `dast-budget.json` | operator (copied from `templates/dast-budget.json`) | dast-review.sh | Per-severity caps (high/medium/low/informational) the ZAP baseline is compared against — safe defaults if absent |
+| `dast-capture.json` | dast-capture.sh (runtime-bound: OWASP ZAP passive baseline in Docker vs the booted app) | dast-review.sh | Raw ZAP report (`site[].alerts[]`); no dast.env / no Docker ⇒ fail-safe no-op (file absent) |
+| `dast-review.json` | dast-review.sh (deterministic severity tally vs budget) | documentation (surfaces over-budget severity bands in the PR) | **Advisory — never a gate, not in loop-exit** (DAST Layer 1); malformed capture ⇒ clean no-op |
 
 ---
 
@@ -851,11 +906,17 @@ when the feature needs that knowledge.
 | `auth-patterns` | on-demand (planning, implementation) | Firebase/Cognito facade, OAuth 2.0, Duo MFA, mfa_verified claim |
 | `logging-conventions` | on-demand (planning, implementation) | structlog/Pino, OTel, CloudWatch/X-Ray, log field schema |
 | `secrets-management` | on-demand (planning, implementation) | Runtime-secret fetch facade (AWS Secrets Manager / SSM), caching, rotation — only when a feature consumes a credential |
+| `data-protection-conventions` | on-demand (planning, implementation, security, plan-audit) | Data classification → at-rest control per class (KDF / KMS envelope / SSE), crypto facade — only when a feature stores user data (DP) |
 | `iac-conventions` | on-demand (planning, implementation, security) | Terraform infra/ layout, AWS provider, IaC security baseline |
 | `ddia-patterns` | on-demand (planning) | Storage, replication, consistency trade-offs (from DDIA) |
 | `containerization-conventions` | on-demand (planning) | Docker vs. serverless decision rubric |
 | `api-edge-conventions` | on-demand (planning, implementation) | Rate limiting, CORS, security headers, idempotency, outbound timeouts |
 | `dependency-audit-policy` | on-demand (plan-audit) | Dependency reality-check + version policy — loaded only when the plan adds a new dependency |
+| `design-system-conventions` | design-spec | The design-bundle extraction schema: screens/components/tokens, layout & interaction intent, needs-native-mapping, injection report (DS) |
+| `swift-conventions` | on-demand (planning, implementation, testing — iOS target only) | SwiftUI architecture, state model, XCTest shape + the web→SwiftUI mapping cheat-sheet |
+| `apple-hig-compliance` | on-demand (planning, design stages — iOS target only) | Native nav patterns, SF Symbols, Dynamic Type, dark mode — mapping web idioms to iOS-native equivalents |
+| `claude-design-to-swiftui` | on-demand (planning, implementation — iOS target only) | Claude Design export → faithful SwiftUI replication recipe |
+| `app-store-submission-requirements` | on-demand (planning, deployment — iOS target only) | Signing, privacy manifest, data-use declarations — emitted as acceptance criteria early |
 
 ---
 
