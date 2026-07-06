@@ -23,13 +23,31 @@
 #     waiver/mutation checks), so this is NOT in the loop-exit predicate — no loop-exit churn.
 # Wired as a Stop hook on the security agent (guaranteed to run, agent-independent).
 set -uo pipefail
-[ -f .pipeline/state.json ] || exit 0          # ambient no-op outside a bootstrapped project
+# CI re-run mode (PR L, job 6): SCAN_BASE=<ref> rescopes the scan to `git diff SCAN_BASE...HEAD`.
+# Needed because on a merge commit `git diff HEAD` is EMPTY — a naive CI re-run would pass
+# vacuously. Three CI-mode differences, all scoped to SCAN_BASE being set: the state.json
+# ambient guard is skipped (a CI checkout isn't a bootstrapped project); untracked files aren't
+# scanned (a CI tree is clean — the diff-vs-base IS the change set); and the script exits 2 on
+# critical>0 (no deployment gate runs in CI to read the JSON — the exit code is the gate there).
+# An unresolvable SCAN_BASE fails CLOSED (exit 2), never silently-vacuous.
+if [ -n "${SCAN_BASE:-}" ]; then
+  git rev-parse --verify --quiet "$SCAN_BASE^{commit}" >/dev/null 2>&1 || {
+    echo "[asvs-sast] SCAN_BASE '$SCAN_BASE' does not resolve to a commit — failing closed." >&2
+    exit 2
+  }
+else
+  [ -f .pipeline/state.json ] || exit 0        # ambient no-op outside a bootstrapped project
+fi
 command -v jq >/dev/null 2>&1 || exit 0         # no jq ⇒ can't emit JSON (the gate fails closed on jq anyway)
 
 OUT=.pipeline/asvs-sast.json
+mkdir -p .pipeline 2>/dev/null || true          # CI checkouts have no .pipeline/ (gitignored)
 
-# Diff-scoped change set (tracked changes since HEAD + untracked new files); full tree pre-first-commit.
-if git rev-parse --verify HEAD >/dev/null 2>&1; then
+# Diff-scoped change set (tracked changes since HEAD + untracked new files); full tree pre-first-commit;
+# diff-vs-merge-base in CI mode.
+if [ -n "${SCAN_BASE:-}" ]; then
+  mapfile -t FILES < <(git diff "$SCAN_BASE...HEAD" --name-only 2>/dev/null | sort -u)
+elif git rev-parse --verify HEAD >/dev/null 2>&1; then
   mapfile -t FILES < <({ git diff HEAD --name-only; git ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
 else
   mapfile -t FILES < <(git ls-files --others --exclude-standard 2>/dev/null | sort -u)
@@ -102,4 +120,9 @@ jq -n --argjson f "$findings" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{ran_at:$t, scope:"diff", critical:$c, warning:$w, findings:$f}' > "$OUT"
 
 echo "[asvs-sast] ${CRIT:-0} critical, ${WARN:-0} warning (ASVS Tier-1: JWT-none/9.1.2, pw-KDF/11.4.2, CSPRNG/11.5.1, cipher/11.3.1, cookie/3.3.1; advisory: debug/13.4.2, headers/3.4.x, url-secrets/14.2.1) — see $OUT"
+# CI mode: the exit code is the gate (locally the deployment gate reads the JSON instead).
+if [ -n "${SCAN_BASE:-}" ] && [ "${CRIT:-0}" -gt 0 ]; then
+  echo "[asvs-sast] CI mode (SCAN_BASE=$SCAN_BASE): ${CRIT} critical — failing the job." >&2
+  exit 2
+fi
 exit 0

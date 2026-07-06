@@ -77,6 +77,24 @@ When invoked:
    passive baseline runs post-GREEN, outside the security loop; the pre-merge scanners + human
    diff review stay the teeth) — present it as reviewer context, never as a pass/fail. Note that
    the gating DAST layers run in CI against staging, not in this run.
+6b. **Design-record retention (PR L Layer 0).** `.pipeline/` is overwritten every
+   feature and never committed, so without this step a shipped app retains no plan,
+   threat model, or security report — and CI-era reviewers have nothing to check the
+   diff against. Copy the run's design record into the project, **before step 7** (so
+   the reviewed-state hash — and therefore the human's diff approval — covers it):
+   ```
+   mkdir -p "docs/decisions/$(git branch --show-current)"
+   cp .pipeline/plan.md .pipeline/acceptance.md .pipeline/plan-audit.md \
+      .pipeline/security-report.md "docs/decisions/$(git branch --show-current)/" 2>/dev/null || true
+   cp .pipeline/design-spec.md .pipeline/run-summary.json \
+      "docs/decisions/$(git branch --show-current)/" 2>/dev/null || true
+   ```
+   (The `|| true` forms tolerate absent optional files — design-spec/run-summary exist
+   only on some runs.) **Redaction rule:** these reports are already written secret-free
+   by the security agent's own rules; still scan what you copied for anything
+   credential-shaped and redact before proceeding — the record is about to become part
+   of the commit. The record is **evidence for humans and audits, not a CI input** —
+   no gate reads it. Layout details live in the `doc-conventions` skill.
 7. **Record the reviewed-state hash — do this LAST, after every README,
    system_architecture.md, and source-tree edit is written**, so it captures the
    exact bytes the human will review and the deployment agent will commit. You

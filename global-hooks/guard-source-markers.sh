@@ -22,8 +22,23 @@
 # Exit: 0 = clean (or no change set / not a pipeline project) · 2 = marker found (BLOCK).
 set -uo pipefail
 
-# Pipeline-project guard: no-op outside a bootstrapped pipeline project.
-[ -f .pipeline/state.json ] || exit 0
+# CI re-run mode (PR L, job 6): SCAN_BASE=<ref> rescopes the added-lines scan to
+# `git diff SCAN_BASE...HEAD` — on a merge commit `git diff HEAD` is empty, so a naive CI
+# re-run passes vacuously. Added-lines-only semantics are PRESERVED (a full-tree grep would
+# false-block on a marker being *removed*). The state.json guard is skipped in CI (not a
+# bootstrapped checkout); an unresolvable SCAN_BASE fails CLOSED (exit 2), never vacuous.
+# Exit 2 on a hit is already the contract, so CI needs no separate failure path.
+DIFF_REF="HEAD"
+if [ -n "${SCAN_BASE:-}" ]; then
+  git rev-parse --verify --quiet "$SCAN_BASE^{commit}" >/dev/null 2>&1 || {
+    echo "[guard-source-markers] SCAN_BASE '$SCAN_BASE' does not resolve to a commit — failing closed." >&2
+    exit 2
+  }
+  DIFF_REF="$SCAN_BASE...HEAD"
+else
+  # Pipeline-project guard: no-op outside a bootstrapped pipeline project.
+  [ -f .pipeline/state.json ] || exit 0
+fi
 
 # Danger-marker pattern. Anchored to revert/do-not-commit intent, not ordinary TODOs.
 MARKERS='TEMP[-_ ]?(PREFIX[-_ ]?)?REVERT|REVERT[-_ ]?ME|XXX[-_ ]?REVERT|DO[-_ ]?NOT[-_ ]?COMMIT|HACK[-_ ]?REMOVE|FIXME[-_ ]?BEFORE[-_ ]?COMMIT'
@@ -42,8 +57,8 @@ hits=""
 #    applies; previously the tracked scan ran over the whole `git diff HEAD` unfiltered.
 #    NUL-delimited end-to-end (name-only -z | grep -z | xargs -0) so odd filenames and the
 #    NUL-stripping of $() capture can't corrupt the file list.
-added="$(git diff HEAD --name-only -z 2>/dev/null | grep -zvE "$EXCLUDE" \
-         | xargs -0 -r git diff HEAD -- 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+added="$(git diff "$DIFF_REF" --name-only -z 2>/dev/null | grep -zvE "$EXCLUDE" \
+         | xargs -0 -r git diff "$DIFF_REF" -- 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
 if [ -n "$added" ]; then
   m="$(printf '%s\n' "$added" | grep -inE "$MARKERS" || true)"
   [ -n "$m" ] && hits="$hits"$'\n'"tracked diff:"$'\n'"$m"
