@@ -6,7 +6,7 @@
 # What gets published:
 #   global-agents/      -> ~/.claude/agents/              (9 pipeline subagents, incl. conditional design-spec)
 #   global-hooks/       -> ~/.claude/hooks/               (deterministic gate scripts, chmod +x)
-#   global-skills/      -> ~/.claude/skills/              (17 global skills)
+#   global-skills/      -> ~/.claude/skills/              (19 global skills)
 #   templates/          -> ~/.claude/pipeline-templates/  (CLAUDE.md, settings, state seed, mcp.json)
 #   global-project-skills/ -> ~/.claude/pipeline-templates/project-skills/  (8 per-project skill templates)
 #   scripts/bootstrap-project.sh -> ~/.claude/pipeline-templates/bootstrap-project.sh

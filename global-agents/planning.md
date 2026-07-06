@@ -41,7 +41,10 @@ container runtime); `ci-conventions` when the project has (or the plan adds) a
 pre-merge-only guarantee, and the branch-protection checklist;
 `delivery-conventions` when the change ships a container image or touches the
 post-merge deploy path (immutable SHA tags, cosign signing + SBOM/SLSA
-attestation, verify-before-rollout, container hardening). When the frontend target is a **native iOS app (SwiftUI)** —
+attestation, verify-before-rollout, container hardening);
+`observability-conventions` when the change ships to a real environment or
+defines SLOs (Sentry release-tagging, OTel→CloudWatch export, SLO burn-rate
+alarms the canary consumes, synthetics, mobile crash reporting). When the frontend target is a **native iOS app (SwiftUI)** —
 recorded as an alternative to the default JavaScript frontend under `## Stack notes` —
 `swift-conventions` for the view/state/navigation architecture,
 `apple-hig-compliance` to map the design onto native iOS patterns (not a web layout
