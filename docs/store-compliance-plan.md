@@ -198,8 +198,11 @@ changes annually and this doc deliberately does not hard-code it.
   are stripped and single→double quotes normalised first so a stray brace can't desync the match; any
   construct it can't positively resolve to a release block (e.g. `buildTypes.all { … }`, a variable)
   is left unflagged — a false negative, the accepted posture. Regression-guarded, incl. the
-  debug-block safety case. **Residual:** an unbalanced brace *inside a string literal* could still
-  desync brace tracking (rare in Gradle); block/line comments are already handled.
+  debug-block safety case and an unbalanced-brace-in-a-string case (the walker is string-aware, so a
+  `{` inside a `"…"` literal doesn't move the brace depth — that had been a deploy-blocking false
+  positive; now fixed). **Residual:** an *escaped* double-quote inside a string (`"…\"…"`) could
+  still toggle the string-tracking state; vanishingly rare in a Gradle build script, and the
+  favour-FN posture means the likely failure is a miss, not a false block.
 
 ## Maintenance note (the honest cost)
 

@@ -134,25 +134,29 @@ if [ "$ANDROID" = true ]; then
   # `debug { debuggable true }` buildType, a deploy-blocking FALSE POSITIVE. `release_debuggable`
   # extracts only the body of release buildType blocks (release {…} / getByName("release") {…} /
   # create("release") {…}) by brace-matching, then looks for a debuggable-enable inside. Comments and
-  # http:// URLs are stripped and single→double quotes normalised first so a stray brace can't desync
-  # the matching; any construct it can't resolve to a release block is simply NOT flagged (favour-FN).
+  # http:// URLs are stripped and single→double quotes normalised first, and the walker is STRING-AWARE
+  # (a `{`/`}` inside a "…" literal — e.g. a resValue template `"Hi {name}"` — does not move the brace
+  # depth, so it can't misattribute a later debug block to release) — without that, an unbalanced brace
+  # in a string was a deploy-blocking false positive. Any construct it can't resolve to a release block
+  # is simply NOT flagged (favour-FN).
   release_debuggable() {  # stdin: gradle text → prints the concatenated body of every release block
     sed -E ':a;s@/\*[^*]*\*+([^/*][^*]*\*+)*/@ @;ta' \
       | sed -E "s@(^|[[:space:]])//.*@\1@; s@'@\"@g" \
       | awk '
         { doc = doc $0 "\n" }
         END {
-          n = length(doc); depth = 0; tok = ""; last = ""; relopen = -1
+          n = length(doc); depth = 0; tok = ""; last = ""; relopen = -1; instr = 0
           for (i = 1; i <= n; i++) {
             c = substr(doc, i, 1)
-            if (c == "{") {
+            if (c == "\"") { instr = 1 - instr; tok = tok c; if (relopen != -1) out = out c; continue }
+            if (!instr && c == "{") {
               depth++
               lbl = (tok != "" ? tok : last)
               if (relopen == -1 && tolower(lbl) ~ /(^|[^a-z0-9])release([^a-z0-9]|$)/) relopen = depth
               tok = ""; last = ""; continue
             }
-            if (c == "}") { if (relopen == depth) relopen = -1; if (depth > 0) depth--; tok = ""; last = ""; continue }
-            if (c ~ /[A-Za-z0-9_.()"]/) { tok = tok c } else { if (tok != "") { last = tok; tok = "" } }
+            if (!instr && c == "}") { if (relopen == depth) relopen = -1; if (depth > 0) depth--; tok = ""; last = ""; continue }
+            if (c ~ /[A-Za-z0-9_.()]/) { tok = tok c } else { if (tok != "") { last = tok; tok = "" } }
             if (relopen != -1) out = out c
           }
           print out

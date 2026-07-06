@@ -95,6 +95,15 @@ assert_eq 0 "$(store_scan '.critical' \
 assert_eq "true" "$(store_scan '.findings|map(.rule)|index("SC-5")!=null' \
   build.gradle.kts 'android { buildTypes { getByName("release") { isDebuggable = true } } }' \
   AndroidManifest.xml '<manifest/>')" "SC-5 Kotlin DSL: getByName(\"release\"){isDebuggable=true} fires"
+#   String-aware safety: an unbalanced brace inside a STRING literal in the release block must not
+#   desync brace tracking and misattribute the debug block's debuggable to release (a deploy-blocking
+#   false positive). release is debuggable=false here; only debug is true → must NOT fire.
+assert_eq 0 "$(store_scan '.critical' \
+  build.gradle 'android { buildTypes {
+  release { resValue "string", "x", "brace{here"
+           debuggable false }
+  debug   { debuggable true }
+} }' AndroidManifest.xml '<manifest><application/></manifest>')" "unbalanced { in a release string + debug debuggable → 0 critical (no false positive)"
 
 # (3) gate floor on the critical count
 gate_store() {  # <want-exit> <desc> <json|''>
