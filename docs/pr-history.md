@@ -1,6 +1,6 @@
 # PR History
 
-Every pull request made against this repo, in order. All 32 land between **2026-06-27 and 2026-07-06** — the repo's entire PR history falls inside the last two weeks, so the concept summary at the end covers everything.
+Every pull request made against this repo, in order. All 33 land between **2026-06-27 and 2026-07-06** — the repo's entire PR history falls inside the last two weeks, so the concept summary at the end covers everything.
 
 ## The PRs
 
@@ -38,6 +38,7 @@ Every pull request made against this repo, in order. All 32 land between **2026-
 | 30 | Jul 6 | Track 2: PR N — environments + progressive delivery + real load | `templates/ci/deploy.yml` (inert until `DEPLOY_ENABLED=true`): cosign verify-before-rollout identity-pinned to this repo's workflow → staging deploy (RDS snapshot → migrate → rollout) → canary with burn-rate rollback; real load campaign. No new gate hooks, no loop-exit change. |
 | 31 | Jul 6 | Track 2: PR O — triage agent + observability wiring | New read-only **triage** agent: operator-invoked with one Sentry issue id, writes `.pipeline/incident-brief.md` and stops — safety by tool absence (no Bash/Edit). Plus observability scaffolding (Sentry, OTel→CloudWatch/X-Ray, SLOs + burn-rate alarms) feeding the canary rollback. |
 | 32 | Jul 6 | Track 2: PR P — scale validation + DR drill + cost + continuous vuln | Final Track-2 item: `scale-ceiling` k6 ramp proving autoscaling fires (abort = the ceiling measurement), monthly `dr-drill.yml` executing a real restore, cost guardrails, continuous vulnerability re-scanning. Per-project scaffolding; no engine/gate change. |
+| 33 | Jul 6 | CQ: CodeQL deep-SAST CI job + doc sync & audit-residual fixes | `codeql` job fills `pipeline-ci.yml`'s Layer-4 reserved slot (security-extended queries, SHA-pinned, alert-only by default; CI-only by design). Plus this doc, the post-Track-2 architecture sync, and fixes for the pre-build audit's surviving findings (stale spec banners, dangling audit-ID legend, ordering/dependency overclaims). |
 
 ## Two-week summary, by concept
 
