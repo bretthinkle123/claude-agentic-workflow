@@ -34,7 +34,7 @@ containerization-conventions|dast-conventions|data-protection-conventions|ddia-p
 debugging-escalation-protocol|delivery-conventions|dependency-audit-policy|\
 deployment-checklist-and-rollback|diff-scoping-conventions|doc-conventions|\
 iac-conventions|logging-conventions|observability-conventions|pipeline-orchestration|\
-secrets-management|stride-threat-model-template|triage-conventions) return 0 ;;
+requirements-elicitation|secrets-management|stride-threat-model-template|triage-conventions) return 0 ;;
     *) return 1 ;;
   esac
 }

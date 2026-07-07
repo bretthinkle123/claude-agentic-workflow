@@ -116,9 +116,11 @@ When invoked:
    A-3 decomposition is present, otherwise a coherent plan slice / one acceptance
    criterion): **write the failing test(s) that the plan's `test_strategy` specifies for
    that unit FIRST, run them and see them fail (red), then write the code that makes them
-   pass (green), then move to the next unit.** Commit as you go so the ordering is
-   auditable (the test file lands in the same commit as — or an earlier commit than — the
-   code it exercises). This is the happy-path + contract layer of the tests; the testing
+   pass (green), then move to the next unit.** You do **not** commit — the pipeline makes a
+   single commit at deployment — so record the red→green step per unit in
+   `.pipeline/implementation-progress.md` (the U-06 note: "T<n>: tests written+red → code →
+   green"). That progress trail, not git history, is where the test-first sequence is
+   visible. This is the happy-path + contract layer of the tests; the testing
    agent adds the adversarial and coverage-gap layer afterward and independently verifies
    the mapping — do not treat your own passing tests as proof a criterion is covered, and
    never weaken a test to make it pass. If the plan's `test_strategy` is thin for a unit,

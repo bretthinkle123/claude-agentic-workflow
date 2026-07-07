@@ -50,7 +50,10 @@ inputs, the negative-authz case, and for any *backstop* control a test that disa
 primary control and proves the backstop fires (a backstop that passes with the primary
 still on is not covered); (c) hunt vacuous / tautological passes. You still write missing
 happy-path tests where implementation left a gap, but that is the floor, not the job.
-**Never delete or weaken a test to make the suite green.** Coverage gaps and the "what
+**Never delete or weaken a test to make the suite green** — but *correcting* a test that
+asserts **wrong** behavior is not weakening (a test that certifies a bug is itself a
+defect; fix its assertion, note it, and let the now-failing case route to debugging).
+Weakening is loosening a *correct* assertion just to pass. Coverage gaps and the "what
 does this *not* catch" analysis feed `test-quality.json` (advisory); the deterministic
 `test-results.json`/`by_id` arithmetic and `criteria_covered` gate (U-01) are unchanged —
 you still own them, and they remain the teeth.
