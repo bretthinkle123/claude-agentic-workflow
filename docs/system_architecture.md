@@ -41,9 +41,10 @@ The authoring pipeline ends at the PR, but the guarantees now extend **past the 
 own `.github/workflows/eval.yml` runs the full deterministic harness as a required merge check, and
 `templates/ci/` gives each project a delivery chain — `pipeline-ci.yml` re-runs the deterministic
 gates on the merge commit, `build-provenance.yml` produces a signed, SBOM-attested, SLSA-provenanced
-image, and the opt-in `deploy.yml` / `load-campaign.yml` / `dr-drill.yml` / `scheduled-rescan.yml`
-verify-then-progressively-deploy, load-validate, DR-drill, and continuously re-scan it. All of that
-is per-project scaffolding the pipeline authors — not new gates in the authoring loop.
+image, and the opt-in `deploy.yml` / `load-campaign.yml` / `dr-drill.yml` / `scheduled-rescan.yml` /
+`dast-staging.yml` verify-then-progressively-deploy, load-validate, DR-drill, continuously re-scan,
+and staging-DAST-scan it. All of that is per-project scaffolding the pipeline authors — not new
+gates in the authoring loop.
 
 ---
 
@@ -91,7 +92,7 @@ flowchart TD
     PREV --> HC
     REV -->|no| HC{Human checkpoint\nread plan.md + plan-audit.md\ntouch plan-approved}
     HC -->|rejected| P
-    HC -->|approved| I[implementation agent — SINGLE-SHOT\nsonnet · effort high · maxTurns 40]
+    HC -->|approved| I[implementation agent — SINGLE-SHOT\nsonnet · effort high · maxTurns 60]
     I -->|Stop hook fires| SC{smoke-check.sh\n+ infra-validate.sh}
     SC -->|exit 2 = FAIL| DB1[debugging agent — sanity role\nopus · effort xhigh · maxTurns 30]
     DB1 -->|fix applied\nretry count++| SC
@@ -100,7 +101,7 @@ flowchart TD
     LG -->|cap hit| HC
     LG -->|ok| SEC[security agent\nopus · effort high · maxTurns 30]
     SEC -->|writes| SECREP[security-report.md\nsecurity-status.json]
-    SECREP --> TEST[testing agent\nsonnet · effort medium · maxTurns 30]
+    SECREP --> TEST[testing agent\nsonnet · effort medium · maxTurns 50]
     TEST -->|writes| TRES[test-results.json\n+ criteria_covered\n+ test-quality.json advisory]
     TRES --> GREEN{GREEN? deterministic jq\nsecurity=clean · tests=pass\ncriteria_covered complete\n· perf-completeness}
     GREEN -->|no| DB2[debugging agent — remediation role\nopus · effort xhigh · maxTurns 30]
@@ -112,11 +113,11 @@ flowchart TD
     DR -->|no| DA{.pipeline/dast.env present?\nDAST Layer 1 — conditional}
     DA -->|yes| DAC[dast-capture.sh → dast-review.sh\nZAP passive baseline\nadvisory dast-review.json · never a gate]
     DAC --> DOC
-    DA -->|no| DOC[documentation agent\nhaiku · maxTurns 25]
+    DA -->|no| DOC[documentation agent\nsonnet · maxTurns 25]
     DOC -->|writes| DOCS[README updates\npr-description.md\ndocs/decisions/branch records\nreview-manifest.json]
     DOCS --> CR["/code-review — standard automated pre-step\nreview-only triage of the diff"]
     CR --> HARDCK{Human diff-review checkpoint M5\nreview diff + code-review findings + reports\nrun approve-diff.sh — TTY-only, writes diff-approved}
-    HARDCK --> DEP[deployment agent\nsonnet · maxTurns 15]
+    HARDCK --> DEP[deployment agent\nsonnet · maxTurns 25]
     DEP -->|PreToolUse fires| GATE{deployment-gate.sh\n5 conditions checked}
     GATE -->|blocked| DEP
     GATE -->|passed| COMMIT[git commit\ngit push\ngh pr create]
@@ -124,7 +125,7 @@ flowchart TD
     PR --> CI[pipeline-ci.yml — CI merge gate\nre-runs the deterministic gates\non the merge commit]
     CI --> BP[build-provenance.yml\nSHA-tagged image · SBOM\ncosign sign · SLSA attestation\nself-skips without a Dockerfile]
     BP --> DEPL[deploy.yml — opt-in\nverify signature → staging →\ncanary 10/50/100 → prod\nburn-rate auto-rollback]
-    DEPL --> OPS([operate\nobservability + triage agent\nload-campaign · dr-drill · scheduled-rescan])
+    DEPL --> OPS([operate\nobservability + triage agent\nload-campaign · dr-drill\nscheduled-rescan · dast-staging])
 ```
 
 ---
@@ -145,7 +146,7 @@ claude-agentic-workflow/
 │   ├── deployment.md
 │   └── triage.md           operator-invoked, read-only incident summarizer — outside the pipeline loop (PR O)
 │
-├── global-hooks/           Twenty-six deterministic scripts (+ the ui-capture.mjs Node helper) — zero LLM cost
+├── global-hooks/           Thirty-two deterministic scripts (+ the ui-capture.mjs Node helper) — zero LLM cost
 │   ├── smoke-check.sh          boots app, hits /health; fires on implementation Stop
 │   ├── infra-validate.sh       terraform fmt/validate/plan; fires on implementation Stop
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
@@ -158,6 +159,11 @@ claude-agentic-workflow/
 │   ├── store-compliance.sh     security Stop hook: deterministic app-store checks (privacy manifest, usage strings, Required-Reason API compare, targetSdk floor, debuggable release, permission declared↔used, debug-log flood) for a declared Apple/Play target → store-compliance.json; gate blocks on critical>0 (store-compliance Layer C, SC-1…SC-9); no store target ⇒ no-op
 │   ├── guard-approval-markers.sh  PreToolUse Bash hook on all Bash-carrying subagents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved/design-approved + waivers.json (PR K + Option B + DS structural guard)
 │   ├── guard-source-markers.sh  Stop hook on implementation + debugging AND a deployment-gate hard block (audit E3): greps the change set for revert/do-not-commit-class markers (TEMP-REVERT, DO NOT COMMIT, …) and blocks; plain TODO/FIXME pass
+│   ├── guard-tree-hygiene.sh   Stop hook on security + debugging (U-08): blocks scanner/scratch junk (reports/, scratch_*, raw tool dumps) left untracked in the repo tree — the deterministic form of the "tool output goes to .pipeline/, never the tree" rule
+│   ├── check-doc-identifiers.sh  documentation Stop hook (U-13, warn-first): every identifier written into a README must resolve in the tree and documented signatures must match the def site — blocks invented API names once promoted to enforce
+│   ├── osv-scan.sh / checkov-scan.sh  U-09 scan-evidence wrappers: run the real osv-scanner/checkov with identical args, then stamp the execution into .pipeline/scan-log.jsonl (project settings grant the wrappers, not the raw binaries; semgrep/trivy/gitleaks wrappers stamp too)
+│   ├── stamp-scan.sh           U-09: appends one hash-anchored execution stamp per scanner run to .pipeline/scan-log.jsonl — a report may claim "executed this pass" only for a stamped tool; everything else is honestly "carried forward"
+│   ├── reconcile-scans.sh      security Stop hook (U-09): recomputes every per-tool finding count from the hash-named raw artifact in .pipeline/ and blocks (exit 2) on any mismatch with security-status.json — "stop trusting a summary integer" applied to the security stage
 │   ├── write-review-manifest.sh writes reviewed_change_hash (documentation's record + approve-diff's sanity check); called by documentation agent
 │   ├── compute-change-hash.sh  SHA-256 of working-tree diff + untracked files; used by the two above
 │   ├── log-run.sh              appends one line to run-log.jsonl; fires on every agent's Stop
@@ -176,6 +182,7 @@ claude-agentic-workflow/
 │
 ├── global-skills/          Reference knowledge preloaded into agents that need it
 │   └── README.md           How to install, update, and add global skills
+│   └── VENDORED.md         Third-party provenance ledger (TA/B-0): every vendored tool/skill is pinned + reviewed + rowed here; tests/suites/vendored.sh enforces it
 │   ├── pipeline-orchestration/     stage sequence, interlock contracts, gate semantics
 │   ├── stride-threat-model-template/  STRIDE worksheet + ASVS 5.0.0 scope (sibling asvs-5.0-checklist.md)
 │   ├── code-standards/             naming, SOLID, facade pattern, security invariants
@@ -206,7 +213,8 @@ claude-agentic-workflow/
 │   ├── apple-hig-compliance/       iOS: native nav patterns, Dynamic Type, dark mode — the web→native design seam
 │   ├── claude-design-to-swiftui/   iOS: Claude Design export → faithful SwiftUI replication recipe
 │   ├── app-store-submission-requirements/  Apple: signing, privacy manifest, data-use — planning emits them as ACs
-│   └── google-play-submission-requirements/  Google Play: Data safety, targetSdk floor, account-deletion (incl. web), Play Billing — planning emits them as ACs (store-compliance Layer A)
+│   ├── google-play-submission-requirements/  Google Play: Data safety, targetSdk floor, account-deletion (incl. web), Play Billing — planning emits them as ACs (store-compliance Layer A)
+│   └── ast-grep-rules/         security's optional structural-search adjunct (TA/B-2): starter AST rules + the advisory-only boundary (findings never feed a count or gate)
 │
 ├── templates/
 │   ├── CLAUDE.md               Seed for the per-project CLAUDE.md (fill in stack + run commands)
@@ -219,7 +227,7 @@ claude-agentic-workflow/
 │   ├── dast-budget.json        DAST Layer 1: copy to .pipeline/dast-budget.json — per-severity ZAP finding caps
 │   ├── renovate.json           Continuous dependency remediation (PR P): update PRs flow through the same gates
 │   └── ci/                     Per-project GitHub Actions delivery chain (bootstrap copies what applies)
-│       ├── pipeline-ci.yml         the CI merge gate — re-runs the deterministic gates on the merge commit (SCAN_BASE mode); + the codeql deep-SAST job (CQ, alert-only) and deploy-verify (= the reborn post-deploy-check)
+│       ├── pipeline-ci.yml         the CI merge gate — re-runs the deterministic gates on the merge commit (SCAN_BASE mode); + the codeql deep-SAST job (CQ, alert-only), deploy-verify (= the reborn post-deploy-check), and an opt-in advisory mutation job (U-22: runs mutmut/Stryker on the Linux runner where the local win32 pipeline honestly can't; never fails the gate)
 │       ├── build-provenance.yml    post-merge: hadolint → OIDC AWS → SHA-tagged build → dockle → CycloneDX SBOM → cosign keyless sign → SLSA attestation; self-skips without a Dockerfile
 │       ├── deploy.yml              opt-in (DEPLOY_ENABLED): cosign verify-before-rollout → staging (snapshot→migrate→rollout) → prod behind the GitHub production rule → weighted canary + burn-rate auto-rollback
 │       ├── load-campaign.yml       dispatch+weekly vs staging: k6 thresholds from the acceptance budget + failover drill + scale-ceiling ramp (proves autoscaling fires)
@@ -236,11 +244,18 @@ claude-agentic-workflow/
 │
 ├── tests/                  Eval/regression harness (M8) — deterministic, zero-LLM; run `bash tests/run-eval.sh`
 │   ├── run-eval.sh             Entry: runs every suite against golden fixtures; exit 0 iff all pass (CI-ready)
-│   ├── suites/                 21 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
+│   ├── suites/                 28 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
 │   │                           loop-exit-invariant, stamp-ran-at, record-clean, hash-determinism, asvs,
 │   │                           waiver-guard, asvs-sast, design-spec, egress, assurance, design-review, dast-review,
-│   │                           store-compliance, ci-scan-base, triage (366 assertions; run in CI by eval.yml)
+│   │                           store-compliance, ci-scan-base, triage, bootstrap-integration (U-11), smoke-check
+│   │                           (U-04), tree-hygiene (U-08), scan-reconcile (U-09), doc-identifiers (U-13),
+│   │                           telemetry (U-16), vendored (B-0) — 467 assertions; run in CI by eval.yml
+│   ├── agent-evals/            U-23 planted-defect golden trees + run-agent-evals.sh — invokes the REAL agent
+│   │                           against a frozen tree with a documented defect and greps its output for the
+│   │                           finding; needs model access, so it's a separate step, NOT part of run-eval.sh
 │   ├── fixtures/linkly-green/  Golden pipeline snapshot (Linkly, perf corrected to a passing state)
+│   ├── fixtures/m3/            Preserved evidence from all three M3-series validation runs (run3 .pipeline
+│   │                           snapshot, decision records, reconstructed artifacts) — audit corpus + suite fixtures
 │   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
 │
 ├── docs/
@@ -253,8 +268,10 @@ claude-agentic-workflow/
 │   ├── ios-swiftui-target-plan.md    iOS side-track plan (skills/planning layers built; Layer 3 gate adapters macOS-bound)
 │   ├── data-protection-enforcement-plan.md  DP side-track plan — per-field at-rest accountability (built)
 │   ├── egress-control-plan.md        EG side-track plan — default-deny egress (deterministic slices built; proxy operator-provisioned)
-│   ├── dast-plan.md                  DAST side-track plan — Layer 1 built (PR #26); Layers 2–4 remain
-│   ├── store-compliance-plan.md      STORE side-track plan — Layers A–E built (PR #27); SC-6/7/9 deferred
+│   ├── dast-plan.md                  DAST side-track plan — fully delivered: Layer 1 (PR #26) + Layers 2–4 (PR #33: dast-conventions, planning ACs, dast-staging.yml); Layer 5 (Nuclei) optional
+│   ├── store-compliance-plan.md      STORE side-track plan — fully delivered: Layers A–E (PR #27) + SC-6/7/9 (PR #33)
+│   ├── finding-ledger.md             U-10: one row per verifier-CONFIRMED escape/incident — each becomes a permanent check (suite case, hook, or agent-eval), never a re-learned lesson
+│   ├── m3-validation-run-plan.md     The M3 validation-run plan (Meterly): 4 phases, scorecard, evidence rule 0
 │   ├── ci-merge-gate-plan.md         PR L spec — CI as the merge gate (built, PR #28)
 │   ├── delivery-operations-plan.md   PRs M–P spec — artifact/provenance, observability, scale/DR (built, PRs #29/#31/#32)
 │   ├── environments-delivery-plan.md PR N spec — environments + progressive delivery + real load (built, PR #30)
@@ -268,13 +285,11 @@ claude-agentic-workflow/
 │   └── pipeline-refinement-loops.md  Candidate refinement loops (the planning loop shipped; the rest are designs)
 │
 ├── .github/workflows/
-│   └── eval.yml            The engine's own CI merge gate: runs the full 21-suite / 355-assertion harness on every push/PR to main (PR L Layer 1; `eval` is a required check)
+│   └── eval.yml            The engine's own CI merge gate: runs the full 28-suite / 467-assertion harness on every push/PR to main (PR L Layer 1; `eval` is a required check)
 │
-├── memory/                 Auto-memory persisted across Claude Code sessions
-│   ├── brett-profile.md    Brett's preferences, default stack, collaboration style
-│   ├── project-context.md  Pipeline architecture, settled decisions, build status
-│   ├── testing-coverage-contract.md  test_strategy/coverage schema + skill preload-vs-on-demand contract
-│   └── audit-prompt.md     Saved prompt for a pre-build readiness audit session (read-only, report only)
+├── memory/                 Auto-memory persisted across Claude Code sessions — one file per durable
+│                           fact (profile, project context, settled decisions, run findings);
+│                           MEMORY.md is the index loaded each session
 │
 └── README.md               Install and bootstrap instructions (entry point for new machines)
 ```
@@ -304,13 +319,18 @@ it, which is why all cross-stage state must travel through `.pipeline/` files.
 | maxTurns | 30 |
 | Tools | Read, Grep, Glob, WebSearch, Write, Skill, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `stride-threat-model-template` |
-| On-demand skills | `ddia-patterns`, `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions`, `containerization-conventions` |
+| On-demand skills | `ddia-patterns`, `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions`, `containerization-conventions`, `api-edge-conventions`, `data-protection-conventions`, `ci-conventions`, `dast-conventions`, `delivery-conventions`, `observability-conventions` (+ the store/Swift skills on a declared iOS/Play target) |
 | Stop hook | `log-run.sh planning` (model auto-derived from frontmatter) |
 
 **Responsibility:** Read the codebase (or `PROJECT.md` on greenfield), define scope and
 approach, then write `.pipeline/plan.md` including a STRIDE threat model. Never writes application
 code. The plan explains every non-trivial decision with *what / why / how* so Brett understands the
-full reasoning, not just the outcome.
+full reasoning, not just the outcome. On a large/brownfield target the orchestrator may pre-generate
+`.pipeline/repomix-pack.xml` (TA/B-1, a single-file repo map — untrusted generated data) so planning
+reads one artifact instead of sweeping the tree. Planning also owns **criteria arithmetic** (U-01):
+`acceptance.md` frontmatter declares `criteria_total` and any `delegated_criteria:` (ids whose
+verification is the security stage's deliverable, not a test) — human-reviewed at the checkpoint,
+cross-checked by the deploy gate, so testing can neither shrink the denominator nor self-delegate.
 
 **Why opus + xhigh effort?** Planning is open-ended reasoning over uncertain requirements. Getting
 the plan wrong is the most expensive mistake in the pipeline — every downstream agent spends tokens
@@ -380,7 +400,7 @@ the checkpoint.
 |---|---|
 | Model | `sonnet` |
 | Effort | `high` |
-| maxTurns | 40 |
+| maxTurns | 60 *(U-06: raised from 40 after the M3 runs capped; paired with a warm-resume contract — a progress note appended to `.pipeline/implementation-progress.md` every ~15 turns so a cap resumes warm instead of re-reading cold)* |
 | Tools | Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform |
 | Preloaded skills | `code-standards` |
 | On-demand skills | `auth-patterns`, `logging-conventions`, `secrets-management`, `iac-conventions` |
@@ -412,7 +432,7 @@ marker. Then `log-run.sh` appends a line to `run-log.jsonl` with `status` derive
 | maxTurns | 30 |
 | Tools | Read, Write, Edit, Bash, Grep |
 | Preloaded skills | `debugging-escalation-protocol` |
-| Stop hooks (in order) | `guard-source-markers.sh`, `log-run.sh debugging` |
+| Stop hooks (in order) | `guard-source-markers.sh`, `guard-tree-hygiene.sh`, `log-run.sh debugging` |
 
 **Responsibility:** Fix specific, reported problems — reproduce-first, author a failing→passing
 regression test (its `Write` tool authors the new test file and `.pipeline/debug-notes.md`),
@@ -445,12 +465,24 @@ fixes, not just symptoms. It fires only on failure, so the Opus cost is small in
 | maxTurns | 30 |
 | Tools | Read, Edit, Bash, Grep, Write, Skill |
 | Preloaded skills | `semgrep-ruleset-guide`, `diff-scoping-conventions` |
-| On-demand skills | `iac-conventions` (only when `infra/` exists) |
-| Stop hooks (in order) | `asvs-sast.sh`, `egress-check.sh`, `stamp-ran-at.sh security`, `log-run.sh security` |
+| On-demand skills | `iac-conventions` (only when `infra/` exists), `data-protection-conventions` (stored user data), `ast-grep-rules` (optional structural-search adjunct) |
+| Stop hooks (in order) | `guard-tree-hygiene.sh`, `asvs-sast.sh`, `store-compliance.sh`, `egress-check.sh`, `stamp-ran-at.sh security`, `reconcile-scans.sh`, `log-run.sh security` |
 
 **Responsibility:** Scan the working-tree change set (tracked diff + untracked files since last
 commit), fix exploitable vulnerabilities (any severity) and critical/high hygiene findings
-directly, and report remaining findings. Runs:
+directly, and report remaining findings. **Scan evidence is enforced (U-09):** scanners run through
+stamping wrappers (`semgrep-scan.sh`, `osv-scan.sh`, `trivy-scan.sh`, `checkov-scan.sh`,
+`gitleaks-scan.sh` — project settings grant the wrappers, not the raw binaries), each execution
+leaves a hash-anchored stamp in `.pipeline/scan-log.jsonl`, raw outputs go to `.pipeline/<tool>.json`
+(never the repo tree — `guard-tree-hygiene.sh` blocks that — and never OS temp, which is how the M3
+evidence was lost), and the `reconcile-scans.sh` Stop hook recomputes every per-tool count from
+those artifacts and blocks on mismatch. A report may claim "executed this pass" only for a
+this-pass-stamped tool. **Presence is not efficacy (U-02):** each verified STRIDE mechanism must
+also answer its per-category efficacy question with file:line evidence (is the throttle keyed on
+the real client IP behind the LB? is the RLS backstop actually enforced?) — a "no" is a critical,
+same as an absent mechanism. An optional **ast-grep** structural-search adjunct (TA/B-2,
+`ast-grep-rules` skill) finds syntax-shaped issues regex misses — advisory only, never feeds a
+count or gate. Runs:
 
 1. **Semgrep** via `semgrep-scan.sh` Docker wrapper — SAST, SCA, secrets scanning (stack-specific rule packs per `semgrep-ruleset-guide`, SB)
 2. **OSV Scanner** — dependency CVE scanning
@@ -521,10 +553,10 @@ not a free upgrade.
 |---|---|
 | Model | `sonnet` |
 | Effort | `medium` |
-| maxTurns | 30 |
+| maxTurns | 50 *(E2/U-06: raised from 30 after cap-outs; paired with an incremental-artifact contract — a valid `test-results.json` after every sub-step, so a cap resumes warm)* |
 | Tools | Bash, Read, Write, Edit |
 | Preloaded skills | `test-conventions`, `diff-scoping-conventions` |
-| Stop hooks (in order) | `stamp-ran-at.sh testing`, `record-clean.sh`, `log-run.sh testing` |
+| Stop hooks (in order) | `stamp-ran-at.sh testing`, `log-run.sh testing`, `record-clean.sh` *(U-16f: log-run runs BEFORE record-clean so the final clean line still records the cycle's true retry count — record-clean zeroes it)* |
 
 **Responsibility:** Write missing unit and integration tests for the change set, then run the
 full suite with coverage. Follows the plan's `test_strategy` shape (`pyramid` default, or
@@ -545,10 +577,18 @@ Separately writes the **advisory** `test-quality.json` (mutation over changed co
 adversarial "what does this test not catch" review); it is surfaced by documentation in the PR
 description and **read by no gate or loop-exit**. Branch coverage is surfaced (reported), not gated.
 
-**When it stops:** `record-clean.sh` fires first. It reads both gate artifacts — if
-`security-status.json` is `clean` AND `test-results.json` is `pass`, it resets the
-`debug_retry_count` in `state.json` to zero. Then `log-run.sh` appends the telemetry line with
-coverage and test counts.
+**Delegated criteria (U-01):** a criterion whose verification is the *security* stage's
+deliverable (e.g. ASVS reconciliation — never a test-suite assertion) is marked
+`covered: false, delegated: "security"` — but **only** when `acceptance.md`'s frontmatter
+declares that id under `delegated_criteria:` (planning declares; testing copies, never invents).
+The gate recomputes both integers from `by_id`, so delegation can never inflate the numerator.
+
+**When it stops:** `stamp-ran-at.sh` normalizes the timestamp, then `log-run.sh` appends the
+telemetry line with coverage, test counts, and the cycle's true retry tally, and **then**
+`record-clean.sh` reads both gate artifacts — if `security-status.json` is `clean` AND
+`test-results.json` is `pass`, it resets the `debug_retry_count` in `state.json` to zero
+(U-16f: this order keeps the retry telemetry honest, since record-clean zeroes the count
+log-run reports).
 
 ---
 
@@ -556,12 +596,12 @@ coverage and test counts.
 
 | Property | Value |
 |---|---|
-| Model | `haiku` |
-| Effort | *(none — Haiku exposes no effort levels)* |
+| Model | `sonnet` *(U-06 experiment: documentation capped on haiku three runs straight on trivial updates — M4 tests the model hypothesis at the same maxTurns; if caps persist, revert to haiku@35)* |
+| Effort | *(unset)* |
 | maxTurns | 25 |
 | Tools | Read, Write, Edit, Glob, Bash |
 | Preloaded skills | `doc-conventions` |
-| Stop hook | `log-run.sh documentation` |
+| Stop hooks (in order) | `check-doc-identifiers.sh` *(U-13, warn-first: every identifier written into docs must resolve in the tree; signatures must match the def site — the invented-API-name guard)*, `log-run.sh documentation` |
 
 **Responsibility:** Only runs once both gates are clean. Finds every directory touched by the
 change (via `git diff --name-only`), creates or updates per-directory `README.md` files, updates
@@ -585,7 +625,7 @@ committed change. The hash must be recorded *after* those writes, so it captures
 |---|---|
 | Model | `sonnet` |
 | Effort | *(unset in frontmatter — Sonnet defaults to `high`)* |
-| maxTurns | 15 |
+| maxTurns | 25 *(U-06: raised from 15 — the pre-commit inspection + gate-retry cycles were capping)* |
 | Tools | Bash |
 | Preloaded skills | `deployment-checklist-and-rollback` |
 | PreToolUse hook | `deployment-gate.sh` (fires before every Bash call) |
@@ -603,7 +643,8 @@ clean commit, runs `git push` (requires human approval — intentionally not in 
 **Why sonnet?** Deployment is no longer purely mechanical — it now performs a **read-only pre-commit
 content inspection** (scan the change set for secrets, junk, interlock files, and conflict markers;
 stop for a human on a hit) before the pipeline's single commit. That inspection is real judgment
-Haiku handles poorly, so the model was moved `haiku` → `sonnet` (maxTurns 8 → 15). It fires once per
+Haiku handles poorly, so the model was moved `haiku` → `sonnet` (maxTurns 8 → 15, then → 25 at
+U-06 when the inspection + gate-retry cycles capped). It fires once per
 feature and only makes git calls after the gate passes, so absolute cost stays small. *(This
 supersedes the earlier "deployment = haiku" allocation — the inspection capability is worth the bump.)*
 
@@ -649,13 +690,15 @@ and are the pipeline's mechanism for deterministic enforcement. Published to `~/
 
 - **`Stop` (declared in agent frontmatter)** — fires when that agent finishes, as a
   `SubagentStop` event. Used for: smoke check, infra validate, source-marker guard,
-  ASVS Tier-1 SAST, egress detection, ran-at stamping, record-clean, log-run.
+  tree-hygiene guard, ASVS Tier-1 SAST, store compliance, egress detection, scan-count
+  reconciliation, doc-identifier check, ran-at stamping, record-clean, log-run.
 - **`PreToolUse` (declared in agent frontmatter)** — fires before a specific tool runs. Used
   for: the deployment gate (blocks the git commit Bash call) and `guard-approval-markers.sh`
   (on all 7 Bash-carrying agents — blocks a subagent from forging a human approval marker).
 
 **Global safety rule:** every ambient Stop hook (smoke-check, record-clean, infra-validate,
-log-run, stamp-ran-at, asvs-sast, store-compliance, egress-check, guard-source-markers, ui-capture,
+log-run, stamp-ran-at, asvs-sast, store-compliance, egress-check, guard-source-markers,
+guard-tree-hygiene, reconcile-scans, check-doc-identifiers, ui-capture,
 design-review-check, dast-capture, dast-review) — and the orchestrator-invoked `loop-guard.sh` — opens with
 `[ -f .pipeline/state.json ] || exit 0` so it no-ops instantly in any repo that hasn't been
 bootstrapped. The deployment gate has no such guard — it fails closed when interlock files are
@@ -666,8 +709,10 @@ is called explicitly by the orchestrator each cycle, and `run-log-digest.sh` is 
 operator tool — both are deterministic shell, but neither fires on a Claude Code lifecycle event.
 
 **maxTurns caveat:** a Stop/SubagentStop hook does not fire if the agent hits its `maxTurns`
-cap. The session ends before the hook runs. A missing `run-log.jsonl` entry for a stage is the
-signal that it capped out.
+cap. The session ends before the hook runs. The orchestrator therefore writes an explicit
+breadcrumb on observing a cap (`log-run.sh <stage> "" capped`, audit T1/T2), and
+`loop-events.jsonl` + `run-summary.json` keep the durable history — a stage line that is simply
+*missing* now means the breadcrumb protocol itself failed.
 
 ---
 
@@ -756,11 +801,18 @@ both to report honest attempt counts even when a capped stage's Stop hook never 
 
 1. `jq` is available — fails closed with a clear error if not.
 2. `test-results.json` exists and `status == "pass"`.
-3. **Acceptance criteria fully covered** — `criteria_covered.covered >= .total` in
-   `test-results.json`. The loop exits on this **same** check (together with test-pass and
-   security-clean), so the loop can't exit green on a criteria state the gate would reject.
-   Absent/empty `criteria_covered` (a criteria-less feature, or a pre-PR-C result file) is
-   `0 >= 0` → passes, so it never blocks a legitimately criteria-less change.
+3. **Acceptance criteria fully covered — with honest arithmetic (PR C + U-01).** When
+   `criteria_covered.by_id` is present, the summary integers are **recomputed from it** (the M3
+   run shipped `covered: 24/24` while `by_id` marked AC20 `covered:false` — two trusted integers
+   compared, both wrong): every entry must be `covered:true` or `delegated:"security"` (the only
+   valid delegate — its checks are already gate conjuncts), the recorded `covered` must equal the
+   `covered==true` count (delegation never inflates the numerator), and `total` must equal the
+   `by_id` length. Deploy-only frontmatter anchors cross-check `acceptance.md`: `total` must equal
+   planning's `criteria_total`, and every delegated id must appear under `delegated_criteria:` —
+   so testing can neither shrink the denominator nor self-delegate. The loop exits on this **same**
+   recompute (asserted by `loop-exit-invariant.sh`). A legacy file without `by_id` keeps the
+   original integer compare; absent/empty `criteria_covered` is `0 >= 0` → passes, so it never
+   blocks a legitimately criteria-less change.
 3b. **Criterion-completeness — perf-pairing (PR G / F1).** When perf mode ran
    (`.perf.status != "n/a"`), every non-null `perf.budget.*` dimension (`p95_ms`,
    `throughput_rps`) must have a non-null `perf.measured.*` counterpart. A declared budget
@@ -867,6 +919,39 @@ is documented in `docs/pipeline-threat-model.md`.
 
 ---
 
+### The scan-evidence chain (U-09): wrappers → stamp-scan.sh → reconcile-scans.sh
+
+**Why it exists:** the M3-series runs shipped security reports whose "Semgrep/OSV executed this
+pass" claims were uncheckable — the on-disk artifacts were a prior run's, or had evaporated with
+the session scratchpad. Three runs in a row. The chain makes every count reproducible:
+
+1. **Wrappers** (`semgrep-scan.sh`, `osv-scan.sh`, `trivy-scan.sh`, `checkov-scan.sh`,
+   `gitleaks-scan.sh`) run the real tool with identical args; `project-settings.json` grants the
+   wrapper paths, not the raw binaries, so an unstamped execution can't happen by permission.
+2. **`stamp-scan.sh`** appends one stamp per execution to `.pipeline/scan-log.jsonl` —
+   tool, exit code, and the SHA-256 of the output artifact. A report may say "executed this pass"
+   only for a this-pass stamp; everything else is honestly "carried forward".
+3. **`reconcile-scans.sh`** (security Stop hook) recomputes each per-tool finding count from the
+   hash-named artifact `security-status.json.scan_artifacts` points at, and blocks (exit 2,
+   feeding the mismatch back to the model) until the numbers are corrected.
+
+### guard-tree-hygiene.sh
+
+**Fires:** on `security` and `debugging` Stop (U-08). Blocks (exit 2) when **untracked** files
+matching scanner/scratch junk classes (`reports/`, `scratch_*`, raw tool dumps) sit in the repo
+tree — the deterministic form of the "tool output goes to `.pipeline/`, never the tree" rule that
+prose alone failed to hold in the M3 run.
+
+### check-doc-identifiers.sh
+
+**Fires:** on `documentation` Stop (U-13). Extracts identifiers written into changed docs and
+verifies each resolves in the tree (and documented call signatures match the def site) — the
+guard against invented API names, which happened on two consecutive M3 runs. **Warn-first** (exit
+0 + stderr report) while the extraction is calibrated; flip `DOC_IDENT_ENFORCE=1` to make it
+blocking. Never a deploy-gate conjunct — it's a documentation-stage quality signal.
+
+---
+
 ### log-run.sh
 
 **Fires:** on every agent's Stop hook (wired in each agent's frontmatter).
@@ -876,7 +961,10 @@ only `<stage>`; `model` auto-derives from the agent's frontmatter, the rest from
 
 **Logic:**
 1. Guard: no-op if `.pipeline/state.json` absent.
-2. Derives `feature` from the current git branch.
+2. Derives `feature` from the current git branch; stamps `branch` and the per-`(feature,stage)`
+   `attempt` number (audit T2 — caps/resumes are countable lines, not silent gaps). An explicit
+   `capped` status suppresses artifact-derived fields (U-16d: a prior run's artifact can't
+   masquerade as this attempt's result).
 3. Auto-derives `status` from the stage's canonical artifact:
    - `implementation` → `smoke-status.json`
    - `security` → `security-status.json`
@@ -923,13 +1011,18 @@ commit; until then, all changes live in the working tree.
 | `design-approved` | **human** via orchestrator (in-session) | orchestrator (re-verifies currency before planning), planning (treats design-spec.md as authoritative when present) | `{"approved_at":"...","note":"...","design_spec_hash":"<sha256>"}` — human vouch for the design's **visual intent**; currency-pinned (F3 pattern), subagent-forgery-guarded like plan/diff-approved |
 | `plan.md` | planning agent | plan-audit, human, implementation, testing, documentation | The implementation spec + STRIDE threat model |
 | `plan-audit.md` | plan-audit agent | orchestrator (`revision_recommended`), planning (revision pass), human (checkpoint) | Advisory flags: completeness, ambiguity, dependency reality, version policy — each material/advisory; non-gating |
-| `acceptance.md` | planning agent | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag) | Per-criterion contract: ID, criterion, file/layer, how verified |
+| `acceptance.md` | planning agent | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag), deployment-gate.sh (U-01 frontmatter anchors) | Per-criterion contract: ID, criterion, file/layer, how verified. Frontmatter declares `criteria_total` + `delegated_criteria:` (ids verified by the security stage, not tests) — human-reviewed at the plan checkpoint, cross-checked by the gate |
 | `plan-approved` | human (`touch`) | implementation agent (refuses to start without it) | The human checkpoint gate marker |
 | `surface-delta.md` | implementation agent | security agent (6f STRIDE-delta reconciliation) | Best-effort hint listing new/changed attack surface (entry points, trust boundaries, data flows, privilege surface); non-authoritative — the diff is the source of truth |
 | `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
 | `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,"osv_max_cvss":0,"input_surface":{...,"reconciled":true},"data_surface":{"classified":N,"sensitive":M,"unprotected":[],"reconciled":true},"asvs":{"l1_l2_universal":true,"in_scope_l3":[],"triggered_chapters":[...],"l1_l2_missing":[],"l3_in_scope_missing":[],"reconciled":true},...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`); the `asvs` object (ASVS 5.0.0 6g — L1/L2 universal, in-scope L3) and `data_surface` (DP — per-field at-rest protection) are deterministic floors: `deployment-gate.sh` + loop-exit block on `asvs.reconciled==false` and on `data_surface.unprotected` non-empty |
 | `sbom.cdx.json` | `generate-sbom.sh` (via security) | documentation (surfaces component count in the PR) | CycloneDX SBOM (M6); **best-effort, non-gating** — absent when Docker is unavailable |
+| `scan-log.jsonl` | `stamp-scan.sh` (called by every scanner wrapper) | reconcile-scans.sh, security agent (may only claim "executed this pass" for a this-pass stamp) | Append-only scan-execution stamps (U-09): `{tool, exit_code, artifact_sha256, ts}` per real scanner run — the evidence behind every count |
+| `<tool>.json` (semgrep/osv/trivy-config/checkov/gitleaks) | the scanner wrappers | reconcile-scans.sh (recounts findings from these exact artifacts) | Raw scanner output, kept in gitignored `.pipeline/` — never the repo tree (guard-tree-hygiene blocks) and never OS temp (how the M3 evidence was lost) |
+| `implementation-progress.md` | implementation agent (~every 15 turns) | implementation on a warm resume (read FIRST after a cap) | U-06 warm-resume state: what's built, what remains — a cap costs a resume, not a cold re-read |
+| `repomix-pack.xml` | orchestrator (optional, large/brownfield targets — TA/B-1) | planning (reads it as the codebase map; untrusted generated data) | Single-file repo map via `repomix`; absent ⇒ planning sweeps the tree as usual |
+| `design-src/` | orchestrator (`markitdown`, TA/B-4 — only when the design bundle has PDF/DOCX/PPTX) | design-spec (reads the conversions instead of binaries it can't open) | Mechanical Markdown conversions of non-text design docs — **still untrusted bundle content** |
 | `asvs-sast.json` | `asvs-sast.sh` (security Stop hook) | deployment-gate.sh (blocks on `critical>0`), security agent (fixes findings) | `{"critical":N,"warning":M,"findings":[{rule,asvs,severity,file,line,match}]}` — deterministic ASVS Tier-1 SAST (ASVS-DET); absent ⇒ 0 ⇒ no-op |
 | `store-compliance.json` | `store-compliance.sh` (security Stop hook) | deployment-gate.sh (blocks on `critical>0`), security agent (fixes findings) | `{"ran_at","scope":"apple\|android\|apple+android","critical":N,"warning":M,"findings":[{store,rule,severity,match}]}` — deterministic app-store submission checks (store-compliance Layer C); **repo-state scoped**, activated by a declared Apple/Play target; absent ⇒ 0 ⇒ no-op (deploy-only, not in loop-exit) |
 | `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
@@ -987,6 +1080,7 @@ when the feature needs that knowledge.
 | `containerization-conventions` | on-demand (planning) | Docker vs. serverless decision rubric |
 | `api-edge-conventions` | on-demand (planning, implementation) | Rate limiting, CORS, security headers, idempotency, outbound timeouts |
 | `dependency-audit-policy` | on-demand (plan-audit) | Dependency reality-check + version policy — loaded only when the plan adds a new dependency |
+| `ast-grep-rules` | on-demand (security — optional adjunct) | Starter structural (AST) search rules + the hard boundary: findings are advisory prose only, never a `security-status.json` count or gate conjunct (TA/B-2) |
 | `design-system-conventions` | design-spec | The design-bundle extraction schema: screens/components/tokens, layout & interaction intent, needs-native-mapping, injection report (DS) |
 | `swift-conventions` | on-demand (planning, implementation, testing — iOS target only) | SwiftUI architecture, state model, XCTest shape + the web→SwiftUI mapping cheat-sheet |
 | `apple-hig-compliance` | on-demand (planning, design stages — iOS target only) | Native nav patterns, SF Symbols, Dynamic Type, dark mode — mapping web idioms to iOS-native equivalents |
@@ -1068,7 +1162,7 @@ flowchart LR
         DG1{jq available?} -->|no| DGX[exit 2 blocked]
         DG1 -->|yes| DG2{test-results.json\nstatus=pass?}
         DG2 -->|no| DGX
-        DG2 -->|yes| DG2c{criteria complete?\ncovered ≥ total AND\nperf budget dims measured}
+        DG2 -->|yes| DG2c{criteria complete?\nrecomputed from by_id — covered or\ndelegated:security only, totals match\nacceptance frontmatter AND\nperf budget dims measured}
         DG2c -->|no| DGX
         DG2c -->|yes| DG3{security-status.json\nstatus=clean?}
         DG3 -->|no| DGX
@@ -1092,9 +1186,11 @@ flowchart LR
 {
   "ts": "2026-06-27T14:30:00Z",
   "feature": "file-upload",
+  "branch": "feature/file-upload",
   "stage": "security",
   "status": "clean",
-  "model": "haiku",
+  "model": "opus",
+  "attempt": 1,
   "retries": 0,
   "files_changed": 6,
   "notes": "",
@@ -1102,6 +1198,12 @@ flowchart LR
   "warning_findings": 1
 }
 ```
+
+The `attempt` field (audit T2) numbers each `(feature, stage)` invocation, so caps/resumes are
+countable lines instead of silent gaps. When the orchestrator observes a `maxTurns` cap-out it
+emits the breadcrumb `log-run.sh <stage> "" capped` — a `capped`-status line whose artifact-derived
+fields are suppressed (U-16d: a prior run's on-disk artifact can't masquerade as this attempt's
+result). The eventual clean resume then logs the next attempt number.
 
 Testing lines also include `coverage` (the merged `combined` figure),
 `tests.{total,passed,failed}`, `tests_by_type`, and `test_strategy`. Security lines include
@@ -1116,9 +1218,15 @@ per-stage summary (smoke result, finding counts, test pass/fail, or debug-retry 
 | First-pass gate rate | % of features reaching documentation with `retries == 0` | Plan + implementation quality |
 | Debug-retry rate | mean `retries` across features | Rising = plans too ambitious or stage struggling |
 | Wall-clock per stage | timestamp delta between consecutive lines | Spot a hung stage |
-| Missing stage line | no entry for a stage | Suspect a `maxTurns` cap-out |
+| Cap-outs | `status:"capped"` lines + `attempt` gaps; cross-check `loop-events.jsonl` | Stage budget too tight, or a stage struggling |
+| Missing stage line | no entry for a stage | A cap-out the orchestrator failed to breadcrumb — itself a finding |
 | Coverage trend | `coverage.combined.lines` over time | Regression guard |
 
-A missing stage line in the log means the agent's Stop hook never fired — the most likely cause is
-that the agent hit its `maxTurns` cap. `duration_s` and `tokens` are not available to shell hooks;
-use timestamp deltas as a duration proxy and `model + files_changed` as the cost proxy.
+A capped stage's Stop hook never fires, so its line exists only because the orchestrator writes the
+`capped` breadcrumb (T1/T2); `loop-events.jsonl` and `run-summary.json` are the durable cross-checks
+(`run-summary.sh` reads both, and the retrospective must quote its numbers from that file, never
+hand-write them — B7). `duration_s` and `tokens` are not available to shell hooks; use timestamp
+deltas as a duration proxy and `model + files_changed` as the cost proxy. For real per-stage
+token/$ figures, the **codeburn** operator tool (TA/B-6 — `npx codeburn`, operator-run, never
+agent-invoked) snapshots session cost out-of-band; the convention is one snapshot per phase in the
+run journal.
