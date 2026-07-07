@@ -64,9 +64,9 @@ resolve_exists() {  # $1 = bare identifier → 0 if it occurs in any non-doc sou
 # tracked (git grep) then the working tree (grep) so an uncommitted def is still seen.
 sig_mismatch() {  # $1 = name, $2 = comma-joined documented arg list
   local name="$1" doc_args="$2" defline params
-  defline="$(git grep -hI -E "def[[:space:]]+$name[[:space:]]*\(" -- '*.py' 2>/dev/null | head -1)"
+  defline="$(git grep -hI -E "def[[:space:]]+${name}[[:space:]]*\(" -- '*.py' 2>/dev/null | head -1)"
   [ -n "$defline" ] || defline="$(grep -RhI --include='*.py' --exclude-dir='.git' \
-    -E "def[[:space:]]+$name[[:space:]]*\(" . 2>/dev/null | head -1)"
+    -E "def[[:space:]]+${name}[[:space:]]*\(" . 2>/dev/null | head -1)"
   [ -n "$defline" ] || return 0                       # not a python def we can see → skip
   params="$(printf '%s' "$defline" | sed -E 's/.*def[[:space:]]+'"$name"'[[:space:]]*\(([^)]*)\).*/\1/')"
   # Normalize def params to a set of bare names (strip *, **, defaults, type hints).
