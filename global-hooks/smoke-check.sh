@@ -46,9 +46,16 @@ write_smoke_status() {
 # check is the right signal until then. After the first commit exists (the deployment
 # agent makes it), the runtime check below applies on every later run. Override the
 # build command with SMOKE_BUILD_CMD if `python -c "import src.main"` isn't right.
+#
+# U-04: commands run via `bash -c` — the M3 run's SMOKE_BUILD_CMD carried nested
+# quotes (the form bootstrap's own docs recommended) and the old unquoted `$VAR`
+# expansion word-split them into a SyntaxError, costing an implementation resume
+# cycle. The greenfield default is resolved into a variable FIRST: nesting the
+# ${VAR:-…} default inside the bash -c string would re-introduce the quoting bug.
 if ! git rev-parse --verify -q HEAD >/dev/null 2>&1; then
   echo "[smoke-check] No commit yet — running build/import check (greenfield bootstrap)."
-  if ${SMOKE_BUILD_CMD:-python -c "import src.main"}; then
+  BUILD_CMD="${SMOKE_BUILD_CMD:-python -c \"import src.main\"}"
+  if bash -c "$BUILD_CMD"; then
     write_smoke_status pass
     exit 0
   else
@@ -58,7 +65,10 @@ if ! git rev-parse --verify -q HEAD >/dev/null 2>&1; then
 fi
 
 echo "[smoke-check] Starting application..."
-$START_CMD &
+# U-04: `exec` is load-bearing — without it $APP_PID is the wrapper shell, the
+# EXIT-trap kills the wrapper, and the real server orphans and holds the port for
+# every subsequent smoke run.
+bash -c "exec $START_CMD" &
 APP_PID=$!
 trap 'kill "$APP_PID" 2>/dev/null' EXIT
 sleep "$STARTUP_WAIT"

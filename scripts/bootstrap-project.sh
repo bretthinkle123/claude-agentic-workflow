@@ -11,12 +11,19 @@
 #
 # Optional flags pre-wire the smoke check (written to .pipeline/smoke.env, which the
 # global smoke-check.sh sources) and fill the matching lines in CLAUDE.md:
-#   --start   app start command (e.g. "uvicorn app.main:app")
+#   --start   app start command (e.g. ".venv/bin/python -m uvicorn app.main:app")
 #   --health  health URL the smoke check probes after the first commit
 #   --test    test command (e.g. "pytest --cov=app")
 #   --build   import/build check used on the greenfield first run, before any
-#             commit exists (e.g. 'python -c "import app.main"'). Set it explicitly
-#             for non-src layouts; the hook default ('import src.main') won't match.
+#             commit exists. Prefer the venv-explicit MODULE form — e.g.
+#             ".venv/bin/python -m app.main_check" (or on Windows
+#             ".venv/Scripts/python.exe -m scripts.smoke_import_check") — the form
+#             that survived the M3 run: space-free, quote-free, and pinned to the
+#             project venv rather than whatever `python` is on PATH (U-04). Set it
+#             explicitly for non-src layouts; the hook default (import src.main)
+#             won't match. Quoted forms now execute correctly (smoke-check runs
+#             commands via bash -c), but quotes in these values still break the
+#             CLAUDE.md/pipeline-ci.yml sed fills below — bootstrap warns on them.
 #
 # Idempotent and non-destructive: existing files are left untouched (so re-running
 # never clobbers a CLAUDE.md you've edited or skill placeholders planning has filled).
@@ -38,6 +45,23 @@ while [[ $# -gt 0 ]]; do
     --test=*)   TEST="${1#*=}";   shift ;;
     --build=*)  BUILD="${1#*=}";  shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+# U-04: warn loudly on embedded quotes in the smoke/test commands. They now execute
+# correctly (smoke-check.sh runs them via bash -c), but they also flow into sed fills
+# (CLAUDE.md, pipeline-ci.yml) where quotes silently corrupt the line — and the M3 run
+# lost an implementation cycle to exactly this shape. The venv-explicit module form
+# (".venv/bin/python -m <module>") avoids the whole class.
+for _flagval in "--start:$START" "--build:$BUILD" "--test:$TEST"; do
+  _v="${_flagval#*:}"
+  case "$_v" in
+    *\"*|*\'*)
+      echo "Warning: ${_flagval%%:*} value contains quotes ($_v)." >&2
+      echo "         It will run correctly, but prefer the quote-free module form" >&2
+      echo "         (e.g. .venv/bin/python -m app.main_check) — quotes corrupt the" >&2
+      echo "         CLAUDE.md / pipeline-ci.yml template fills." >&2
+      ;;
   esac
 done
 
@@ -91,6 +115,10 @@ fi
 if [[ -n "$START$HEALTH$BUILD" ]]; then
   {
     echo "# Written by bootstrap-project.sh — sourced by the global smoke-check.sh hook."
+    echo "# Convention (U-04): commands run via bash -c, so quoted forms work — but the"
+    echo "# robust shape is venv-explicit + module: .venv/bin/python -m <module>"
+    echo "# (Windows: .venv/Scripts/python.exe -m <module>) — never bare 'python',"
+    echo "# which resolves to whatever is on PATH, not the project venv."
     [[ -n "$START"  ]] && echo "export SMOKE_START_CMD=\"$START\""
     [[ -n "$HEALTH" ]] && echo "export SMOKE_HEALTH_URL=\"$HEALTH\""
     [[ -n "$BUILD"  ]] && echo "export SMOKE_BUILD_CMD='$BUILD'"
