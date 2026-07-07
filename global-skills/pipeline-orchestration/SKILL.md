@@ -233,6 +233,13 @@ furthest recorded state, do not restart."* The stages write that state as they g
 (implementation appends a progress note every ~15 turns; testing keeps a valid
 `test-results.json` after every sub-step), so a cap becomes a warm resume — the caps
 that remain cost far less than the cache-cold re-reads the M3 series paid.
+**Reference, don't re-summarize (TA/C-2).** The resume prompt should point at the
+`.pipeline/*` artifacts by path (progress file, plan, acceptance, test-results) rather
+than restating their contents — the interlock files ARE the handoff, and duplicating them
+in the prompt burns tokens and risks drift. If the capped stage was mid-way through a
+specific unit (an A-3 task, a plan layer) and was using particular on-demand skills, name
+that unit and those skills in the resume prompt so the fresh agent re-invokes them without
+rediscovery. *(Pattern adapted from mattpocock/skills `handoff`, MIT — see VENDORED.md.)*
 
 `duration_s` and `tokens` are not available to shell hooks; use timestamp deltas between
 lines as a duration proxy.
