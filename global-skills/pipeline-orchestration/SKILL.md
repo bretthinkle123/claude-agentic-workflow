@@ -243,6 +243,15 @@ zero-LLM summary of `run-log.jsonl` — per-stage model/status/retries, the
 **inverted-pyramid flag** (a `pyramid`-strategy feature whose unit count is below
 integration+e2e). Read-only; never part of a gate.
 
+**Per-stage cost snapshot (TA/B-6 — operator, out-of-band).** `duration_s`/`tokens` are not
+available to shell hooks, so per-stage token/$ cost is not in `run-summary.json`. The operator
+tool **codeburn** (`npx codeburn`, installed on the operator machine — never agent-invoked, no
+permission entry) parses Claude Code's local session JSONL and reports per-project/model/task
+cost. Record a codeburn snapshot per phase in the run journal so the retrospective's cost column
+is measured, not estimated. One-time trust check before first use: confirm its only outbound calls
+are the LiteLLM pricing + Frankfurter FX pulls (no session-data egress). It is telemetry only —
+nothing in the pipeline reads it, and it never gates.
+
 ## Prompts are for experiments, definitions are for keeps (U-12)
 
 A lesson that worked when delivered via an orchestrator prompt gets moved into the
