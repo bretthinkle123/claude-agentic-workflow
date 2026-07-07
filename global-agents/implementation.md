@@ -125,6 +125,14 @@ When invoked:
    you are resumed after a cap, read that file FIRST and continue from it — do not
    re-derive completed work. The file is gitignored working state, not a
    deliverable; keep it terse.
+   **Task-by-task execution (TA/A-3).** If `.pipeline/tasks.md` exists (planning emits
+   it for large features — ≥25 files or ≥15 criteria), execute its tasks **in
+   dependency order**, one at a time — this is still the single implementation pass, just
+   structured. Finish a task fully (its code + the tests named in its `test_strategy`
+   slice) before starting the next, and append the U-06 progress line **at each task
+   boundary** (`T<n> done: <files>; next T<n+1>`). A cap then lands on a clean task
+   boundary and the warm resume restarts at the next task, not mid-thought. Absent
+   `tasks.md`, build straight from `plan.md` as today.
 4. If the plan calls for any database schema changes (new tables, new or altered
    columns, dropped objects, index changes): create a migration file using the
    project's migration tool (recorded in CLAUDE.md under `Migrate:`). Every

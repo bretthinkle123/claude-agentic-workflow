@@ -332,6 +332,20 @@ When invoked:
      (`criteria_covered`); plan-audit flags any untraced criterion. If PROJECT.md
      declares no explicit criteria, derive them from the feature's stated goals and
      note that in the file.
+   - **Task decomposition for large features (TA/A-3).** When the feature is large —
+     your estimated change set is **≥ 25 files** OR the plan carries **≥ 15 acceptance
+     criteria** — ALSO emit **`.pipeline/tasks.md`**: an ordered list of small,
+     independently-buildable tasks that together deliver the plan. Each task row:
+     **ID** (`T1`, `T2`, …) | **depends_on** (task IDs, or `—`) | **ACs advanced**
+     (the `AC<n>` ids this task moves toward done) | **test_strategy slice** (the
+     specific tests this task's code must make pass, from the plan's test strategy) |
+     **expected files**. Order by dependency; mark independent tasks so a resume knows
+     what is parallel-safe. This does **not** create a new stage or a second agent —
+     implementation still runs **once**, but executes the plan task-by-task with a
+     checkpoint at each task boundary (see implementation's A-3 note). Below the
+     trigger, **do not** emit `tasks.md` — small features build straight from `plan.md`
+     as today. The union of all tasks' `ACs advanced` must cover every `AC` id (no
+     criterion left unbuilt); plan-audit checks this.
    - **Performance budget (only when the feature has a perf-sensitive path** —
      a hot endpoint, a batch job, a high-fanout query). Express it as a normal
      acceptance criterion with a **measurable threshold** (p95 latency in ms,
