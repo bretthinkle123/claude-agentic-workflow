@@ -1,0 +1,45 @@
+{
+  "_provenance": "Reconstructed 2026-07-07 from the audit session's full Read of meterly .pipeline/test-results.json as written by run 1 (M3 greenfield) testing attempt 3, ran_at 2026-07-06T20:49:32Z. Original bytes overwritten by run 2. Gate-relevant fields (status, criteria_covered incl. the AC20 covered:false vs covered:24 inconsistency, perf) are verbatim; by_id entries other than AC20 are abbreviated to id+covered, which is all the gate reads.",
+  "status": "pass",
+  "ran_at": "2026-07-06T20:49:32Z",
+  "scope": "full",
+  "since_commit": null,
+  "tested_change_hash": "a17802ed6d73c9b03a836d6be4a2cef62c05e4c30c16c108481553da96d98f14",
+  "test_strategy": "pyramid",
+  "total": 83,
+  "passed": 83,
+  "failed": 0,
+  "failures": [],
+  "tests_by_type": { "unit": 60, "integration": 23, "e2e": 0 },
+  "criteria_covered": {
+    "total": 24,
+    "covered": 24,
+    "by_id": [
+      { "id": "AC1", "covered": true }, { "id": "AC2", "covered": true },
+      { "id": "AC3", "covered": true }, { "id": "AC4", "covered": true },
+      { "id": "AC5", "covered": true }, { "id": "AC6", "covered": true },
+      { "id": "AC7", "covered": true }, { "id": "AC8", "covered": true },
+      { "id": "AC9", "covered": true }, { "id": "AC10", "covered": true },
+      { "id": "AC11", "covered": true }, { "id": "AC12", "covered": true },
+      { "id": "AC13", "covered": true }, { "id": "AC14", "covered": true },
+      { "id": "AC15", "covered": true }, { "id": "AC16", "covered": true },
+      { "id": "AC17", "covered": true }, { "id": "AC18", "covered": true },
+      { "id": "AC19", "covered": true },
+      { "id": "AC20", "covered": false, "test": "",
+        "reason": "ASVS L1/L2/L3 reconciliation across the whole change set is the security agent's step 6g deliverable, not a test-suite assertion. (Security re-scan reported clean per the coordinator.)" },
+      { "id": "AC21", "covered": true }, { "id": "AC22", "covered": true },
+      { "id": "AC23", "covered": true }, { "id": "AC24", "covered": true }
+    ]
+  },
+  "perf": {
+    "budget": { "p95_ms": 50, "throughput_rps": 475 },
+    "measured": { "p95_ms": 75.47, "throughput_rps": 497.75 },
+    "scenario": { "tool": "grafana/k6 (via Docker), constant-arrival-rate executor", "target": "POST /v1/events" },
+    "status": "fail"
+  },
+  "coverage": {
+    "combined": { "lines": 89.82, "branches": 58.77, "functions": 89.82 },
+    "unit": { "lines": 71.37, "branches": 33.33 },
+    "integration": { "lines": null, "branches": null }
+  }
+}

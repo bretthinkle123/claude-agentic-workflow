@@ -1,0 +1,13 @@
+{
+  "status": "advisory",
+  "ran_at": "2026-07-07T04:42:21Z",
+  "target": "http://host.docker.internal:8000",
+  "alerts_by_severity": {
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "informational": 3
+  },
+  "over_budget": [],
+  "within_budget": true
+}

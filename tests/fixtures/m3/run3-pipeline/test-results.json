@@ -1,0 +1,231 @@
+{
+  "status": "pass",
+  "ran_at": "2026-07-07T04:37:20Z",
+  "scope": "diff",
+  "since_commit": "faabe9d6e59533dd144ce7895881dbe54fd7ddd2",
+  "tested_change_hash": "bf560b722e236d9bc36157ac5d9965abd7ca69aad43b80b206adfabdf474c365",
+  "test_strategy": "pyramid",
+  "total": 161,
+  "passed": 160,
+  "failed": 0,
+  "failures": [],
+  "skipped": [
+    {
+      "test": "tests/integration/test_perf_smoke.py::test_events_ingest_smoke_load",
+      "reason": "pre-existing (feature 1) environment-dependent smoke skip, unrelated to this change set: no successful requests completed in this sandboxed environment"
+    }
+  ],
+  "tests_by_type": {
+    "unit": 105,
+    "integration": 48,
+    "e2e": 8
+  },
+  "criteria_covered": {
+    "total": 25,
+    "covered": 25,
+    "by_id": [
+      {
+        "id": "AC1",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_get_dashboard_returns_200_html_with_page_csp_and_header_set, ::test_dashboard_static_assets_serve_200",
+        "reason": ""
+      },
+      {
+        "id": "AC2",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_served_html_contains_cmp_structure",
+        "reason": ""
+      },
+      {
+        "id": "AC3",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_served_html_contains_cmp_structure (structure); tests/e2e/test_dashboard_e2e.py::test_month_segment_disabled_affordance_and_issues_no_request (segmented-control keyboard/affordance behavior in a real browser)",
+        "reason": ""
+      },
+      {
+        "id": "AC4",
+        "covered": true,
+        "test": "tests/e2e/test_dashboard_e2e.py::test_populated_state_renders_stat_card_and_ten_rows",
+        "reason": ""
+      },
+      {
+        "id": "AC5",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_usage_series_empty_state_when_no_events; tests/e2e/test_dashboard_e2e.py::test_empty_state_renders_when_no_usage_rows",
+        "reason": ""
+      },
+      {
+        "id": "AC6",
+        "covered": true,
+        "test": "tests/e2e/test_dashboard_e2e.py::test_loading_skeleton_shows_ten_rows_on_filter_change",
+        "reason": ""
+      },
+      {
+        "id": "AC7",
+        "covered": true,
+        "test": "tests/e2e/test_dashboard_e2e.py::test_error_state_renders_on_fetch_failure_with_working_retry",
+        "reason": ""
+      },
+      {
+        "id": "AC8",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_usage_series_hour_granularity_reflects_seeded_events; tests/test_dashboard_service.py (window/delta computation)",
+        "reason": ""
+      },
+      {
+        "id": "AC9",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_no_credential_in_served_assets_or_bff_responses, ::test_bff_request_requires_no_authorization_header; tests/e2e/test_dashboard_e2e.py::test_no_api_key_ever_appears_in_page_or_network",
+        "reason": ""
+      },
+      {
+        "id": "AC10",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_cross_tenant_rows_never_appear_in_bff_output",
+        "reason": ""
+      },
+      {
+        "id": "AC11",
+        "covered": true,
+        "test": "tests/test_schemas_dashboard.py; tests/integration/test_dashboard_endpoint.py::test_usage_series_rejects_customer_not_in_allowlist, ::test_usage_series_rejects_month_granularity, ::test_usage_series_rejects_injection_payloads, ::test_usage_series_rejects_unknown_query_param",
+        "reason": ""
+      },
+      {
+        "id": "AC12",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_usage_series_tier1_throttle_exhausted_returns_429",
+        "reason": ""
+      },
+      {
+        "id": "AC13",
+        "covered": true,
+        "test": "tests/e2e/test_dashboard_e2e.py::test_xss_safe_rendering_injected_markup_never_executes",
+        "reason": ""
+      },
+      {
+        "id": "AC14",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_get_dashboard_returns_200_html_with_page_csp_and_header_set, ::test_dashboard_api_routes_carry_no_store_and_strict_json_csp",
+        "reason": ""
+      },
+      {
+        "id": "AC15",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_frame_ancestors_and_x_frame_options_both_present",
+        "reason": ""
+      },
+      {
+        "id": "AC16",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_perf_k6_load.py::test_dashboard_usage_series_hour_sustained_25rps_k6_load, ::test_dashboard_page_sustained_25rps_k6_load",
+        "reason": ""
+      },
+      {
+        "id": "AC17",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_openapi_schema_includes_dashboard_bff_routes",
+        "reason": ""
+      },
+      {
+        "id": "AC18",
+        "covered": true,
+        "test": "tests/test_dast_context_documented.py (existing, reused/still green after plan.md overwrite)",
+        "reason": ""
+      },
+      {
+        "id": "AC19",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_dashboard_usage_series_log_does_not_include_raw_customer_id",
+        "reason": ""
+      },
+      {
+        "id": "AC20",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_config_route_returns_configured_allowlists_and_environment; tests/e2e/test_dashboard_e2e.py::test_environment_badge_reflects_configured_environment",
+        "reason": ""
+      },
+      {
+        "id": "AC21",
+        "covered": true,
+        "test": "tests/test_dashboard_dependency_pins.py",
+        "reason": ""
+      },
+      {
+        "id": "AC22",
+        "covered": true,
+        "test": "smoke-check.sh (global, unchanged; health route untouched by this feature)",
+        "reason": ""
+      },
+      {
+        "id": "AC23",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_usage_series_day_granularity_sums_the_days_hours; tests/test_dashboard_service.py::test_get_usage_series_day_granularity_sums_elapsed_hours; tests/e2e/test_dashboard_e2e.py::test_month_segment_disabled_affordance_and_issues_no_request",
+        "reason": ""
+      },
+      {
+        "id": "AC24",
+        "covered": true,
+        "test": "tests/integration/test_dashboard_endpoint.py::test_forced_internal_error_returns_generic_envelope_no_leak, ::test_forced_config_route_error_also_returns_generic_envelope",
+        "reason": ""
+      },
+      {
+        "id": "AC25",
+        "covered": true,
+        "test": "tests/test_dashboard_reader_secret_iac.py",
+        "reason": ""
+      }
+    ]
+  },
+  "resilience": {
+    "migration_roundtrip": "n/a",
+    "property_tests": 2,
+    "concurrency": "n/a"
+  },
+  "perf": {
+    "budget": {
+      "p95_ms": 200,
+      "throughput_rps": 25
+    },
+    "measured": {
+      "p95_ms": 26.24,
+      "throughput_rps": 25.04
+    },
+    "scenario": {
+      "tool": "k6 (grafana/k6, via Docker)",
+      "target": "GET /dashboard/api/usage-series?granularity=hour",
+      "executor": "constant-arrival-rate",
+      "rate_rps": 25,
+      "duration": "60s",
+      "warmup": "5s",
+      "preallocated_vus": 30,
+      "max_vus": 100,
+      "against": "out-of-process uvicorn (5 workers), real Postgres + Redis testcontainers",
+      "cache": "warm (session-scoped reader-principal memoization; a real acme-corp/api_calls seed row present)",
+      "auth": "no client credential (BFF is app-layer unauthenticated for the viewer per plan; reader key is server-held)",
+      "secondary_measurement": {
+        "target": "GET /dashboard (static HTML)",
+        "budget_p95_ms": 50,
+        "measured_p95_ms": 10.72,
+        "measured_throughput_rps": 25.02
+      },
+      "sample_count": 1501
+    },
+    "status": "pass"
+  },
+  "coverage": {
+    "combined": {
+      "lines": 92,
+      "branches": 67,
+      "functions": 92
+    },
+    "unit": {
+      "lines": null,
+      "branches": null
+    },
+    "integration": {
+      "lines": null,
+      "branches": null
+    }
+  },
+  "notes": "Full suite run in two invocations because pytest-playwright's sync browser fixture and pytest-asyncio's auto-mode conflict when collected in the SAME pytest session ('This event loop is already running' on every async test) -- a known plugin interaction, not a bug in the app. Ran (1) unit+integration with --cov (152 passed, 1 pre-existing unrelated skip, 304s) and (2) tests/e2e separately with Playwright/Chromium (8 passed, 15s). Coverage figures are from run (1); tests/e2e is excluded from the coverage instrumentation (it exercises the app out-of-process via a real browser + real uvicorn subprocess, not the in-process src/ import coverage.py instruments, so it would not contribute countable coverage anyway)."
+}
