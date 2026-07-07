@@ -122,19 +122,25 @@ done
 SCOPE_GAPS='[]'
 SEMGREP_P="$(artifact_path semgrep)"
 if [ -f "$SEMGREP_P" ] && jq -e '.paths.scanned' "$SEMGREP_P" >/dev/null 2>&1; then
-  # code-shaped changed files (tracked diff + untracked), excluding non-code shapes.
-  CODE_EXCLUDE='\.(md|json|lock|png|jpg|jpeg|gif|svg|ico|pdf|zip|gz)$|(^|/)\.pipeline/'
+  # Only consider changed files with a CODE shape Semgrep is EXPECTED to scan — a positive
+  # ALLOWLIST, not a blocklist. An exclusion blocklist would false-block on any unusual
+  # extension Semgrep legitimately doesn't scan (a .toml/.cfg/.ini, a dependency-only
+  # pyproject bump): it lands in "changed but not scanned" → a spurious scope gap →
+  # scan_reconciled=false → a WRONGLY blocked clean deploy. Allowlisting the shapes Semgrep
+  # covers (py/js/ts/go/java/rb/php/tf/yaml/json/dockerfile/bash — matching its own language
+  # set) means an unknown extension is simply not checked here, never a false gap.
+  CODE_INCLUDE='\.(py|js|jsx|ts|tsx|go|java|rb|php|tf|ya?ml|sh|bash)$|(^|/)Dockerfile$'
   DIFF_REF="HEAD"; git rev-parse --verify -q HEAD >/dev/null 2>&1 || DIFF_REF=""
   { [ -n "$DIFF_REF" ] && git diff "$DIFF_REF" --name-only 2>/dev/null; \
     git ls-files --others --exclude-standard 2>/dev/null; } \
-    | grep -vE "$CODE_EXCLUDE" | sort -u > /tmp/.u09_changed.$$ 2>/dev/null || true
-  jq -r '.paths.scanned[]?' "$SEMGREP_P" 2>/dev/null | sed 's#^\./##' | sort -u > /tmp/.u09_scanned.$$ 2>/dev/null || true
+    | grep -vE '(^|/)\.pipeline/' | grep -E "$CODE_INCLUDE" | sort -u > "/tmp/.u09_changed.$$" 2>/dev/null || true
+  jq -r '.paths.scanned[]?' "$SEMGREP_P" 2>/dev/null | sed 's#^\./##' | sort -u > "/tmp/.u09_scanned.$$" 2>/dev/null || true
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    grep -qxF "$f" /tmp/.u09_scanned.$$ 2>/dev/null || \
+    grep -qxF "$f" "/tmp/.u09_scanned.$$" 2>/dev/null || \
       SCOPE_GAPS="$(printf '%s' "$SCOPE_GAPS" | jq -c --arg f "$f" '. + [$f]')"
-  done < /tmp/.u09_changed.$$
-  rm -f /tmp/.u09_changed.$$ /tmp/.u09_scanned.$$ 2>/dev/null || true
+  done < "/tmp/.u09_changed.$$"
+  rm -f "/tmp/.u09_changed.$$" "/tmp/.u09_scanned.$$" 2>/dev/null || true
 fi
 
 RECONCILED=true

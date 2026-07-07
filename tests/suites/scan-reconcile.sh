@@ -69,4 +69,32 @@ w="$(mk_scan_proj)"; write_status "$w"; printf '# report pass 1\n' > "$w/.pipeli
 run "$w" >/dev/null
 assert_eq "# report pass 1" "$(cat "$w/.pipeline/archive/security-report.1.md" 2>/dev/null)" "security-report archived per attempt"
 
+# --- Scope reconciliation (previously untested — needs a real git repo + changed files) ---
+# The run-3 semgrep fixture's .paths.scanned = src/api/routes/events.py, src/api/schemas/events_list.py,
+# src/repositories/events_repo.py. Build a git repo whose UNTRACKED change set is a code file
+# and assert the scope check flags a code file NOT in paths.scanned, passes one that IS, and —
+# the false-block regression — never flags a non-code shape Semgrep doesn't scan (.toml).
+mk_scan_git() {
+  local w; w="$(mktemp -d)"; _WORKDIRS+=("$w")
+  ( cd "$w" && git init -q && git config user.email e@x && git config user.name x \
+      && printf '.pipeline/\n' > .gitignore && git add .gitignore && git commit -qm base ) >/dev/null 2>&1
+  mkdir -p "$w/.pipeline"; printf '{}' > "$w/.pipeline/state.json"
+  cp "$FX/semgrep.json" "$FX/osv.json" "$FX/trivy-config.json" "$FX/checkov.json" "$w/.pipeline/"
+  local t; for t in semgrep osv trivy checkov; do jq -nc --arg t "$t" '{tool:$t,ran_at:"t",args:"scan",exit_code:0}' >> "$w/.pipeline/scan-log.jsonl"; done
+  echo "$w"
+}
+# (a) changed code file NOT in paths.scanned → scope gap → block.
+w="$(mk_scan_git)"; write_status "$w"; mkdir -p "$w/src"; printf 'x=1\n' > "$w/src/unscanned_new.py"
+run "$w" >/dev/null
+assert_eq "false" "$(reconciled "$w")" "scope: changed .py absent from paths.scanned → scan_reconciled=false"
+assert_eq 1 "$(jq '.scope_gaps | length' "$w/.pipeline/scan-reconciliation.json")" "scope: the unscanned file is recorded"
+# (b) changed file that IS in paths.scanned → no gap.
+w="$(mk_scan_git)"; write_status "$w"; mkdir -p "$w/src/repositories"; printf '# edit\n' > "$w/src/repositories/events_repo.py"
+run "$w" >/dev/null
+assert_eq "true" "$(reconciled "$w")" "scope: changed file present in paths.scanned → reconciled true"
+# (c) THE FALSE-BLOCK REGRESSION: a changed .toml (Semgrep doesn't scan it) must NOT be a scope gap.
+w="$(mk_scan_git)"; write_status "$w"; printf '[tool]\nx=1\n' > "$w/pyproject.toml"
+run "$w" >/dev/null
+assert_eq "true" "$(reconciled "$w")" "scope: changed .toml (non-code shape) does NOT false-block (allowlist, not blocklist)"
+
 finish scan-reconcile
