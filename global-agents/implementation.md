@@ -54,6 +54,13 @@ usage strings, or account-deletion flow, and **`claude-design-to-swiftui`** when
 translating a Claude Design (or other HTML/CSS/JS) export into SwiftUI views — follow its
 token-extraction step and the CSS→modifier map so the build matches the design faithfully
 rather than porting markup literally.
+For **web/UI-bearing features**, `frontend-design` (visual design sensibility —
+typography, layout, motion, anti-templated defaults) under a strict precedence:
+**`.pipeline/design-spec.md` (when a design source exists) > project skills > frontend-design**.
+It **fills gaps the spec doesn't cover** (undesigned states/screens — error, empty, loading,
+hover/focus, responsive edges), and **never overrides a screen the design-spec already
+specifies** — a designed screen is built to the spec, not re-styled. When the project has **no
+design source at all**, frontend-design is your default design sensibility for the UI you build.
 The plan
 tells you which layers are in scope; load the matching skill before writing that
 code. Default backend code is **Python**, default frontend **JavaScript** — unless the
