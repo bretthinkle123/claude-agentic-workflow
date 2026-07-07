@@ -4,7 +4,14 @@ description: Writes and updates per-directory README.md files, root README.md, s
 tools: Read, Write, Edit, Glob, Bash
 skills:
   - doc-conventions
-model: haiku
+# U-06 documentation-model experiment (M4 condition): documentation capped on the LAST
+# stage for THREE consecutive runs — twice within ~1 minute of finishing on trivial
+# incremental updates. That pattern points at the model (haiku), not the turn budget, so
+# the plan's decision is to test the model hypothesis FIRST: run M4 on sonnet at the
+# SAME maxTurns 25. If the cap disappears, the budget was never the problem (keep sonnet,
+# or trial haiku@35 for cost); if it persists, revert to haiku and raise to 35. One
+# variable per observation — do not also raise maxTurns in this commit.
+model: sonnet
 maxTurns: 25
 hooks:
   PreToolUse:

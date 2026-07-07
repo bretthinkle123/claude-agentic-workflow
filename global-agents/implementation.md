@@ -4,7 +4,10 @@ description: Writes code against an approved plan in .pipeline/plan.md. Use afte
 tools: Read, Write, Edit, Bash, Skill, mcp__context7, mcp__aws-knowledge, mcp__terraform
 model: sonnet
 effort: high
-maxTurns: 40
+# U-06: raised 40→60. R1 capped implementation 3× on a ~100-file greenfield feature;
+# R2/R3 (small scope) capped 0–1×, confirming the cap storm was scope-size, not a defect.
+# 60 covers a large greenfield first feature; the loop-guard budgets still bound runaway.
+maxTurns: 60
 # MCP servers are PROJECT-SCOPED: defined in the project's .mcp.json (see
 # docs/pipeline-mcp-config.md), not baked into the portable agent. context7 gives
 # current, version-specific library APIs (the main per-feature token win — avoids
@@ -107,6 +110,14 @@ When invoked:
    endpoint returning HTTP 200 as part of the initial scaffold, so the smoke
    check has a stable runtime target on every subsequent run. (Until that
    endpoint exists, `smoke-check.sh` falls back to a build/import check.)
+   **Warm-resume progress note (U-06).** A large greenfield feature can hit the
+   `maxTurns` cap mid-build; each cap-resume otherwise re-reads the whole plan and
+   tree cold. Roughly every ~15 turns (and whenever you finish a coherent chunk),
+   append a short paragraph to `.pipeline/implementation-progress.md`: what is
+   DONE (files written + what they do), what is IN FLIGHT, and the NEXT step. If
+   you are resumed after a cap, read that file FIRST and continue from it — do not
+   re-derive completed work. The file is gitignored working state, not a
+   deliverable; keep it terse.
 4. If the plan calls for any database schema changes (new tables, new or altered
    columns, dropped objects, index changes): create a migration file using the
    project's migration tool (recorded in CLAUDE.md under `Migrate:`). Every

@@ -174,6 +174,17 @@ Each line now carries an `attempt` number (audit T2) — how many times this
 `(feature,stage)` has been logged, +1 — so the capped line and the eventual clean
 resume are distinct, countable entries instead of collapsing into one. A missing stage
 line is still a signal, but with the breadcrumb the cap is recorded, not inferred.
+
+**Warm-resume prompt (U-06).** When you resume a capped `implementation` or `testing`
+stage, the resume prompt must tell it to read its progress state FIRST and not
+re-derive completed work — e.g. *"You were resumed after a cap. Read
+`.pipeline/implementation-progress.md` (implementation) or the existing
+`.pipeline/test-results.json` (testing) before doing anything; continue from the
+furthest recorded state, do not restart."* The stages write that state as they go
+(implementation appends a progress note every ~15 turns; testing keeps a valid
+`test-results.json` after every sub-step), so a cap becomes a warm resume — the caps
+that remain cost far less than the cache-cold re-reads the M3 series paid.
+
 `duration_s` and `tokens` are not available to shell hooks; use timestamp deltas between
 lines as a duration proxy.
 
