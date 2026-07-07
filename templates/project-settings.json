@@ -36,6 +36,7 @@
       "Bash(sha256sum:*)",
       "Bash(date:*)",
       "Bash(semgrep:*)",
+      "Bash(repomix:*)",
       "Bash(docker info:*)",
       "Bash(docker run:*)",
       "Bash(terraform fmt:*)",

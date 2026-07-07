@@ -272,6 +272,13 @@ so `rm` is permitted; only CREATION is guarded, and creating them stays human-on
 **and run `bash ~/.claude/hooks/loop-guard.sh reset`** so the circuit-breaker starts
 the next feature with a fresh budget.
 
+**Large / brownfield target — optional repo map (TA/B-1).** Before invoking planning on a
+large or existing-code target, you MAY generate a single-file codebase map for the planning
+agent (which has no `Bash` of its own): `repomix --output .pipeline/repomix-pack.xml`
+(gitignored). Planning reads that one artifact instead of sweeping with Grep/Glob, and
+repomix's built-in Secretlint pass is a free secrets check on the inputs. Skip it for a
+small greenfield feature — the tree is cheap to Grep directly.
+
 ## Interlock-file contract
 
 | File | Writer | Readers |
