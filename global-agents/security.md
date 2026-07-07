@@ -430,8 +430,16 @@ When invoked:
    **Report but do NOT auto-fix:**
    - OSV dependency CVEs — record the CVE, affected package, and the safe
      version to upgrade to, but do not modify dependency manifests or lock
-     files. Upgrading a dependency can break the build; that decision belongs
-     to the human after reviewing the report.
+     files. Upgrading a dependency can break the build. **A GATING dependency CVE
+     (unwaived, CVSS ≥ 7.0 — `osv_max_cvss >= 7` with no `osv_waiver`) is
+     remediated by the DEBUGGING agent, not here (U-19 / decision D2):** you
+     report it (the CVE, package, safe version, and that it trips the deploy
+     gate's ≥7.0 floor), the orchestrator routes it to debugging as a remediation
+     finding (the clean-but-conjunct-failing loop route, SKILL U-18), and
+     debugging performs the manifest/lockfile bump with a fails-before/passes-after
+     pin-guard test. This keeps the security stage scan-and-report focused and its
+     `fixed_count` honest (it counts code fixes YOU made, not dependency bumps).
+     A below-floor CVE (< 7.0, or waived) is reported only — the human decides.
    - Medium/low hygiene findings (warnings) — report in full, no code change.
 
    **How to fix:**

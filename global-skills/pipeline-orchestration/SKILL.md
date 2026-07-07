@@ -27,8 +27,12 @@ string and those files — never assume it can see the conversation.
    run iff a `design/` dir exists OR a `Design source:` line in PROJECT.md/CLAUDE.md (non-"none") OR the project wired Figma MCP.
    -> Agent(design-spec, "Normalize the design source into .pipeline/design-spec.md (7 sections incl. injection report).")
 0b. HUMAN DESIGN-REVIEW CHECKPOINT (design-approved) — the human reads .pipeline/design-spec.md
-     (especially its injection report), and on "continue" the ORCHESTRATOR records the marker with a
-     currency hash of the exact bytes approved (path visible so the subagent guard catches forgery):
+     (especially its injection report), and on the human's explicit approval the ORCHESTRATOR records
+     the marker on the un-hooked main thread with a currency hash of the exact bytes approved. (U-15/D1:
+     design-approved is orchestrator-written precisely BECAUSE it needs the sha256 hash, which a bare
+     human `touch` can't produce — the human's approval is still the trigger; the orchestrator only
+     transcribes it + the hash. plan-approved and diff-approved, which need no hash, are human-typed.
+     Path visible so the subagent guard catches forgery):
           HASH=$(sha256sum .pipeline/design-spec.md | cut -d' ' -f1)
           printf '{"approved_at":"%s","note":"<human note>","design_spec_hash":"%s"}\n' \
                  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$HASH" > .pipeline/design-approved
@@ -48,7 +52,8 @@ string and those files — never assume it can see the conversation.
 1c. read revision_recommended from .pipeline/plan-audit.md frontmatter:
      if true: Agent(planning, "Revise .pipeline/plan.md: address every [material] flag in
               .pipeline/plan-audit.md, append ## Revision notes.")   # ONE pass only, no recursion
-     -> review plan.md + plan-audit.md, then: touch .pipeline/plan-approved       # human checkpoint
+     -> review plan.md + plan-audit.md, then the HUMAN runs (in their own terminal, NOT the
+        orchestrator — U-15/D1): touch .pipeline/plan-approved                    # human checkpoint
 2. Agent(implementation, "Implement .pipeline/plan.md.")     # SINGLE-SHOT — runs exactly once
      -> smoke-check.sh (+ infra-validate.sh) fire on Stop
      -> if smoke fails: Agent(debugging, "<error>") up to max_retries, then re-smoke
@@ -261,8 +266,11 @@ catch-vs-cost in the M4 retrospective; keep or drop the step on that data.
 Run `bash ~/.claude/pipeline-templates/bootstrap-project.sh` from inside the
 target repo root (flags `--start`, `--health`, `--test`, `--build` are optional
 and pre-wire the smoke check). Before each new feature, remove any stale
-`.pipeline/plan-approved` marker **and run `bash ~/.claude/hooks/loop-guard.sh
-reset`** so the circuit-breaker starts the next feature with a fresh budget.
+`.pipeline/{plan,diff,design}-approved` markers (the orchestrator MAY `rm` these —
+U-15/D3: deletion is not the forgery vector, it can only un-approve a prior feature,
+so `rm` is permitted; only CREATION is guarded, and creating them stays human-only)
+**and run `bash ~/.claude/hooks/loop-guard.sh reset`** so the circuit-breaker starts
+the next feature with a fresh budget.
 
 ## Interlock-file contract
 
