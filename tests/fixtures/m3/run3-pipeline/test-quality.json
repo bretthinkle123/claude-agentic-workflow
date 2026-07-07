@@ -1,0 +1,54 @@
+{
+  "quality_ok": false,
+  "quality_waiver": null,
+  "ran_at": "2026-07-07T04:33:40Z",
+  "mutation": {
+    "tool": "mutmut",
+    "configured_scope": ["src/services/dashboard_service.py", "src/api/schemas/dashboard.py", "src/auth/dashboard_reader.py"],
+    "scope": [],
+    "score": null,
+    "killed": 0,
+    "survived": 0,
+    "threshold": null,
+    "note": "mutmut 3.6.0 has no native Windows support ('please use WSL') and this sandboxed session has no WSL available -- confirmed via `python -m mutmut --help`, which hard-blocks with that message before any scope/config is read. No mutation run occurred; quality_ok is honestly false rather than claiming coverage that wasn't measured. The adversarial review below was still performed manually."
+  },
+  "adversarial_review": {
+    "gaps": [
+      {
+        "area": "src/services/dashboard_service.py::_format_quantity",
+        "gap": "unit tests cover thousands-separator + trailing-zero trimming for a handful of fixed examples, but there is no property test (Hypothesis) over arbitrary Decimal magnitudes/signs/scales -- an edge case like a value with >15 significant digits or a scale that trips Python's Decimal-to-string formatting is unexercised.",
+        "severity": "low"
+      },
+      {
+        "area": "src/services/dashboard_service.py::_read_day_granularity_buckets",
+        "gap": "the day-granularity fan-out's 'never query beyond the latest completed hour' boundary (today's partial day) is exercised only against mocked get_usage in the unit test, never against a real Postgres testcontainer at exactly the UTC hour boundary -- an off-by-one at midnight/hour-rollover would not be caught.",
+        "severity": "medium"
+      },
+      {
+        "area": "src/services/dashboard_service.py::get_usage_series (partial fan-out failure)",
+        "gap": "no test forces ONE of the 11 (or up to 264 for day) concurrent get_usage reads to fail while the others succeed. asyncio.gather without return_exceptions=True will propagate the first exception and abort the whole request (falling into the safe-error path, AC24's shape), but this specific partial-failure behavior is inferred from AC24's generic-error test, not asserted directly against a fan-out.",
+        "severity": "medium"
+      },
+      {
+        "area": "src/auth/dashboard_reader.py (concurrent resolution)",
+        "gap": "no test drives N concurrent calls to get_dashboard_reader_principal() before the cache is populated (e.g. the first burst of requests after a cold start / TTL expiry) to confirm it doesn't fire N redundant Secrets Manager + Argon2id verifications -- a thundering-herd cost, not a correctness bug, but unmeasured.",
+        "severity": "low"
+      },
+      {
+        "area": "tests/e2e/test_dashboard_e2e.py::test_xss_safe_rendering_injected_markup_never_executes",
+        "gap": "only one injection shape (img onerror) is exercised in one field pair (window_start/metric); a <script>...</script> literal, an event-handler string in delta_text, and injection via the customer_id/metric SELECT options themselves are not separately proven inert -- the CSP + textContent combination make all of these very likely safe, but only the one shape is directly demonstrated end-to-end.",
+        "severity": "low"
+      },
+      {
+        "area": "AC12 (Tier-1 throttle) refill behavior",
+        "gap": "the throttle test proves capacity=1 exhausts after 2 requests, but does not wait out the refill window and assert a subsequent request succeeds again -- only the 'exhausted' half of the token-bucket contract is proven, not the 'refills over time' half.",
+        "severity": "low"
+      },
+      {
+        "area": "src/api/schemas/dashboard.py (AC11 property test)",
+        "gap": "the Hypothesis property test asserts arbitrary customer_id text never raises an uncontrolled exception, but does not separately fuzz `metric` or `granularity` with the same breadth -- both are covered by fixed-example parametrized tests only.",
+        "severity": "low"
+      }
+    ]
+  }
+}

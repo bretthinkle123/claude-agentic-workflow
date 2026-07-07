@@ -32,7 +32,7 @@
 - Start: `<e.g. python -m uvicorn src.main:app --port 8000>` (smoke check expects HTTP 200 at `<http://localhost:8000/health>`)
 - Test:  `<e.g. pytest --cov=src>` with coverage via `<flag>`
 - Migrate: `<e.g. alembic upgrade head>` (run before deploying; also run locally after pulling schema changes)
-- Deploy: `<command, or "CI on merge — see docs/pipeline-deployment-targets.md">`
+- Deploy: `<command, or "CI on merge — post-merge workflows in .github/workflows/; see the ci-conventions + delivery-conventions skills">`
 
 ## Frontend design source
 <!-- OPTIONAL — delete this whole section if the project has no provided UI design.

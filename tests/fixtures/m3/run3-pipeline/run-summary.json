@@ -1,0 +1,99 @@
+{
+  "generated_at": "2026-07-07T05:05:06Z",
+  "assurance": "standard",
+  "stages": {
+    "debugging": {
+      "invocations": 3,
+      "attempts_max": 3,
+      "caps": 1,
+      "models": [
+        "opus"
+      ],
+      "last_status": "pass"
+    },
+    "deployment": {
+      "invocations": 2,
+      "attempts_max": 2,
+      "caps": 1,
+      "models": [
+        "sonnet"
+      ],
+      "last_status": "pass"
+    },
+    "design-spec": {
+      "invocations": 1,
+      "attempts_max": 1,
+      "caps": 0,
+      "models": [
+        "opus"
+      ],
+      "last_status": "pass"
+    },
+    "documentation": {
+      "invocations": 6,
+      "attempts_max": 2,
+      "caps": 3,
+      "models": [
+        "haiku"
+      ],
+      "last_status": "pass"
+    },
+    "implementation": {
+      "invocations": 8,
+      "attempts_max": 5,
+      "caps": 4,
+      "models": [
+        "sonnet"
+      ],
+      "last_status": "pass"
+    },
+    "plan-audit": {
+      "invocations": 3,
+      "attempts_max": 1,
+      "caps": 0,
+      "models": [
+        "sonnet"
+      ],
+      "last_status": "pass"
+    },
+    "planning": {
+      "invocations": 4,
+      "attempts_max": 2,
+      "caps": 0,
+      "models": [
+        "opus"
+      ],
+      "last_status": "pass"
+    },
+    "security": {
+      "invocations": 5,
+      "attempts_max": 3,
+      "caps": 0,
+      "models": [
+        "opus"
+      ],
+      "last_status": "clean"
+    },
+    "testing": {
+      "invocations": 8,
+      "attempts_max": 3,
+      "caps": 4,
+      "models": [
+        "sonnet"
+      ],
+      "last_status": "pass"
+    }
+  },
+  "totals": {
+    "log_lines": 40,
+    "capped_lines": 13,
+    "loop_cap_events": 0,
+    "suspected_underlog": 0
+  },
+  "models_used": [
+    "haiku",
+    "opus",
+    "sonnet"
+  ],
+  "first_pass_clean": false
+}

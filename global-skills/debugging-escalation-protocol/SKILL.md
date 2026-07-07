@@ -17,9 +17,17 @@ approach. There are two roles, one debugging agent definition.
 - **Remediation role** — triggered when **security reports a critical finding**
   (`status: issues-found`) or **a test fails**. After your fix, re-run **both**
   security and testing (a fix can break either). Uses the `remediation` counter.
+  **This role also owns GATING dependency-CVE bumps (U-19 / decision D2):** when
+  security reports an unwaived OSV finding at CVSS ≥ 7.0 (it trips the deploy gate's
+  ≥7.0 floor but security does not modify manifests), you perform the
+  manifest/lockfile upgrade to the safe version — the minimal compatible bump — and
+  prove it with a fails-before/passes-after pin-guard test (assert the installed
+  version is ≥ the CVE-clearing floor; it fails on the old pin, passes after). Then
+  re-run both gates. Keeping the bump here (not in the security stage) keeps
+  security scan-focused and its `fixed_count` honest.
 
-A bare warning never triggers remediation — only `critical_count > 0` or a
-failing test does.
+A bare warning never triggers remediation — only `critical_count > 0`, a gating
+dependency CVE (unwaived CVSS ≥ 7.0), or a failing test does.
 
 ## Fixing discipline (every remediation)
 

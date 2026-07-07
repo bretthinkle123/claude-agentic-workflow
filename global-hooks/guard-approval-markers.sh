@@ -9,11 +9,22 @@
 #   .pipeline/waivers.json    — human-recorded security waivers (Option B; record-waiver.sh writes it,
 #                               deployment-gate.sh cross-checks claimed waivers against it)
 #
-# Both markers are created ONLY by the human, on the un-hooked main thread
-# (approve-diff.sh writes diff-approved; a human `touch`es plan-approved). A subagent
-# writing either one would forge a human approval and bypass the checkpoint. This hook
-# is wired as an ADDITIONAL PreToolUse Bash hook on every Bash-carrying subagent and
-# blocks (exit 2) any command that WRITES a marker.
+# Actor story (U-15 / decision D1 — human-typed): plan-approved and diff-approved are
+# created ONLY by the HUMAN, on the un-hooked main thread — the human runs
+# `touch .pipeline/plan-approved` and `approve-diff.sh` in their own terminal; the
+# orchestrator must NOT create them. design-approved is also recorded on the un-hooked
+# main thread at the human's explicit approval, but by the ORCHESTRATOR — because it
+# carries a sha256 currency hash of the approved spec bytes that a bare `touch` can't
+# compute (the human's spoken approval is the trigger; the orchestrator only transcribes
+# it + the hash). In every case a SUBAGENT creating any marker would forge a human
+# approval and bypass the checkpoint, so this hook — an ADDITIONAL PreToolUse Bash hook on
+# every Bash-carrying subagent — blocks (exit 2) any command that WRITES a marker.
+#
+# DELETION is allowed (U-15 / decision D3): `rm` of a stale marker is NOT blocked (it is
+# absent from the mutating-verb pattern below, by design). Removing a stale marker can
+# only UN-approve a prior feature's checkpoint — worst case a re-review, never a bypass —
+# so the orchestrator may clean up stale plan/diff-approved markers before a new feature.
+# Only CREATION is the forgery vector, and only creation is guarded.
 #
 # Writes only, not reads: the implementation agent legitimately VERIFIES
 # plan-approved exists (`test -f .pipeline/plan-approved`) — a read must pass through.

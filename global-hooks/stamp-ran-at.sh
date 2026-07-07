@@ -4,9 +4,11 @@
 # placeholder. F6: `test-results.json` and `security-status.json` were both seen
 # with `ran_at:"2026-06-30T00:00:00Z"` (a guessed midnight, not the real run time).
 #
-# Wired as the FIRST Stop hook on the testing + security agents (before
-# record-clean.sh / log-run.sh, which read `.status`/coverage, never `.ran_at`, so
-# ordering is not load-bearing — first is just cleanest). Zero-LLM, deterministic.
+# Wired as the FIRST Stop hook on the testing + security agents. It stamps `.ran_at`,
+# which the later hooks never read, so ITS position is not load-bearing. NOTE (U-16f):
+# the relative order of log-run.sh and record-clean.sh IS load-bearing on the testing
+# agent — record-clean zeroes debug_retry_count and log-run records it, so log-run must
+# run first. This hook stays first regardless. Zero-LLM, deterministic.
 # The agent is still told to write a real `date -u` value (the honest path); THIS is
 # the enforcement layer that guarantees it regardless of what the model wrote — the
 # same two-layer pattern as the criterion-completeness gate.

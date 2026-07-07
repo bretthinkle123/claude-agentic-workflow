@@ -67,6 +67,16 @@ across many IPs bypasses the cap; this is a real, shipped defect class).
 - **Algorithm:** token bucket or sliding window (both tiers).
 - **State:** a **shared store (ElastiCache/Redis by default)**, never in-process counters —
   in-memory limits are per-instance and silently fail open behind a load balancer.
+- **Client-IP derivation is an ENABLING CONDITION the plan must state (U-02).** "Keyed on
+  IP" is meaningless behind a proxy/load balancer unless the app is told to trust forwarded
+  headers: with an ALB/nginx in front, `request.client.host` is the *proxy node's* IP — every
+  client shares one bucket per node, and one attacker can 429 all of them (shipped in M3).
+  When the architecture includes any proxy/LB, the plan MUST name the trust mechanism
+  (ProxyHeadersMiddleware + `forwarded-allow-ips`, `X-Forwarded-For` depth, or equivalent)
+  and the plan-audit/security stages verify it. **Probe paths are part of the same
+  condition:** every LB health/readiness path (`/health`, `/health/ready`, …) must be exempt
+  from the pre-auth tier — a throttleable probe lets an attacker drain LB targets (M3 shipped
+  a throttleable `/health/ready`).
 - **Response:** `429 Too Many Requests` with a `Retry-After` header. Never a bare drop —
   clients must be able to back off deterministically.
 - Emit a `warn` log as a limit is approached and on every `429` (attack signal).

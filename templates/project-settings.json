@@ -1,12 +1,23 @@
 {
   "permissions": {
+    "defaultMode": "auto",
     "allow": [
       "Agent",
-      "Read",
+      "Read(./**)",
+      "Read(~/.claude/**)",
       "Grep",
       "Glob",
-      "Write",
-      "Edit",
+      "Write(./**)",
+      "Edit(./**)",
+      "WebFetch",
+      "WebSearch",
+      "Skill",
+      "TodoWrite",
+      "mcp__context7",
+      "mcp__aws-knowledge",
+      "mcp__terraform",
+      "mcp__figma",
+      "mcp__sentry",
       "Bash($HOME/.claude/hooks/*.sh)",
       "Bash(~/.claude/hooks/*.sh)",
       "Bash(git diff:*)",
@@ -18,27 +29,41 @@
       "Bash(git ls-files:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
       "Bash(jq:*)",
       "Bash(sha256sum:*)",
-      "Bash(curl:*)",
       "Bash(date:*)",
       "Bash(semgrep:*)",
       "Bash(docker info:*)",
       "Bash(docker run:*)",
-      "Bash(osv-scanner:*)",
-      "Bash(checkov:*)",
       "Bash(terraform fmt:*)",
       "Bash(terraform validate:*)",
       "Bash(terraform plan:*)",
       "Bash(npm run:*)",
       "Bash(npm test:*)",
+      "Bash(npm ci:*)",
+      "Bash(npm install:*)",
+      "Bash(pip install:*)",
       "Bash(pytest:*)",
       "Bash(go test:*)"
+    ],
+    "ask": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Write(.claude/settings.json)",
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.local.json)",
+      "Edit(.claude/settings.local.json)"
     ],
     "deny": [
       "Read(**/.env)",
       "Read(**/*.tfstate)",
       "Read(**/*.tfvars)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.claude/.credentials.json)",
       "Write(**/.pipeline/diff-approved)",
       "Write(**/.pipeline/plan-approved)",
       "Write(**/.pipeline/design-approved)",
@@ -47,6 +72,23 @@
       "Edit(**/.pipeline/plan-approved)",
       "Edit(**/.pipeline/design-approved)",
       "Edit(**/.pipeline/waivers.json)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "Autonomous multi-agent SDLC pipeline run. All file reads and writes must stay inside this repository (plus read-only pipeline assets under ~/.claude). Shell network access is limited to: localhost, the project's own GitHub remote (git/gh), and package-registry installs (npm/pip/go). Any other external network access must go through the WebFetch tool or a configured MCP server."
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Deleting, moving, or rewriting files that live outside this repository's working directory"
+    ],
+    "hard_deny": [
+      "$defaults",
+      "Creating, modifying, or deleting the .pipeline approval markers (plan-approved, diff-approved, design-approved) or waivers.json by ANY means, including shell redirection, scripts, or git operations — these files exist solely so a human can approve pipeline checkpoints",
+      "Shell commands that send data to external network destinations other than the project's git remote or package registries (use WebFetch or MCP tools instead)",
+      "Reading credential material (~/.ssh, ~/.aws, .env files, cloud or API tokens) or writing anywhere outside the repository working directory"
     ]
   }
 }

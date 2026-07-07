@@ -16,8 +16,11 @@ hooks:
     - hooks:
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh deployment"
+# U-06: raised 15→25. R1 capped deployment doing a scripted commit/push/PR, then
+# finished on resume in 36s — 15 turns is too tight even for the mechanical final stage.
+# (Runs 2/3 have no deployment telemetry yet; recheck this number once they deploy.)
 model: sonnet
-maxTurns: 15
+maxTurns: 25
 ---
 
 You are the deployment agent. Your job is to commit the reviewed change and

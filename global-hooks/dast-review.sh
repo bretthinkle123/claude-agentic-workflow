@@ -32,7 +32,15 @@ budget_json='{"high":0,"medium":5,"low":20,"informational":100}'
 # ZAP baseline JSON shape: {"site":[{"@name":URL,"alerts":[{"name","riskcode":"0|1|2|3","count":"N"}]}]}
 # riskcode + count are STRINGS in ZAP's report — coerce with tonumber. Sum count per severity across
 # every site; list the distinct alert names that pushed a severity over its cap.
-jq -n --slurpfile cap "$CAP" --argjson b "$budget_json" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+# U-14: fold in the target-reachability probe dast-capture writes. A false there means the
+# spider seeded on a non-page (bare root when the UI is at /dashboard), so a within-budget
+# verdict scanned nothing real — surfaced as a WARN below, still advisory (never a gate).
+# Read the sidecar into a variable (default {} when absent — backward compatible).
+probe_json='{}'
+if [ -f .pipeline/dast-target-probe.json ] && jq -e . .pipeline/dast-target-probe.json >/dev/null 2>&1; then
+  probe_json="$(jq -c '.' .pipeline/dast-target-probe.json)"
+fi
+jq -n --slurpfile cap "$CAP" --argjson b "$budget_json" --argjson probe "$probe_json" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
   ({"3":"high","2":"medium","1":"low","0":"informational"}) as $sevmap
   | [ $cap[0].site // [] | .[] | .alerts // [] | .[]
       | {sev: ($sevmap[(.riskcode|tostring)] // "informational"),
@@ -46,19 +54,26 @@ jq -n --slurpfile cap "$CAP" --argjson b "$budget_json" --arg t "$(date -u +%Y-%
       | select($n > $capn)
       | {severity: $s, count: $n, budget: $capn,
          alerts: ($alerts | map(select(.sev == $s) | .name) | unique)} ] as $over
+  | ({"target_reached": true} + ($probe // {})) as $p
   | {status: "advisory",
      ran_at: $t,
      target: $target,
+     target_reached: ($p.target_reached),
+     target_status: ($p.status // null),
      alerts_by_severity: $by_sev,
      over_budget: $over,
      within_budget: (($over | length) == 0)}
 ' > "$OUT"
 
 OVER=$(jq '.over_budget | length' "$OUT" 2>/dev/null || echo 0)
+REACHED=$(jq -r '.target_reached' "$OUT" 2>/dev/null || echo true)
+if [ "$REACHED" = "false" ]; then
+  echo "[dast-review] ADVISORY: DAST target was NOT reached (HTTP $(jq -r '.target_status // "?"' "$OUT")) — the passive scan did not traverse the real page; treat 'within budget' as uninformative. Set DAST_TARGET_URL to the served route. Surface in the PR (advisory). See $OUT." >&2
+fi
 if [ "${OVER:-0}" -gt 0 ]; then
   HI=$(jq -r '[.over_budget[] | select(.severity=="high")] | length' "$OUT" 2>/dev/null || echo 0)
   echo "[dast-review] ADVISORY: $OVER severity band(s) over budget (${HI} at HIGH) — surface in the PR (advisory, non-blocking). See $OUT." >&2
-else
+elif [ "$REACHED" != "false" ]; then
   echo "[dast-review] within budget (target: $(jq -r '.target // "n/a"' "$OUT"))."
 fi
 exit 0

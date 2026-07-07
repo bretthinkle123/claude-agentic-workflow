@@ -28,7 +28,7 @@ echo "-- loop-exit ≡ gate --"
 # GREEN := security-status.status=="clean" AND loop-exit-predicate(test-results)==true
 # GREEN security predicate (audit B6): clean AND no High/Critical OSV without a waiver.
 # Kept byte-equivalent to deployment-gate.sh's CVE floor and the SKILL's security jq.
-SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0) and ((.data_surface.unprotected // []) | length == 0) and (.asvs.reconciled != false)'
+SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0) and ((.data_surface.unprotected // []) | length == 0) and (.asvs.reconciled != false) and (.scan_reconciled != false)'
 
 pred_green() {
   local w="$1"
@@ -73,6 +73,31 @@ row "clean + unprotected sensitive field"     ''                                
 row "clean + data surface reconciled"         ''                                          '.data_surface={unprotected:[]}'
 row "clean + asvs unreconciled"               ''                                          '.asvs={reconciled:false}'
 row "clean + asvs reconciled"                 ''                                          '.asvs={reconciled:true}'
+row "clean + scan unreconciled (U-09)"        ''                                          '.scan_reconciled=false'
+row "clean + scan reconciled (U-09)"          ''                                          '.scan_reconciled=true'
+row "clean + no scan_reconciled field (U-09)" ''                                          'del(.scan_reconciled)'
+# U-01 by_id rows (single-file recomputation — gate and predicate must agree):
+row "U-01 by_id honesty: flag flipped false"  '.criteria_covered.by_id[0].covered=false'  ''
+row "U-01 invalid delegate enum"              '.criteria_covered.by_id[0].delegated="frontend"' ''
+row "U-01 total ≠ by_id length"               '.criteria_covered.total=(.criteria_covered.total+1) | .criteria_covered.covered=(.criteria_covered.covered+1)' ''
+# U-01 delegated-LEGAL needs the acceptance.md declaration (the frontmatter anchors are
+# DEPLOY-ONLY, like waiver authenticity: an undeclared delegation is a documented
+# gate-blocks/predicate-green divergence, so it is exercised in gate.sh, not here).
+# This bespoke row supplies the declaration so gate and predicate agree GREEN.
+u01_deleg_row() {
+  local w; w="$(mk_fixture)"
+  jq_edit "$w/.pipeline/test-results.json" \
+    '.criteria_covered.by_id[0].covered=false | .criteria_covered.by_id[0].delegated="security" | .criteria_covered.covered=(.criteria_covered.covered-1)'
+  local first_id; first_id=$(jq -r '.criteria_covered.by_id[0].id' "$w/.pipeline/test-results.json")
+  printf 'delegated_criteria: [%s]\n' "$first_id" >> "$w/.pipeline/acceptance.md"
+  ( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
+  local rc=$?
+  local gate_pass="no"; [ "$rc" -eq 0 ] && gate_pass="yes"
+  local pred_pass; pred_pass="$(pred_green "$w")"
+  assert_eq "$pred_pass" "$gate_pass" "gate ⟺ loop-exit: U-01 delegated legal + declared (pred=$pred_pass gate=$gate_pass)"
+  assert_eq "yes" "$gate_pass" "U-01 delegated legal + declared is GREEN end-to-end"
+}
+u01_deleg_row
 
 # --- (b) canonical ⟺ SKILL: extract the SKILL's real predicates and compare ---------
 #
@@ -134,6 +159,21 @@ jq -nc '
            scenario:$sc}}
 ' > "$TMP/battery.jsonl"
 
+# U-01 by_id battery rows (fixed): the recomputation clause's boundary cases — honest
+# coverage, honest delegation, inflated numerator, unaccounted entry, invalid delegate
+# enum, total/by_id-length mismatch, empty by_id, covered-field absent. Appended so the
+# canonical and SKILL predicates are byte-compared over these too.
+{
+  printf '%s\n' '{"status":"pass","criteria_covered":{"covered":2,"total":2,"by_id":[{"covered":true},{"covered":true}]},"perf":{"status":"n/a"}}'
+  printf '%s\n' '{"status":"pass","criteria_covered":{"covered":1,"total":2,"by_id":[{"covered":true},{"covered":false,"delegated":"security"}]},"perf":{"status":"n/a"}}'
+  printf '%s\n' '{"status":"pass","criteria_covered":{"covered":2,"total":2,"by_id":[{"covered":true},{"covered":false,"delegated":"security"}]},"perf":{"status":"n/a"}}'
+  printf '%s\n' '{"status":"pass","criteria_covered":{"covered":1,"total":2,"by_id":[{"covered":true},{"covered":false}]},"perf":{"status":"n/a"}}'
+  printf '%s\n' '{"status":"pass","criteria_covered":{"covered":1,"total":2,"by_id":[{"covered":true},{"covered":false,"delegated":"frontend"}]},"perf":{"status":"n/a"}}'
+  printf '%s\n' '{"status":"pass","criteria_covered":{"covered":2,"total":3,"by_id":[{"covered":true},{"covered":true}]},"perf":{"status":"n/a"}}'
+  printf '%s\n' '{"status":"pass","criteria_covered":{"covered":0,"total":0,"by_id":[]},"perf":{"status":"n/a"}}'
+  printf '%s\n' '{"status":"pass","criteria_covered":{"total":1,"by_id":[{"covered":true}]},"perf":{"status":"n/a"}}'
+} >> "$TMP/battery.jsonl"
+
 n_test="$(grep -c '' "$TMP/battery.jsonl")"
 jq -c -f "$LOOP_EXIT_PREDICATE" "$TMP/battery.jsonl" > "$TMP/canon.out" 2>/dev/null
 jq -c -f "$TMP/skill-test.jq"   "$TMP/battery.jsonl" > "$TMP/skill.out" 2>/dev/null
@@ -158,6 +198,8 @@ fi
   printf '{"status":"clean","data_surface":{"unprotected":[]}}\n'
   printf '{"status":"clean","asvs":{"reconciled":false}}\n'
   printf '{"status":"clean","asvs":{"reconciled":true}}\n'
+  printf '{"status":"clean","scan_reconciled":false}\n'
+  printf '{"status":"clean","scan_reconciled":true}\n'
 } > "$TMP/sec.jsonl"
 jq -c -f "$TMP/skill-sec.jq" "$TMP/sec.jsonl" > "$TMP/sec-skill.out" 2>/dev/null
 jq -c "$SEC_PREDICATE"       "$TMP/sec.jsonl" > "$TMP/sec-ref.out"   2>/dev/null

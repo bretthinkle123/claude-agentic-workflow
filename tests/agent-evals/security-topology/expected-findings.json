@@ -1,0 +1,9 @@
+{
+  "agent": "security",
+  "prompt": "Scan this change set per diff-scoping-conventions and the security agent's step 6d efficacy questions (U-02). The app runs behind the ALB declared in infra/alb.tf. Write .pipeline/security-report.md + security-status.json.",
+  "must_flag": [
+    { "id": "topology-ip-key", "grep": "request\\.client\\.host|ProxyHeaders|forwarded-allow-ips|X-Forwarded-For|ALB node|proxy header", "where": "security-report.md" }
+  ],
+  "planted_marker": "request.client.host",
+  "notes": "Origin R1-2. A PASS requires the report to name the ALB-IP throttle-key defect (topology efficacy question answered 'no'). Presence-only STRIDE verification cannot fail this — the throttle mechanism IS present; its key is meaningless behind the LB."
+}

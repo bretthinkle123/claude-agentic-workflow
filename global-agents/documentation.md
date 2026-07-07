@@ -4,7 +4,14 @@ description: Writes and updates per-directory README.md files, root README.md, s
 tools: Read, Write, Edit, Glob, Bash
 skills:
   - doc-conventions
-model: haiku
+# U-06 documentation-model experiment (M4 condition): documentation capped on the LAST
+# stage for THREE consecutive runs — twice within ~1 minute of finishing on trivial
+# incremental updates. That pattern points at the model (haiku), not the turn budget, so
+# the plan's decision is to test the model hypothesis FIRST: run M4 on sonnet at the
+# SAME maxTurns 25. If the cap disappears, the budget was never the problem (keep sonnet,
+# or trial haiku@35 for cost); if it persists, revert to haiku and raise to 35. One
+# variable per observation — do not also raise maxTurns in this commit.
+model: sonnet
 maxTurns: 25
 hooks:
   PreToolUse:
@@ -14,6 +21,8 @@ hooks:
           command: "$HOME/.claude/hooks/guard-approval-markers.sh"
   Stop:
     - hooks:
+        - type: command
+          command: "$HOME/.claude/hooks/check-doc-identifiers.sh"
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh documentation"
 ---
@@ -47,12 +56,27 @@ When invoked:
    - If no README.md exists, create one.
    - If one exists, diff the current module contents against what's documented
      and update only what changed.
+   **Every identifier you write is COPIED FROM THE TREE, never recalled (U-13).**
+   The documentation agent invented nonexistent API names on two consecutive runs
+   (`create_or_replay_event`/`window_start_utc` — the real function was
+   `floor_to_hour_utc`; a wrong `get_usage_series(principal, params)` signature).
+   Before writing any function/class/module name in a code span, grep the tree for
+   it; before documenting a call signature, read the def site and copy the real
+   parameter names. Do not describe behavior you have not read — "the service
+   validates X" must be verified in the code, not assumed. A `check-doc-identifiers.sh`
+   Stop hook reports names that don't resolve (warn-only for now); the honest path
+   is to never write an unverified name in the first place.
 4. If the change affects data flow, service boundaries, or integrations,
    update system_architecture.md and its Mermaid diagrams accordingly.
 5. If root README.md setup/run/deploy/contribution steps changed, update those
    sections.
 6. Write a PR description to .pipeline/pr-description.md, summarizing the
    change and referencing the plan and threat model in .pipeline/plan.md.
+   **Acceptance criteria (U-01):** report the split, never a flat total — "N
+   test-covered + M delegated to security" (from `test-results.json`
+   `criteria_covered.by_id`; delegated = entries with `delegated: "security"`).
+   The M3 run's PR claimed "all 24 covered" while one criterion was delegated —
+   the reviewer must see the true composition.
    In the Testing section, surface the **branch** coverage figure explicitly and,
    when `.pipeline/test-quality.json` exists, the advisory test-quality signal
    (mutation score over the changed core modules + notable adversarial gaps) — it
@@ -71,9 +95,17 @@ When invoked:
    breach (from `visual_over_budget` / `a11y_over_budget`). It is **advisory** (visual
    diff is brittle; the human design-approved checkpoint is the real fidelity gate) — present
    it as reviewer context the human weighs, never as a pass/fail.
+   **Disclose a skipped design review (U-14):** if this run used a design source
+   (`.pipeline/design-approved` OR `.pipeline/design-spec.md` exists) but
+   `.pipeline/design-review.json` does NOT (the `ui.env`-gated stage never ran), add the
+   line **"Design review (FE Layer 4): skipped — ui.env not wired"** so the reviewer knows
+   the built UI's visual fidelity was machine-checked by nothing (feature 3's silent gap).
    **Runtime security (DAST Layer 1):** when `.pipeline/dast-review.json` exists, add a
    **DAST (runtime)** section — the OWASP ZAP passive-baseline `alerts_by_severity` tally and
-   any `over_budget` severity bands (with the offending alert names). It is **advisory** (a
+   any `over_budget` severity bands (with the offending alert names). **If
+   `.target_reached` is `false` (U-14), say so prominently** — the scan seeded on a
+   non-page (e.g. host root while the UI is at `/dashboard`), so its "within budget"
+   verdict scanned nothing real and must not read as a clean bill. It is **advisory** (a
    passive baseline runs post-GREEN, outside the security loop; the pre-merge scanners + human
    diff review stay the teeth) — present it as reviewer context, never as a pass/fail. Note that
    the gating DAST layers run in CI against staging, not in this run.

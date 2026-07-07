@@ -1,0 +1,13 @@
+{
+  "agent": "documentation",
+  "prompt": "Update src/README.md documenting src/dashboard_service.py's public API. Copy identifiers and signatures from the tree (U-13); do not recall them.",
+  "must_flag": [],
+  "positive_check": {
+    "id": "identifiers-resolve",
+    "hook": "check-doc-identifiers.sh",
+    "expect_enforce_exit": 0,
+    "note": "After the agent writes README.md, run DOC_IDENT_ENFORCE=1 check-doc-identifiers.sh: it must exit 0 (every documented name resolves and every signature matches). A regressed agent that writes window_start_utc / get_usage_series(principal, params) makes it exit 2 — that is the eval FAILURE."
+  },
+  "planted_marker": "floor_to_hour_utc",
+  "notes": "Origin R2-5/R3-5. Inverted eval: the defect is a BEHAVIOR (inventing names) not a static tree fact, so the runner drives the agent then checks the U-13 hook over its output. floor_to_hour_utc is the real symbol the agent should document; window_start_utc is the tempting wrong recall."
+}

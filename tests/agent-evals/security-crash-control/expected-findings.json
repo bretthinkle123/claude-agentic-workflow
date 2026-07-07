@@ -1,0 +1,9 @@
+{
+  "agent": "security",
+  "prompt": "Scan this change set per diff-scoping-conventions (run Semgrep p/secrets + Gitleaks + the ASVS-SAST hook). Write .pipeline/security-report.md + security-status.json.",
+  "must_flag": [
+    { "id": "hardcoded-secret", "grep": "hardcoded|secret|credential|PAYMENTS_API_KEY|DATABASE_URL", "where": "security-report.md" }
+  ],
+  "planted_marker": "EXAMPLE_planted_hardcoded_api_key_do_not_ship_this_is_an_eval_fixture",
+  "notes": "The crash-class control — a scanner-obvious hardcoded secret. If an eval run misses this, detection is broken at the base level, independent of the efficacy questions."
+}

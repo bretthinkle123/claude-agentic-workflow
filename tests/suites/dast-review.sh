@@ -46,4 +46,22 @@ assert_eq "" "$(review __none__ '' '.status')" "no dast-capture.json → no-op (
 # Malformed capture → clean no-op: never emit an invalid dast-review.json for docs to choke on.
 assert_eq "" "$(review 'not json at all' '' '.status')" "malformed dast-capture.json → no-op (no invalid output file)"
 
+# --- U-14: target-reachability probe folded into the review ------------------------
+# review_probe <capture> <probe-json|__none__> <jq>  → echoes result
+review_probe() {
+  local cap="$1" probe="$2" q="$3" w; w="$(mktemp -d)"; _WORKDIRS+=("$w")
+  ( cd "$w"
+    mkdir -p .pipeline; echo '{}' > .pipeline/state.json
+    printf '%s' "$cap" > .pipeline/dast-capture.json
+    [ "$probe" != "__none__" ] && printf '%s' "$probe" > .pipeline/dast-target-probe.json
+    bash "$CHECK" ) >/dev/null 2>&1
+  jq -rc "$q" "$w/.pipeline/dast-review.json" 2>/dev/null
+}
+# Run 3's shape: the scan ran (within budget) but the seed 404'd → target_reached:false surfaced.
+assert_eq "false" "$(review_probe "$CAP_OK" '{"target_reached":false,"status":404}' '.target_reached')" "U-14: target_reached=false folded from the probe (the run-3 404-seed case)"
+assert_eq 404 "$(review_probe "$CAP_OK" '{"target_reached":false,"status":404}' '.target_status')" "U-14: target_status carried through"
+assert_eq "true" "$(review_probe "$CAP_OK" '{"target_reached":true,"status":200}' '.target_reached')" "U-14: a live page seed → target_reached=true"
+# Backward compatible: no probe sidecar → defaults to reached:true (never a false alarm on old runs).
+assert_eq "true" "$(review_probe "$CAP_OK" __none__ '.target_reached')" "U-14: absent probe sidecar defaults target_reached=true (backward compatible)"
+
 finish dast-review

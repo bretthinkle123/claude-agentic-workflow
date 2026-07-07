@@ -14,6 +14,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
+          command: "$HOME/.claude/hooks/guard-tree-hygiene.sh"
+        - type: command
           command: "$HOME/.claude/hooks/guard-source-markers.sh"
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh debugging"

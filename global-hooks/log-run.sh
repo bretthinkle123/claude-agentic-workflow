@@ -64,12 +64,18 @@ STATUS="${3:-auto}"
 RETRIES="${4:-auto}"
 NOTES="${5:-}"
 
-# Feature: current git branch (slug for the in-progress change). symbolic-ref
-# resolves the branch even before the first commit, unlike `rev-parse --abbrev-ref`
-# which prints "HEAD" and exits non-zero on a commitless repo. Use a replace-style
-# guard (|| FEATURE="") so a failure can't append stray output to the value.
-FEATURE=$(git symbolic-ref --short HEAD 2>/dev/null) || FEATURE=""
-[ -n "$FEATURE" ] || FEATURE="unknown"
+# Feature: a STABLE slug for the in-progress change (U-16a). The M3 series split one
+# feature's telemetry across two keys because `feature` was the git branch and the
+# deployment agent creates the branch mid-run (lines flip "main" → the branch), which
+# also restarted the per-(feature,stage) attempt counter. Prefer `.pipeline/state.json
+# .feature` (set once at feature start, before branching) so the slug is contiguous;
+# fall back to the branch as before. The branch is recorded separately below so nothing
+# is lost.
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null) || BRANCH=""
+[ -n "$BRANCH" ] || BRANCH="unknown"
+FEATURE=""
+[ -f .pipeline/state.json ] && FEATURE=$(jq -r '(.feature // empty)' .pipeline/state.json 2>/dev/null || echo "")
+[ -n "$FEATURE" ] || FEATURE="$BRANCH"
 
 # Attempt number (audit T2): how many times this (feature, stage) pair has already been
 # logged, +1. A Stop hook CANNOT fire on a maxTurns cap, so cap-outs and resumes are
@@ -134,8 +140,26 @@ TRACKED=0; UNTRACKED=0
 [ -n "$UNTRACKED_LIST" ] && UNTRACKED=$(printf '%s\n' "$UNTRACKED_LIST" | grep -c .)
 FILES_CHANGED=$(( TRACKED + UNTRACKED ))
 
-# Stage-specific extras pulled from pipeline artifacts
+# Deployment files_changed (U-16c): the deployment agent commits, so by the time its
+# Stop hook fires the working tree is clean and the diff-based count above is 0 — the M3
+# deployment lines all read files_changed:0. When the tree is clean and a HEAD exists,
+# count the just-made commit's files instead, so the deployment line reflects what shipped.
+if [ "$STAGE" = "deployment" ] && [ "$FILES_CHANGED" -eq 0 ] && git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+  COMMIT_FILES=$(git show --stat --name-only --format= HEAD 2>/dev/null | grep -c . || echo 0)
+  [ -n "$COMMIT_FILES" ] && FILES_CHANGED="$COMMIT_FILES"
+fi
+
+# Stage-specific extras pulled from pipeline artifacts.
+# U-16d: a CAPPED line carries NO fresh outcome artifact — the stage stopped mid-work, so
+# any artifact on disk is the PREVIOUS run's (M3/feature-3 logged a capped testing line as
+# "142/142 passed" with a prior run's coverage, and another as a partial mid-write 65/65).
+# When status was explicitly passed as `capped` (or any explicit non-auto terminal that
+# isn't a verified outcome), skip artifact-derived notes+extras entirely so stale/partial
+# numbers can't masquerade as this attempt's result.
 EXTRAS='{}'
+if [ "${3:-auto}" = "capped" ]; then
+  [ -z "$NOTES" ] && NOTES="capped"
+else
 case "$STAGE" in
   testing)
     if [ -f .pipeline/test-results.json ]; then
@@ -146,7 +170,8 @@ case "$STAGE" in
       # integration tier hidden behind a healthy combined figure is invisible.
       EXTRAS=$(jq -c '{coverage:(.coverage.combined // .coverage),
         coverage_by_tier:{unit:(.coverage.unit // null),integration:(.coverage.integration // null)},
-        tests:{total:(.total // 0),passed:(.passed // 0),failed:(.failed // 0)},
+        tests:{total:(.total // 0),passed:(.passed // 0),failed:(.failed // 0),
+               skipped:(.skipped.count // .skipped // 0)},
         tests_by_type:(.tests_by_type // {}),
         test_strategy:(.test_strategy // "pyramid")}' \
         .pipeline/test-results.json 2>/dev/null || echo '{}')
@@ -159,6 +184,7 @@ case "$STAGE" in
     fi
     ;;
 esac
+fi   # end U-16d capped-guard
 
 # Notes: a short human-readable summary of the stage outcome. The Stop-hook
 # wiring only passes <stage> <model>, so $5 is virtually always empty — derive a
@@ -177,13 +203,18 @@ if [ -z "$NOTES" ]; then
           .pipeline/security-status.json 2>/dev/null || echo "")
       ;;
     testing)
+      # U-16g: include a skipped count when present so "160/161 passed" stops hiding a
+      # silently-vanished test (feature-3: 161 total / 160 passed / 0 failed / 1 unaccounted).
       [ -f .pipeline/test-results.json ] && \
         NOTES=$(jq -r '
           ([.failures[]? | .name] | map(select(. != null and . != ""))) as $names
+          | (.skipped.count // .skipped // 0) as $sk
           | if (.failed // 0) > 0
             then "\(.failed) failed"
                  + (if ($names | length) > 0 then ": " + ($names | join(", ")) else "" end)
-            else "\(.passed // 0)/\(.total // 0) passed" end' \
+            else "\(.passed // 0) passed"
+                 + (if $sk > 0 then " / \($sk) skipped" else "" end)
+                 + " / \(.total // 0) total" end' \
           .pipeline/test-results.json 2>/dev/null || echo "")
       ;;
     debugging)
@@ -198,6 +229,7 @@ mkdir -p .pipeline
 jq -nc \
   --arg  ts            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg  feature       "$FEATURE" \
+  --arg  branch        "$BRANCH" \
   --arg  stage         "$STAGE" \
   --arg  status        "$STATUS" \
   --arg  model         "$MODEL" \
@@ -206,7 +238,7 @@ jq -nc \
   --argjson files_changed "$FILES_CHANGED" \
   --arg  notes         "$NOTES" \
   --argjson extras     "$EXTRAS" \
-  '{ts:$ts,feature:$feature,stage:$stage,status:$status,model:$model,attempt:$attempt,
+  '{ts:$ts,feature:$feature,branch:$branch,stage:$stage,status:$status,model:$model,attempt:$attempt,
     retries:$retries,files_changed:$files_changed,notes:$notes} + $extras' \
   >> .pipeline/run-log.jsonl
 

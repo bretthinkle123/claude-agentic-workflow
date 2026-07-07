@@ -16,12 +16,23 @@ string and those files — never assume it can see the conversation.
 ## Stage sequence
 
 ```
+0pre. BRANCH FIRST (U-16b). Create and switch to the feature branch BEFORE planning, and
+   record the feature slug once: `git checkout -b <feature-branch>` then set
+   `.pipeline/state.json .feature` to a stable slug. In the M3 series the branch was created
+   at deployment, so telemetry `feature` (derived from the branch) flipped "main" → the branch
+   mid-run and split one feature's log lines across two keys (also restarting the attempt
+   counter). Branching first gives clean per-feature attribution; log-run.sh now prefers the
+   state.json slug over the branch, so this is belt-and-suspenders with a structural backstop.
 0. DESIGN-SPEC STAGE (CONDITIONAL — front-end design source only; skipped entirely otherwise):
    run iff a `design/` dir exists OR a `Design source:` line in PROJECT.md/CLAUDE.md (non-"none") OR the project wired Figma MCP.
    -> Agent(design-spec, "Normalize the design source into .pipeline/design-spec.md (7 sections incl. injection report).")
 0b. HUMAN DESIGN-REVIEW CHECKPOINT (design-approved) — the human reads .pipeline/design-spec.md
-     (especially its injection report), and on "continue" the ORCHESTRATOR records the marker with a
-     currency hash of the exact bytes approved (path visible so the subagent guard catches forgery):
+     (especially its injection report), and on the human's explicit approval the ORCHESTRATOR records
+     the marker on the un-hooked main thread with a currency hash of the exact bytes approved. (U-15/D1:
+     design-approved is orchestrator-written precisely BECAUSE it needs the sha256 hash, which a bare
+     human `touch` can't produce — the human's approval is still the trigger; the orchestrator only
+     transcribes it + the hash. plan-approved and diff-approved, which need no hash, are human-typed.
+     Path visible so the subagent guard catches forgery):
           HASH=$(sha256sum .pipeline/design-spec.md | cut -d' ' -f1)
           printf '{"approved_at":"%s","note":"<human note>","design_spec_hash":"%s"}\n' \
                  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$HASH" > .pipeline/design-approved
@@ -41,7 +52,8 @@ string and those files — never assume it can see the conversation.
 1c. read revision_recommended from .pipeline/plan-audit.md frontmatter:
      if true: Agent(planning, "Revise .pipeline/plan.md: address every [material] flag in
               .pipeline/plan-audit.md, append ## Revision notes.")   # ONE pass only, no recursion
-     -> review plan.md + plan-audit.md, then: touch .pipeline/plan-approved       # human checkpoint
+     -> review plan.md + plan-audit.md, then the HUMAN runs (in their own terminal, NOT the
+        orchestrator — U-15/D1): touch .pipeline/plan-approved                    # human checkpoint
 2. Agent(implementation, "Implement .pipeline/plan.md.")     # SINGLE-SHOT — runs exactly once
      -> smoke-check.sh (+ infra-validate.sh) fire on Stop
      -> if smoke fails: Agent(debugging, "<error>") up to max_retries, then re-smoke
@@ -53,6 +65,16 @@ string and those files — never assume it can see the conversation.
        Agent(security, "Scan per diff-scoping-conventions. Write security-report.md + security-status.json.")
        if jq -r .status security-status.json == "issues-found":
             Agent(debugging, "<finding>");  continue   # re-tick, re-scan from security
+       # U-18: security can report status=="clean" while a GREEN security CONJUNCT still fails —
+       # a dependency CVE at CVSS>=7 with no waiver (the M3 starlette 7.5 shipped "clean"), an
+       # uncontrolled input surface, an unprotected data field, asvs.reconciled==false, or
+       # scan_reconciled==false. The old pseudocode only routed "issues-found", so a clean-but-
+       # conjunct-failing state would fall through to testing, fail the GREEN check, and re-scan
+       # forever. So: if status=="clean" but the security GREEN predicate below is NOT satisfied
+       # (evaluate that SAME predicate now; do not duplicate it here — one source of truth), route
+       # the failing conjunct to debugging, exactly as the M3 orchestrator improvised for starlette:
+       if status=="clean" but the security GREEN predicate (below) is false:
+            Agent(debugging, "<the failing conjunct: CVE bump / add control / meet ASVS / fix counts>");  continue
        Agent(testing,  "Add missing tests, run suite. Write test-results.json (criteria_covered + tested_change_hash).")
             -> record-clean.sh fires on Stop (resets the per-cycle debug counters iff both gates clean)
        if jq -r .status test-results.json == "fail":
@@ -62,18 +84,33 @@ string and those files — never assume it can see the conversation.
               and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null)
               and ((.input_surface.uncontrolled // []) | length == 0)
               and ((.data_surface.unprotected // []) | length == 0)
-              and (.asvs.reconciled != false)' security-status.json   AND
-       jq -e '.status=="pass"
-              and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))
-              and ( ((.perf.status // "n/a")=="n/a")
-                    or ( (.perf.budget.p95_ms==null         or .perf.measured.p95_ms!=null)
-                     and (.perf.budget.throughput_rps==null or .perf.measured.throughput_rps!=null)
+              and (.asvs.reconciled != false)
+              and (.scan_reconciled != false)' security-status.json   AND
+       jq -e '.status == "pass"
+              and ( (.criteria_covered // {}) as $c
+                    | if ($c.by_id // null) == null
+                      then (($c.covered // 0) >= ($c.total // 0))
+                      else (($c.by_id | map(select((.delegated // null) != null and .delegated != "security")) | length) == 0)
+                       and (($c.by_id | map(select(.covered == true or .delegated == "security")) | length) == ($c.by_id | length))
+                       and (($c.covered // -1) == ($c.by_id | map(select(.covered == true)) | length))
+                       and (($c.total // -1) == ($c.by_id | length))
+                      end )
+              and ( ((.perf.status // "n/a") == "n/a")
+                    or ( (.perf.budget.p95_ms == null         or .perf.measured.p95_ms != null)
+                     and (.perf.budget.throughput_rps == null or .perf.measured.throughput_rps != null)
                      and (.perf.scenario != null) ) )' test-results.json
      # These are EXACTLY the gate's test/security/criteria + perf-completeness (PR G) checks, so the
-     # loop never exits green on anything deployment-gate.sh would reject. The perf-completeness clause
-     # mirrors the gate byte-for-byte: a declared perf budget dimension with a null measured value keeps
-     # the loop running (route to debugging), never exits green. The gate's other two checks
-     # (pr-description, currency) come from documentation AFTER the loop — not the loop's job.
+     # loop never exits green on anything deployment-gate.sh would reject. The criteria clause (U-01)
+     # RECOMPUTES the summary integers from by_id: every criterion must be covered or delegated to
+     # "security" (the only valid delegate — its clean/asvs checks are already conjuncts above), the
+     # recorded covered must equal the covered==true count (delegation never inflates it), and total
+     # must equal the by_id length; a result file without by_id keeps the legacy integer compare. The
+     # gate ADDITIONALLY cross-checks acceptance.md frontmatter (criteria_total + delegated_criteria)
+     # — deploy-only honesty anchors, like waiver authenticity, deliberately not in the loop predicate.
+     # The perf-completeness clause mirrors the gate byte-for-byte: a declared perf budget dimension
+     # with a null measured value keeps the loop running (route to debugging), never exits green. The
+     # gate's other two checks (pr-description, currency) come from documentation AFTER the loop —
+     # not the loop's job.
      # planning / plan-audit / implementation / documentation / deployment NEVER run inside this loop.
 
 4b. bash ~/.claude/hooks/loop-guard.sh done   # GREEN exit: stamp loop-state.json status="completed"
@@ -96,6 +133,12 @@ string and those files — never assume it can see the conversation.
      -> ADVISORY only: design-review.json never gates and is NOT in the loop-exit predicate (visual
         diff is too brittle to block on; the human design-approved checkpoint is the teeth).
         documentation surfaces any over-budget screen/a11y breach in the PR.
+     -> U-14 DISCLOSE-THE-SKIP: if this run USED a design source (a design-approved marker or a
+        design-spec.md exists) but .pipeline/ui.env is ABSENT, the stage silently no-ops and the
+        built UI's fidelity is machine-checked by nothing (feature 3 — first design-source run, no
+        ui.env). documentation MUST record "design-review (FE Layer 4): skipped — ui.env not wired"
+        in the PR so the skip is visible, not silent. (Wiring the stage itself — baselines, axe —
+        stays the deferred front-end workstream; this only makes the gap legible.)
 4e. DAST STAGE (DAST Layer 1 — CONDITIONAL, advisory, HTTP-surface only; skipped otherwise):
      run iff .pipeline/dast.env exists (the project opted into runtime scanning). Boots an ephemeral
      instance, runs OWASP ZAP's PASSIVE baseline against it (headers/cookies/info-leaks as SERVED),
@@ -122,6 +165,21 @@ string and those files — never assume it can see the conversation.
 6. Agent(deployment, "Commit the reviewed change and open a PR on GitHub.")  # only after diff-approved
      -> deployment-gate.sh (PreToolUse) blocks the commit unless every gate passes,
         including the human diff approval + that the commit matches the approved hash
+6b. bash ~/.claude/pipeline-templates/run-summary.sh   # RE-STAMP after deployment (U-16e)
+     # run-summary.sh was already run at loop-GREEN (step 4c), BEFORE documentation +
+     # deployment ran — so that snapshot always misses those stages' lines (recurred in all
+     # three M3-series runs; each retrospective had to re-run it by hand). Re-running it here,
+     # after the deployment line is logged, makes .pipeline/run-summary.json the true whole-run
+     # summary the retrospective quotes. Keep 4c too (the loop-GREEN snapshot still has value
+     # if a run stops before deployment).
+7. LEDGER DELTAS (U-10 — post-ship, do this before closing the run). For every
+     verifier-CONFIRMED /code-review finding the human deferred (and any production incident
+     later triaged), append a row to `docs/finding-ledger.md`: {finding, class,
+     escaped-because, action}. The `action` MUST be one of: a new efficacy question (U-02) /
+     a new planted eval defect (U-23) / a new deterministic check / an explicit
+     `accepted:<reason>`. An escape with no decision is itself a defect — `tests/suites/static.sh`
+     asserts every row has an action. This is what turns a one-time escape into a permanent
+     check instead of a re-discovery cost; the retrospective's "ledger deltas" section prompts it.
 ```
 
 ## Telemetry — logged automatically on every stage
@@ -160,6 +218,17 @@ Each line now carries an `attempt` number (audit T2) — how many times this
 `(feature,stage)` has been logged, +1 — so the capped line and the eventual clean
 resume are distinct, countable entries instead of collapsing into one. A missing stage
 line is still a signal, but with the breadcrumb the cap is recorded, not inferred.
+
+**Warm-resume prompt (U-06).** When you resume a capped `implementation` or `testing`
+stage, the resume prompt must tell it to read its progress state FIRST and not
+re-derive completed work — e.g. *"You were resumed after a cap. Read
+`.pipeline/implementation-progress.md` (implementation) or the existing
+`.pipeline/test-results.json` (testing) before doing anything; continue from the
+furthest recorded state, do not restart."* The stages write that state as they go
+(implementation appends a progress note every ~15 turns; testing keeps a valid
+`test-results.json` after every sub-step), so a cap becomes a warm resume — the caps
+that remain cost far less than the cache-cold re-reads the M3 series paid.
+
 `duration_s` and `tokens` are not available to shell hooks; use timestamp deltas between
 lines as a duration proxy.
 
@@ -169,13 +238,39 @@ zero-LLM summary of `run-log.jsonl` — per-stage model/status/retries, the
 **inverted-pyramid flag** (a `pyramid`-strategy feature whose unit count is below
 integration+e2e). Read-only; never part of a gate.
 
+## Prompts are for experiments, definitions are for keeps (U-12)
+
+A lesson that worked when delivered via an orchestrator prompt gets moved into the
+owning agent definition or skill **the same week**. The feature-2 run proved three
+run-1 lessons worked as prompt instructions (temp-output routing, explicit
+delegated-criteria marking, the k6 recipe) — and all three existed nowhere durable
+until they were codified. A behavior that lives only in a prompt depends on the
+orchestrator remembering; a behavior in a definition survives every session. When
+you find yourself re-teaching an agent something in a prompt, that is the signal to
+edit the definition instead.
+
+## M4 correctness-review pilot (U-03 — advisory, measured, this run only)
+
+For the M4 run ONLY: after implementation passes smoke and before arming the loop,
+run one scoped correctness review over the diff's **data-path queries and
+state-changing logic** (not the full multi-angle review — that stays at the
+pre-checkpoint placement). Advisory: findings route to debugging like any other
+input; nothing gates on it. Rationale: across three runs, the pre-checkpoint
+/code-review was the SOLE catcher of each run's deepest bug (topology/RLS class,
+window_start data loss, reader-key empty dashboard) — this pilot measures whether a
+narrow early pass catches that class before the loop churns, at what cost. Record
+catch-vs-cost in the M4 retrospective; keep or drop the step on that data.
+
 ## Bootstrap (once per project)
 
 Run `bash ~/.claude/pipeline-templates/bootstrap-project.sh` from inside the
 target repo root (flags `--start`, `--health`, `--test`, `--build` are optional
 and pre-wire the smoke check). Before each new feature, remove any stale
-`.pipeline/plan-approved` marker **and run `bash ~/.claude/hooks/loop-guard.sh
-reset`** so the circuit-breaker starts the next feature with a fresh budget.
+`.pipeline/{plan,diff,design}-approved` markers (the orchestrator MAY `rm` these —
+U-15/D3: deletion is not the forgery vector, it can only un-approve a prior feature,
+so `rm` is permitted; only CREATION is guarded, and creating them stays human-only)
+**and run `bash ~/.claude/hooks/loop-guard.sh reset`** so the circuit-breaker starts
+the next feature with a fresh budget.
 
 ## Interlock-file contract
 

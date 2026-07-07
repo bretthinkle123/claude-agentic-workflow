@@ -22,6 +22,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
+          command: "$HOME/.claude/hooks/guard-tree-hygiene.sh"
+        - type: command
           command: "$HOME/.claude/hooks/asvs-sast.sh"
         - type: command
           command: "$HOME/.claude/hooks/store-compliance.sh"
@@ -29,6 +31,8 @@ hooks:
           command: "$HOME/.claude/hooks/egress-check.sh"
         - type: command
           command: "$HOME/.claude/hooks/stamp-ran-at.sh security"
+        - type: command
+          command: "$HOME/.claude/hooks/reconcile-scans.sh"
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh security"
 ---
@@ -47,13 +51,19 @@ baseline Checkov checks against) — it is not preloaded.
 - **Checkov** — infrastructure-as-code scanning (run only when the change includes an `infra/` directory); tfsec/Trivy are drop-in alternatives
 - **Trivy** — container image / Dockerfile CVE + misconfiguration scanning (run only when the change includes a `Dockerfile` or a built image). On this (Windows) machine it runs via the Docker wrapper `$HOME/.claude/hooks/trivy-scan.sh` — call that with the same arguments you would pass to `trivy`. Requires Docker Desktop running.
 
-**Tool output goes to the scratchpad, never the repo tree (audit E4).** Write any raw
-scanner output you need to keep (semgrep JSON, OSV/Trivy JSON, error logs) under the
-session scratchpad or a `.gitignore`d path — NEVER as `scratch_*.json` / `reports/` in the
-project tree. Leaking those into the working tree pollutes the change-set the pipeline
-hashes and scans and confused the trial's hash-stability debugging. Only the curated
-`.pipeline/security-*.{md,json}` artifacts belong in the tree. (Bootstrap also gitignores
-`reports/`/`scratch_*` as a backstop, but route them correctly in the first place.)
+**Raw scanner output goes to `.pipeline/`, never the repo tree and never the session
+scratchpad (audit E4 / U-09).** Write every raw scanner artifact you need to keep
+(`semgrep.json`, `osv.json`, `trivy-config.json`, `checkov.json`, `gitleaks.json`, error
+logs) into `.pipeline/` — which is gitignored, so it survives the session but never
+pollutes the change-set the pipeline hashes and scans. **Do NOT route them to OS temp or
+the session scratchpad:** those evaporate when the session ends, and the M3 series lost
+its Semgrep/OSV evidence exactly that way — three runs later the security report claimed
+executions whose artifacts no longer existed to verify. NEVER write `scratch_*.json` /
+`reports/` into the project tree (the `guard-tree-hygiene.sh` Stop hook now blocks that
+deterministically). Only the curated `.pipeline/security-*.{md,json}` artifacts plus the
+raw `.pipeline/<tool>.json` scan outputs belong there; `reconcile-scans.sh` (U-09)
+re-derives the per-tool counts from those raw files, so a missing or misrouted artifact
+now fails the reconciliation, not just the honor system.
 
 When invoked:
 1. Read .pipeline/state.json. If it does not exist, create it with defaults
@@ -247,6 +257,35 @@ When invoked:
    `stride_mechanisms_verified` count and `stride_mechanisms_missing` count in
    the `security-status.json` output (step 9).
 
+   **PRESENCE IS NOT EFFICACY (U-02).** The M3 run verified 15/15 mechanisms
+   "present" while the RLS backstop was inert, the append-only claim was
+   unenforced, and the throttle keyed on the load balancer's own IP — every named
+   mechanism existed, so a presence check could not fail. For each mechanism, also
+   answer the per-category **efficacy question** and record the answer (with
+   file:line evidence) in the report's 6d section; an answer of "no" is a
+   **critical**, same as an absent mechanism:
+   - **Topology:** if the plan or infra declares a proxy/load balancer in front of
+     the app, is client-IP trust actually configured (ProxyHeaders middleware /
+     `forwarded-allow-ips` / equivalent)? Are the LB's probe paths (e.g.
+     `/health/ready`) exempt from pre-auth throttles? (M3 shipped a Tier-1
+     throttle keyed on `request.client.host` behind an ALB — one bucket per node —
+     and a throttleable readiness probe.)
+   - **DB privilege:** for every RLS policy — does the app role OWN the table,
+     and if so is FORCE ROW LEVEL SECURITY set (owners bypass non-FORCE RLS
+     regardless of BYPASSRLS)? For every "append-only"/"immutable" claim — does a
+     REVOKE or trigger actually enforce it, or is UPDATE/DELETE still granted?
+   - **Async runtime:** inside async handlers, are CPU-hard KDF calls (Argon2id,
+     bcrypt) and blocking SDK calls (sync boto3, sync redis) moved off the event
+     loop (thread pool / async client), or do they stall every request on the
+     loop?
+   - **Contract drift:** for each facade contract the plan names (secret rotation
+     re-fetch, scrubbing, redaction), name the CONSUMER and verify it honors the
+     contract — e.g. does the DB engine re-resolve credentials after rotation, or
+     resolve once at creation? Does the error scrubber cover query_string/url, or
+     only headers/body?
+   These four classes are exactly what the M3 series shipped past three clean
+   scans; each is checkable by inspection, no scanner needed.
+
    **e. Log-sink safety** — inspect every logging call in the change set that
    includes request-derived or user-controlled data:
    - **Log forging / injection:** raw user input containing newlines or CR written
@@ -391,8 +430,16 @@ When invoked:
    **Report but do NOT auto-fix:**
    - OSV dependency CVEs — record the CVE, affected package, and the safe
      version to upgrade to, but do not modify dependency manifests or lock
-     files. Upgrading a dependency can break the build; that decision belongs
-     to the human after reviewing the report.
+     files. Upgrading a dependency can break the build. **A GATING dependency CVE
+     (unwaived, CVSS ≥ 7.0 — `osv_max_cvss >= 7` with no `osv_waiver`) is
+     remediated by the DEBUGGING agent, not here (U-19 / decision D2):** you
+     report it (the CVE, package, safe version, and that it trips the deploy
+     gate's ≥7.0 floor), the orchestrator routes it to debugging as a remediation
+     finding (the clean-but-conjunct-failing loop route, SKILL U-18), and
+     debugging performs the manifest/lockfile bump with a fails-before/passes-after
+     pin-guard test. This keeps the security stage scan-and-report focused and its
+     `fixed_count` honest (it counts code fixes YOU made, not dependency bumps).
+     A below-floor CVE (< 7.0, or waived) is reported only — the human decides.
    - Medium/low hygiene findings (warnings) — report in full, no code change.
 
    **How to fix:**
@@ -465,9 +512,29 @@ When invoked:
                "reqs_verified": 12, "l1_l2_missing": [], "l3_in_scope_missing": [],
                "doc_advisory": [], "waivers": [], "reconciled": true },
      "osv_findings": 0, "osv_max_cvss": 0, "osv_waiver": null,
+     "semgrep_findings": 0, "checkov_findings": 0, "trivy_findings": 0,
+     "scan_artifacts": { "semgrep": "<sha256 of .pipeline/semgrep.json>", "osv": "<sha256 of .pipeline/osv.json>",
+                         "trivy": "<sha256 of .pipeline/trivy-config.json>", "checkov": "<sha256 of .pipeline/checkov.json>" },
      "input_surface": { "declared": 0, "implemented": 0, "uncontrolled": [], "reconciled": true },
      "data_surface": { "classified": 0, "sensitive": 0, "unprotected": [], "reconciled": true } }
    ```
+   - **`scan_artifacts` + per-tool counts (REQUIRED when you ran a scanner this pass; U-09).**
+     Run each scanner through its WRAPPER (`semgrep-scan.sh`, `osv-scan.sh`, `checkov-scan.sh`,
+     `trivy-scan.sh`), writing raw output to the conventional `.pipeline/<tool>.json` path
+     (`semgrep.json`, `osv.json`, `checkov.json`, `trivy-config.json`) — the wrappers stamp
+     each execution into `.pipeline/scan-log.jsonl`. For every tool you counted this pass,
+     record its per-tool count (`semgrep_findings` = `.results|length`; `osv_findings` = unique
+     vulnerability ids; `trivy_findings` = misconfigurations; `checkov_findings` =
+     `[.[].summary.failed]|add` — checkov.json is a top-level ARRAY, so this is the counting
+     convention, which may differ from a subtotal you eyeballed) AND the sha256 of the artifact
+     you counted from in `scan_artifacts`. The `reconcile-scans.sh` Stop hook RE-HASHES each
+     named artifact and RE-COUNTS it; a recorded number that doesn't match the recomputation, a
+     missing/altered artifact, or a claimed scan with no execution stamp sets
+     `.scan_reconciled=false` and **blocks the deploy gate + loop-exit** (U-09 — the M3 series
+     recorded a checkov 58 that reproduces to 59, and claimed executions whose artifacts were a
+     prior run's). A tool you did NOT run this pass (legitimately carried forward — infra
+     byte-identical) is simply OMITTED from `scan_artifacts`; say "carried forward" in the report
+     rather than claiming execution. Gitleaks is exempt (its in-scope filtering is triage).
    - `input_surface` (REQUIRED when the change exposes any input source — an HTTP route that
      accepts a body/query/path param, a form, a queue/message consumer, a file/CSV ingest, or
      a webhook receiver): reconcile the **implemented** input surface against the **declared**
