@@ -62,8 +62,8 @@ if [ -d "$GS" ]; then
 fi
 
 # 3. A HOLD/RE-SOURCE item must NOT already be vendored on disk (its block is real).
-#    skill-creator (HOLD) and design-extract (RE-SOURCE) must have no dir yet.
-for held in skill-creator design-extract; do
+#    design-extract (BACKLOG) must have no dir yet. (skill-creator cleared + vendored 2026-07-07.)
+for held in design-extract; do
   assert_exit 1 "held item '$held' is not vendored on disk yet" test -d "$GS/$held"
 done
 
