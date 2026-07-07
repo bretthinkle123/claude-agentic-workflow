@@ -16,6 +16,13 @@ string and those files — never assume it can see the conversation.
 ## Stage sequence
 
 ```
+0pre. BRANCH FIRST (U-16b). Create and switch to the feature branch BEFORE planning, and
+   record the feature slug once: `git checkout -b <feature-branch>` then set
+   `.pipeline/state.json .feature` to a stable slug. In the M3 series the branch was created
+   at deployment, so telemetry `feature` (derived from the branch) flipped "main" → the branch
+   mid-run and split one feature's log lines across two keys (also restarting the attempt
+   counter). Branching first gives clean per-feature attribution; log-run.sh now prefers the
+   state.json slug over the branch, so this is belt-and-suspenders with a structural backstop.
 0. DESIGN-SPEC STAGE (CONDITIONAL — front-end design source only; skipped entirely otherwise):
    run iff a `design/` dir exists OR a `Design source:` line in PROJECT.md/CLAUDE.md (non-"none") OR the project wired Figma MCP.
    -> Agent(design-spec, "Normalize the design source into .pipeline/design-spec.md (7 sections incl. injection report).")
@@ -53,6 +60,16 @@ string and those files — never assume it can see the conversation.
        Agent(security, "Scan per diff-scoping-conventions. Write security-report.md + security-status.json.")
        if jq -r .status security-status.json == "issues-found":
             Agent(debugging, "<finding>");  continue   # re-tick, re-scan from security
+       # U-18: security can report status=="clean" while a GREEN security CONJUNCT still fails —
+       # a dependency CVE at CVSS>=7 with no waiver (the M3 starlette 7.5 shipped "clean"), an
+       # uncontrolled input surface, an unprotected data field, asvs.reconciled==false, or
+       # scan_reconciled==false. The old pseudocode only routed "issues-found", so a clean-but-
+       # conjunct-failing state would fall through to testing, fail the GREEN check, and re-scan
+       # forever. So: if status=="clean" but the security GREEN predicate below is NOT satisfied
+       # (evaluate that SAME predicate now; do not duplicate it here — one source of truth), route
+       # the failing conjunct to debugging, exactly as the M3 orchestrator improvised for starlette:
+       if status=="clean" but the security GREEN predicate (below) is false:
+            Agent(debugging, "<the failing conjunct: CVE bump / add control / meet ASVS / fix counts>");  continue
        Agent(testing,  "Add missing tests, run suite. Write test-results.json (criteria_covered + tested_change_hash).")
             -> record-clean.sh fires on Stop (resets the per-cycle debug counters iff both gates clean)
        if jq -r .status test-results.json == "fail":
@@ -143,6 +160,13 @@ string and those files — never assume it can see the conversation.
 6. Agent(deployment, "Commit the reviewed change and open a PR on GitHub.")  # only after diff-approved
      -> deployment-gate.sh (PreToolUse) blocks the commit unless every gate passes,
         including the human diff approval + that the commit matches the approved hash
+6b. bash ~/.claude/pipeline-templates/run-summary.sh   # RE-STAMP after deployment (U-16e)
+     # run-summary.sh was already run at loop-GREEN (step 4c), BEFORE documentation +
+     # deployment ran — so that snapshot always misses those stages' lines (recurred in all
+     # three M3-series runs; each retrospective had to re-run it by hand). Re-running it here,
+     # after the deployment line is logged, makes .pipeline/run-summary.json the true whole-run
+     # summary the retrospective quotes. Keep 4c too (the loop-GREEN snapshot still has value
+     # if a run stops before deployment).
 ```
 
 ## Telemetry — logged automatically on every stage

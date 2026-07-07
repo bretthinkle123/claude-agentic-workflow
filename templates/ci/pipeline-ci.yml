@@ -61,6 +61,29 @@ jobs:
         # gate rides. Branch coverage: surface in the job summary, do NOT gate (mirrors
         # the local posture; see test-conventions).
 
+  # mutation — U-22: run mutation testing HERE, on the Linux runner, not on the author's
+  # host. mutmut needs a POSIX environment (WSL on Windows), so the local pipeline honestly
+  # skips it and writes quality_ok:false (WS3-1) — the *measurement* just never happened on
+  # win32, two M3-series runs in a row. This job runs it where it works. ADVISORY: it reports
+  # the score in the job summary and NEVER fails the merge gate (mutation quality is
+  # settled-advisory; the local WS3-1 scope-honesty check stays the only deploy-side teeth).
+  # OPT-IN: fill <MUTATION_CMD> + <MUTATION_SCOPE> (the logic-dense changed modules, matching
+  # test-conventions) to enable; leave the placeholders and delete this job if not using it.
+  mutation:
+    if: false   # flip to `true` (or a repo/branch condition) once <MUTATION_CMD> is filled
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Install dependencies (from lockfile)
+        run: <INSTALL_CMD>
+      - name: Mutation testing (advisory — score to the summary, never fails the gate)
+        run: |
+          set +e
+          <MUTATION_CMD>   # e.g. mutmut run --paths-to-mutate <MUTATION_SCOPE>
+          echo "Mutation run complete (advisory; see output). This job never fails the merge gate." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
   sast:
     runs-on: ubuntu-latest
     timeout-minutes: 20

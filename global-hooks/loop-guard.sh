@@ -44,6 +44,17 @@ MAX_CYCLES="${LOOP_MAX_CYCLES:-5}"
 # trial's 71-min "wall-clock" trip was mostly human-wait + cap/resume overhead, not
 # runaway compute — this bounds the compute, not the latency. Wall-clock stays as a
 # generous ABSOLUTE backstop for a genuinely stuck loop.
+#
+# U-17 (do NOT redefine the wall clock): the M3 series consumed ~86% of the wall budget
+# at cycle 3 while compute sat at ~68% — that is the backstop ABSORBING cap-resume
+# latency exactly as designed, not a defect. The compute budget already excludes
+# human-wait; making the wall clock do the same would recreate the failure mode the
+# compute/wall split was built to prevent. A project that legitimately expects heavy
+# caps raises LOOP_MAX_WALL_S in .pipeline/loop.env — do NOT raise the default here
+# reflexively; measure the next run's wall-vs-compute first (U-06's cap-tax work should
+# shrink it). Also note (U-17): a SINGLE-CYCLE loop legitimately records compute_s:0 —
+# compute accrues BETWEEN ticks, and a 1-tick loop has no interval to accrue, so
+# `compute_s:0` on a clean 1-cycle run means "nothing to bound yet", not "free".
 MAX_COMPUTE_S="${LOOP_MAX_COMPUTE_S:-1800}"
 MAX_CYCLE_S="${LOOP_MAX_CYCLE_S:-600}"
 MAX_WALL_S="${LOOP_MAX_WALL_S:-7200}"

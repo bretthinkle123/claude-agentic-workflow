@@ -325,8 +325,10 @@ agent surfaces the error rather than skipping the scan silently.
 
 The deployment agent commits the reviewed change, pushes to GitHub, and opens a PR. It
 does NOT run `terraform apply`, database migrations, app deploys, or any post-merge CI
-steps. Those happen outside the pipeline after the PR is merged. See
-`docs/pipeline-deployment-targets.md` for CI/CD patterns to wire up after merge.
+steps. Those happen outside the pipeline after the PR is merged. The post-merge CI/CD
+chain (build-provenance, deploy, DR-drill, scheduled re-scan) ships as workflows in
+`.github/workflows/` and is documented by the `ci-conventions` and `delivery-conventions`
+skills — wire it up per the branch-protection checklist in `ci-conventions`.
 EOF
 
   note "[new]  ~/.claude/projects/${ENCODED}/memory/ (first-run gotchas pre-loaded)"

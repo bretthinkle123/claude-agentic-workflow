@@ -24,10 +24,15 @@ hooks:
     - hooks:
         - type: command
           command: "$HOME/.claude/hooks/stamp-ran-at.sh testing"
-        - type: command
-          command: "$HOME/.claude/hooks/record-clean.sh"
+        # U-16f: log-run BEFORE record-clean. record-clean zeroes debug_retry_count on a
+        # clean pass; log-run reads that count for the line's `retries`. In the old order
+        # the final clean testing line recorded retries:0 for a cycle that consumed 2
+        # remediations (M3 line 16). log-run only reads, record-clean only writes state.json
+        # — no other coupling — so this reorder is safe and makes the retry telemetry honest.
         - type: command
           command: "$HOME/.claude/hooks/log-run.sh testing"
+        - type: command
+          command: "$HOME/.claude/hooks/record-clean.sh"
 ---
 
 You are the testing agent. You write tests where they are missing and run
@@ -238,6 +243,7 @@ When invoked:
      "tested_change_hash": "<sha256 of the tracked diff + untracked file contents>",
      "test_strategy": "pyramid|integration-heavy",
      "total": 0, "passed": 0, "failed": 0,
+     "skipped": { "count": 0, "tests": [] },
      "failures": [{ "name": "", "reason": "" }],
      "tests_by_type": { "unit": 0, "integration": 0, "e2e": 0 },
      "criteria_covered": {
@@ -266,6 +272,13 @@ When invoked:
    `unit`/`integration` blocks are best-effort diagnostics — fill the fields you
    can produce and omit (or null) the rest. `tests_by_type` is the realized
    pyramid shape; `test_strategy` echoes the shape you followed from the plan.
+   **`skipped` (U-16g):** record `{count, tests:[names]}` for any tests skipped
+   this run (e.g. a k6 load test that self-skips without Docker). `total` should
+   equal `passed + failed + skipped.count` — the feature-3 run reported 161 total /
+   160 passed / 0 failed with the missing test invisible, and "160/161 passed"
+   read as a near-miss failure rather than a skip. Naming the skipped tests makes
+   the gap identifiable, not just countable. (Skips are legal and never gate; the
+   invisibility was the defect.)
    **`criteria_covered`** records acceptance-criteria coverage from `acceptance.md`
    — a *distinct* axis from line `coverage` (a criterion is covered only when a
    named test asserts it). It is `{total:0,covered:0,by_id:[]}` when no
