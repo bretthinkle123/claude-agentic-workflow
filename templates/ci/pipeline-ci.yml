@@ -191,7 +191,7 @@ jobs:
       - name: ASVS Tier-1 patterns vs merge base (fix-not-waive; exit 2 fails)
         if: steps.base.outputs.sha != ''
         run: SCAN_BASE="${{ steps.base.outputs.sha }}" bash scripts/ci/asvs-sast.sh
-      - name: Revert/do-not-commit markers vs merge base (fix-not-waive; exit 2 fails)
+      - name: Experimental-revert / must-not-ship markers vs merge base (fix-not-waive; exit 2 fails)
         if: steps.base.outputs.sha != ''
         run: SCAN_BASE="${{ steps.base.outputs.sha }}" bash scripts/ci/guard-source-markers.sh
 
