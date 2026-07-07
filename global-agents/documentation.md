@@ -53,6 +53,11 @@ When invoked:
    sections.
 6. Write a PR description to .pipeline/pr-description.md, summarizing the
    change and referencing the plan and threat model in .pipeline/plan.md.
+   **Acceptance criteria (U-01):** report the split, never a flat total — "N
+   test-covered + M delegated to security" (from `test-results.json`
+   `criteria_covered.by_id`; delegated = entries with `delegated: "security"`).
+   The M3 run's PR claimed "all 24 covered" while one criterion was delegated —
+   the reviewer must see the true composition.
    In the Testing section, surface the **branch** coverage figure explicitly and,
    when `.pipeline/test-quality.json` exists, the advisory test-quality signal
    (mutation score over the changed core modules + notable adversarial gaps) — it

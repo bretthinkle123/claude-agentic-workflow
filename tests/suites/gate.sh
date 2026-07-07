@@ -27,6 +27,47 @@ gate_case 2 "test-results.status=fail → block" '.status="fail"'
 # Acceptance criteria not fully covered.
 gate_case 2 "criteria covered<total → block" '.criteria_covered.covered = (.criteria_covered.total - 1)'
 
+# --- U-01: criteria arithmetic recomputed from by_id + the delegated escape valve ---
+# The M3 defect: covered:24/24 recorded while by_id marked AC20 covered:false — the
+# trusted-integer compare passed it. These cases replay the real R1 file (reconstructed
+# fixture) and every by_id path: honesty equality, the "security"-only delegate enum,
+# the planning-owned acceptance.md anchors (criteria_total + delegated_criteria), and
+# the legacy no-by_id fallback.
+M3R1="$REPO_ROOT/tests/fixtures/m3/reconstructed/r1-test-results.json"
+ACC24_DELEG=$'---\ncriteria_total: 24\ndelegated_criteria: [AC20]\n---'
+ACC24_NODELEG=$'---\ncriteria_total: 24\n---'
+u01_case() {
+  local want="$1" desc="$2" trmut="${3:-}" acc="${4:-}"
+  local w; w="$(mk_fixture)"
+  cp "$M3R1" "$w/.pipeline/test-results.json"
+  [ -n "$trmut" ] && jq_edit "$w/.pipeline/test-results.json" "$trmut"
+  # acceptance.md control: "NONE" removes it (anchors self-skip); "KEEP" leaves the
+  # golden fixture's (criteria_total: 18 — a planning/testing denominator mismatch);
+  # anything else is written verbatim.
+  case "$acc" in
+    NONE|"") rm -f "$w/.pipeline/acceptance.md" ;;
+    KEEP)    : ;;
+    *)       printf '%s\n' "$acc" > "$w/.pipeline/acceptance.md" ;;
+  esac
+  ( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
+  assert_eq "$want" "$?" "$desc"
+}
+u01_case 2 "U-01(a): R1's real file (24/24 recorded, AC20 covered:false) → block" '' NONE
+u01_case 0 "U-01(b): AC20 delegated=security + covered=23 + declared in acceptance → pass" \
+  '(.criteria_covered.by_id[] | select(.id=="AC20")).delegated="security" | .criteria_covered.covered=23' "$ACC24_DELEG"
+u01_case 2 "U-01(c): delegated but numerator still inflated (covered=24) → block" \
+  '(.criteria_covered.by_id[] | select(.id=="AC20")).delegated="security"' "$ACC24_DELEG"
+u01_case 2 "U-01(d): delegation NOT declared in acceptance delegated_criteria → block" \
+  '(.criteria_covered.by_id[] | select(.id=="AC20")).delegated="security" | .criteria_covered.covered=23' "$ACC24_NODELEG"
+u01_case 2 "U-01(enum): delegated=\"frontend\" (no gate-backed status file) → block" \
+  '(.criteria_covered.by_id[] | select(.id=="AC20")).delegated="frontend" | .criteria_covered.covered=23' "$ACC24_DELEG"
+u01_case 0 "U-01(e): legacy result file without by_id → integer-compare fallback passes" \
+  'del(.criteria_covered.by_id)' NONE
+u01_case 2 "U-01(total-anchor): total=24 vs acceptance criteria_total=18 → block" \
+  '(.criteria_covered.by_id[] | select(.id=="AC20")).delegated="security" | .criteria_covered.covered=23' KEEP
+# Honesty holds on the golden fixture too: flip one by_id flag without touching the summary.
+gate_case 2 "U-01 honesty: green fixture + one by_id flipped false → block" '.criteria_covered.by_id[0].covered=false'
+
 # Perf criterion-completeness (F1): a declared budget dim with a null measured value.
 gate_case 2 "perf F1: measured.throughput_rps=null → block" '.perf.measured.throughput_rps = null'
 

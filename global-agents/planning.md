@@ -302,6 +302,16 @@ When invoked:
      frontmatter `criteria_total: <int>`, then a table — **ID** (`AC1`, `AC2`, …) |
      **Criterion** (project-specific, not only STRIDE) | **File / layer** it lives
      in | **How verified** (a named test, endpoint behavior, or concrete mechanism).
+     **Delegated criteria (U-01):** when a criterion's verification is the security
+     stage's deliverable rather than a test-suite assertion (e.g. "ASVS L1/L2
+     reconciliation across the change set"), declare it in the frontmatter —
+     `delegated_criteria: [AC<n>, …]` — so testing marks it
+     `covered: false, delegated: "security"` instead of inventing a judgment call.
+     The deploy gate cross-checks BOTH frontmatter fields: `criteria_covered.total`
+     must equal `criteria_total`, and every delegated id must appear in
+     `delegated_criteria` (only `security` is a valid delegate — its own checks are
+     gate conjuncts). These values are yours and are human-reviewed at the plan
+     checkpoint; testing can neither shrink the denominator nor self-delegate.
      Implementation builds to this file and testing maps each ID to a test
      (`criteria_covered`); plan-audit flags any untraced criterion. If PROJECT.md
      declares no explicit criteria, derive them from the feature's stated goals and

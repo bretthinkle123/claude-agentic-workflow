@@ -106,6 +106,17 @@ When invoked:
    to make a criterion pass — if a criterion cannot be satisfied by the current
    implementation, leave it `uncovered` with a reason; the orchestrator routes that
    to debugging like any other gap. (Skip this step if no `acceptance.md` exists.)
+   **Delegated criteria (U-01):** a criterion whose verification is the SECURITY
+   stage's deliverable (e.g. an ASVS-reconciliation criterion — never a test-suite
+   assertion) is marked `covered: false, delegated: "security"` with the reason —
+   ONLY when `acceptance.md`'s frontmatter lists that id under `delegated_criteria:`
+   (planning declares delegation; you copy it, never invent it — the gate blocks a
+   delegation acceptance.md doesn't declare, and blocks any delegate value other
+   than "security"). Never count a delegated criterion in `covered`; the gate and
+   loop-exit recompute both integers from `by_id` and reject a numerator that
+   disagrees. A criterion covered by a PRE-EXISTING test from an earlier feature is
+   different: that is honest inherited coverage — mark it `covered: true` with the
+   named test and a reason saying it is inherited/unchanged (the feature-2 pattern).
 5c. **Migration reversibility (only when the change set includes migration
    files).** Prove the down-path actually *works* — security flags a *missing*
    downgrade critical (its step 5), but a present downgrade can still be broken.
@@ -225,7 +236,7 @@ When invoked:
      "tests_by_type": { "unit": 0, "integration": 0, "e2e": 0 },
      "criteria_covered": {
        "total": 0, "covered": 0,
-       "by_id": [{ "id": "AC1", "covered": true, "test": "", "reason": "" }]
+       "by_id": [{ "id": "AC1", "covered": true, "test": "", "reason": "", "delegated": null }]
      },
      "resilience": {
        "migration_roundtrip": "pass|fail|n/a",
@@ -252,10 +263,14 @@ When invoked:
    **`criteria_covered`** records acceptance-criteria coverage from `acceptance.md`
    — a *distinct* axis from line `coverage` (a criterion is covered only when a
    named test asserts it). It is `{total:0,covered:0,by_id:[]}` when no
-   `acceptance.md` exists. The deploy gate requires
-   `criteria_covered.covered >= criteria_covered.total` (an absent/empty field
-   means `0 >= 0`, so a criteria-less feature still passes); the orchestrator's
-   run-to-condition loop exits on the same check.
+   `acceptance.md` exists. **The deploy gate and the loop-exit predicate RECOMPUTE
+   the summary from `by_id` (U-01):** every entry must be `covered: true` or
+   `delegated: "security"` (the only valid delegate — see step 5b), `covered` must
+   equal the count of `covered==true` entries exactly (delegation never inflates
+   it), and `total` must equal the `by_id` length AND acceptance.md's
+   `criteria_total` frontmatter. Write the numbers honestly — a generous summary
+   integer no longer passes; an honestly-delegated criterion no longer wedges.
+   (An absent/empty field still means `0 >= 0`, so a criteria-less feature passes.)
    **`resilience`** records the conditional modes (steps 5c–5e). Each field is
    `n/a` when its trigger was absent — these are *reported* by default and never
    add a new gate; a resilience guarantee only blocks deployment when planning

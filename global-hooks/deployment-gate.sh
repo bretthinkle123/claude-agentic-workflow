@@ -27,17 +27,65 @@ if [ ! -f "$TEST_RESULTS" ] || [ "$(jq -r '.status' "$TEST_RESULTS")" != "pass" 
   exit 2
 fi
 
-# Acceptance-criteria coverage must be COMPLETE (PR C). Every criterion testing
-# recorded from acceptance.md must be covered. This is the SAME condition the
-# orchestrator's run-to-condition loop exits on, so loop-exit ≡ deploy gate and the
-# two cannot drift. An absent/empty criteria_covered (a feature with no acceptance
-# criteria, or a pre-PR-C result file) means total 0 == covered 0 → complete, so
-# this no-ops for those — never blocks a legitimately criteria-less change.
-CRIT_TOTAL=$(jq -r '(.criteria_covered.total // 0)' "$TEST_RESULTS")
-CRIT_COVERED=$(jq -r '(.criteria_covered.covered // 0)' "$TEST_RESULTS")
-if [ "$CRIT_COVERED" -lt "$CRIT_TOTAL" ]; then
-  echo "Blocked: acceptance criteria not fully covered ($CRIT_COVERED/$CRIT_TOTAL). See $TEST_RESULTS .criteria_covered." >&2
+# Acceptance-criteria coverage must be COMPLETE and its arithmetic HONEST (PR C + U-01).
+# In the M3 run the recorded summary said covered:24/24 while the same file's by_id
+# marked AC20 covered:false — the gate compared two trusted integers and passed. Now,
+# when `by_id` is present, the summary is RECOMPUTED from it: every entry must be
+# covered or delegated to "security" (the ONLY valid delegate — its clean/asvs checks
+# are already conjuncts of this gate; any other delegate value blocks until that stage
+# has its own gate-conjunct-backed status file), the recorded `covered` must equal the
+# covered==true count (delegation never inflates the numerator), and `total` must equal
+# the by_id length. A legacy result file without by_id keeps the original integer
+# compare. This is the SAME condition the orchestrator's run-to-condition loop exits on
+# (pipeline-orchestration SKILL.md, asserted by tests/suites/loop-exit-invariant.sh),
+# so loop-exit ≡ deploy gate and the two cannot drift. An absent/empty criteria_covered
+# (a feature with no acceptance criteria, or a pre-PR-C result file) means total 0 ==
+# covered 0 → complete — never blocks a legitimately criteria-less change.
+CRIT_REASON=$(jq -r '
+  (.criteria_covered // {}) as $c
+  | if ($c.by_id // null) == null
+    then if (($c.covered // 0) >= ($c.total // 0)) then "ok"
+         else "not fully covered (\($c.covered // 0)/\($c.total // 0))" end
+    else ($c.by_id | map(select(.covered == true)) | length) as $ct
+       | if (($c.by_id | map(select((.delegated // null) != null and .delegated != "security")) | length) > 0)
+         then "invalid delegate value (only \"security\" is gate-backed): \([$c.by_id[] | select((.delegated // null) != null and .delegated != "security") | .id] | join(", "))"
+         elif (($c.by_id | map(select(.covered == true or .delegated == "security")) | length) != ($c.by_id | length))
+         then "unaccounted criteria (neither covered nor delegated): \([$c.by_id[] | select(.covered != true and .delegated != "security") | .id] | join(", "))"
+         elif (($c.covered // -1) != $ct)
+         then "recorded covered=\($c.covered) but by_id counts \($ct) covered==true entries — the summary integer must equal the recomputation"
+         elif (($c.total // -1) != ($c.by_id | length))
+         then "recorded total=\($c.total) but by_id has \($c.by_id | length) entries"
+         else "ok" end
+    end' "$TEST_RESULTS" 2>/dev/null)
+if [ "$CRIT_REASON" != "ok" ]; then
+  echo "Blocked: acceptance-criteria arithmetic — ${CRIT_REASON:-unreadable criteria_covered}. See $TEST_RESULTS .criteria_covered." >&2
   exit 2
+fi
+
+# Acceptance-frontmatter anchors (U-01, DEPLOY-ONLY — like waiver authenticity, NOT in
+# the loop-exit predicate). The denominator and the right to delegate are PLANNING-owned
+# and human-reviewed at the plan checkpoint: testing must neither shrink the total nor
+# invent a delegation. acceptance.md absent, or present without a `criteria_total:` line
+# (a legacy format) ⇒ the total anchor self-skips; a delegated entry with no matching id
+# in `delegated_criteria:` ALWAYS blocks (fail closed — self-delegation is the vector).
+ACCEPTANCE=".pipeline/acceptance.md"
+if [ -f "$ACCEPTANCE" ]; then
+  ACC_TOTAL=$(grep -m1 -E '^criteria_total:' "$ACCEPTANCE" | sed -E 's/^criteria_total:[[:space:]]*//' | tr -cd '0-9')
+  TR_TOTAL=$(jq -r '(.criteria_covered.total // 0)' "$TEST_RESULTS")
+  if [ -n "$ACC_TOTAL" ] && [ "$TR_TOTAL" -ne "$ACC_TOTAL" ] 2>/dev/null; then
+    echo "Blocked: test-results records criteria_covered.total=$TR_TOTAL but acceptance.md frontmatter declares criteria_total: $ACC_TOTAL — the denominator is planning-owned and must match." >&2
+    exit 2
+  fi
+  DELEG_IDS=$(jq -r '[.criteria_covered.by_id[]? | select(.delegated == "security") | .id] | join(" ")' "$TEST_RESULTS" 2>/dev/null)
+  if [ -n "$DELEG_IDS" ]; then
+    ACC_DELEG=$(grep -m1 -E '^delegated_criteria:' "$ACCEPTANCE" | sed -E 's/^delegated_criteria:[[:space:]]*//')
+    for _id in $DELEG_IDS; do
+      if ! printf '%s' "$ACC_DELEG" | grep -qw "$_id"; then
+        echo "Blocked: $TEST_RESULTS delegates criterion $_id to security, but acceptance.md frontmatter declares no matching id in delegated_criteria (${ACC_DELEG:-<absent>}). Delegation is declared by PLANNING and human-reviewed — a testing agent cannot self-delegate." >&2
+        exit 2
+      fi
+    done
+  fi
 fi
 
 # Criterion-completeness (PR G / F1). Counting criteria_covered trusts the testing

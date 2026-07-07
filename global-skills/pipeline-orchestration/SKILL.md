@@ -63,17 +63,31 @@ string and those files — never assume it can see the conversation.
               and ((.input_surface.uncontrolled // []) | length == 0)
               and ((.data_surface.unprotected // []) | length == 0)
               and (.asvs.reconciled != false)' security-status.json   AND
-       jq -e '.status=="pass"
-              and ((.criteria_covered.covered // 0) >= (.criteria_covered.total // 0))
-              and ( ((.perf.status // "n/a")=="n/a")
-                    or ( (.perf.budget.p95_ms==null         or .perf.measured.p95_ms!=null)
-                     and (.perf.budget.throughput_rps==null or .perf.measured.throughput_rps!=null)
+       jq -e '.status == "pass"
+              and ( (.criteria_covered // {}) as $c
+                    | if ($c.by_id // null) == null
+                      then (($c.covered // 0) >= ($c.total // 0))
+                      else (($c.by_id | map(select((.delegated // null) != null and .delegated != "security")) | length) == 0)
+                       and (($c.by_id | map(select(.covered == true or .delegated == "security")) | length) == ($c.by_id | length))
+                       and (($c.covered // -1) == ($c.by_id | map(select(.covered == true)) | length))
+                       and (($c.total // -1) == ($c.by_id | length))
+                      end )
+              and ( ((.perf.status // "n/a") == "n/a")
+                    or ( (.perf.budget.p95_ms == null         or .perf.measured.p95_ms != null)
+                     and (.perf.budget.throughput_rps == null or .perf.measured.throughput_rps != null)
                      and (.perf.scenario != null) ) )' test-results.json
      # These are EXACTLY the gate's test/security/criteria + perf-completeness (PR G) checks, so the
-     # loop never exits green on anything deployment-gate.sh would reject. The perf-completeness clause
-     # mirrors the gate byte-for-byte: a declared perf budget dimension with a null measured value keeps
-     # the loop running (route to debugging), never exits green. The gate's other two checks
-     # (pr-description, currency) come from documentation AFTER the loop — not the loop's job.
+     # loop never exits green on anything deployment-gate.sh would reject. The criteria clause (U-01)
+     # RECOMPUTES the summary integers from by_id: every criterion must be covered or delegated to
+     # "security" (the only valid delegate — its clean/asvs checks are already conjuncts above), the
+     # recorded covered must equal the covered==true count (delegation never inflates it), and total
+     # must equal the by_id length; a result file without by_id keeps the legacy integer compare. The
+     # gate ADDITIONALLY cross-checks acceptance.md frontmatter (criteria_total + delegated_criteria)
+     # — deploy-only honesty anchors, like waiver authenticity, deliberately not in the loop predicate.
+     # The perf-completeness clause mirrors the gate byte-for-byte: a declared perf budget dimension
+     # with a null measured value keeps the loop running (route to debugging), never exits green. The
+     # gate's other two checks (pr-description, currency) come from documentation AFTER the loop —
+     # not the loop's job.
      # planning / plan-audit / implementation / documentation / deployment NEVER run inside this loop.
 
 4b. bash ~/.claude/hooks/loop-guard.sh done   # GREEN exit: stamp loop-state.json status="completed"
