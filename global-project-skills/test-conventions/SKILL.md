@@ -151,6 +151,26 @@ These run **only when the change set triggers them** (the testing agent's steps
   Also record an adversarial "what does this test not catch" review. Written to
   `test-quality.json` (advisory sibling of `test-results.json`).
 
+## Authorship split — test-first (TA/A-2)
+
+Tests are written by **two** agents, in two layers:
+
+- **Implementation writes first, and writes the happy-path + contract layer.** Under the
+  test-first contract, the implementation agent writes the tests named in the plan's
+  `test_strategy` for each unit of work **before** the code, watches them fail, then codes
+  to green. So the suite already exists — and asserts the intended behavior — before
+  testing runs.
+- **Testing writes the adversarial + coverage-gap layer, and independently verifies.**
+  The testing agent does **not** re-write the happy-path tests. It re-derives the AC→test
+  mapping for itself (never trusting that implementation's own passing test proves a
+  criterion), writes the hostile/boundary/backstop-disable cases below, hunts vacuous
+  passes, and fills any happy-path gap implementation left. Neither agent deletes or
+  weakens the other's tests to go green.
+
+This is why the mapping is trustworthy: the agent that judges coverage (testing → the
+`criteria_covered` gate) is not the agent that wrote the code, and it re-checks rather than
+inherits. The deterministic `test-results.json`/`by_id` arithmetic is unchanged.
+
 ## Adversarial test shapes (mandatory when the change has the trigger)
 
 A green suite that is *shaped to pass* is worse than no suite — it certifies a defect. The

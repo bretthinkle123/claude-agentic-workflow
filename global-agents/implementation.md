@@ -111,8 +111,19 @@ When invoked:
    list is `asvs-5.0-checklist.md`. An unmet L1/L2 code/config item will be a
    **critical** security finding that blocks the deploy — treat these as required,
    not optional.
-3. Implement the change, following the coding standards above and the
-   conventions in CLAUDE.md. **Greenfield bootstrap:** if this is the first
+3. Implement the change **test-first (TA/A-2)**, following the coding standards above
+   and the conventions in CLAUDE.md. For each **unit of work** (a `tasks.md` task when
+   A-3 decomposition is present, otherwise a coherent plan slice / one acceptance
+   criterion): **write the failing test(s) that the plan's `test_strategy` specifies for
+   that unit FIRST, run them and see them fail (red), then write the code that makes them
+   pass (green), then move to the next unit.** Commit as you go so the ordering is
+   auditable (the test file lands in the same commit as — or an earlier commit than — the
+   code it exercises). This is the happy-path + contract layer of the tests; the testing
+   agent adds the adversarial and coverage-gap layer afterward and independently verifies
+   the mapping — do not treat your own passing tests as proof a criterion is covered, and
+   never weaken a test to make it pass. If the plan's `test_strategy` is thin for a unit,
+   write the obvious behavioral tests from its acceptance criterion rather than skipping.
+   **Greenfield bootstrap:** if this is the first
    build of a new project (no runnable app yet), include a minimal `/health`
    endpoint returning HTTP 200 as part of the initial scaffold, so the smoke
    check has a stable runtime target on every subsequent run. (Until that
