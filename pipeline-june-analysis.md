@@ -525,6 +525,45 @@ implementation's coding standards gate everything downstream, and richer securit
 [[redteam-app-goal]]. It is deliberately off the critical path: the pipeline is already a 10/10
 scaffolder without it.
 
+#### SK — build-ready addendum (2026-07-07; original detail above stands unchanged)
+
+Audited alongside the **TA overhaul track** (`.pipeline/pipeline-adaptation-plan.md`); SK's method
+survives unmodified. **M3 landed 2026-07-07** (branch `fix/m3-unified-v2`, unified "U-##"
+numbering; plan of record `.pipeline/pipeline-fix-plan-final.md` carries the P→U crosswalk) —
+so guardrail 4 below is now checkable against real merged bodies, not a pending plan. Deltas
+that make it build-ready:
+
+1. **Sequencing (settled):** SK lands **after TA-3** — the TA track's A-2 reframes the vocabulary of
+   two SK targets (`code-standards` → test-first units, `test-conventions` → the authorship split),
+   so enrichment written first would be rewritten. Full order: M3 fixes (landed) → TA-1/2/3 →
+   **SK-1/2/3** → the **M4 proof run** (M4 = the codified next validation run; it measures the
+   combined overhaul; attribution trade-off accepted 2026-07-07). *(The overhaul is the TA
+   engine-PR track, NOT "M4" — an earlier draft mislabeled it; corrected after a blast-radius audit
+   showed "M4" is woven through 6 engine files as the proof-run name.)*
+2. **PR split:** one PR per first-pass agent — **SK-1 planning, SK-2 implementation,
+   SK-3 security** — matching the per-file approval cadence and keeping eval bisection clean.
+3. **Re-inventory step (new step 0):** the target inventory above predates roughly half the current
+   skill tree (dast/data-protection/ci/delivery/observability/containerization conventions, the
+   ASVS checklist sibling, …). Before SK-1, regenerate the per-agent preload/on-demand inventory
+   from the **post-M3** tree; first-pass order (planning → implementation → security) stands.
+4. **New guardrail — load-bearing content:** M3's P0-2 amendment, DP, and ASVS-DET pushed
+   *enforcement-coupled* text into exactly the skills SK enriches first (stride template,
+   api-edge, data-protection). Diff against post-M3 bodies; enabling-conditions /
+   classification / checklist content is load-bearing — enrich around it, never simplify it away.
+5. **Sources pre-seeded:** the 2026-07-07 third-party audit replaces open-ended scouting —
+   vetted, license-known candidates: mattpocock/skills (MIT: tdd, code-review, diagnosing-bugs →
+   code-standards + testing/debugging conventions), obra/superpowers (TDD/review craft),
+   ponytail's over-engineering heuristics (→ code-standards), VOIDXAI/taste (engineering-judgment
+   framing), anthropics/skills Apache-2.0 items only (document skills are source-available — the
+   existing caveat above stands).
+6. **Provenance unified:** every SK import records into the **content-imports** section of
+   `global-skills/VENDORED.md` (created by the TA track's B-0) — same row schema, same static-suite
+   enforcement — instead of a per-import ad-hoc record.
+7. **Shared rules with TA** (synergy contract, mirrored in the TA doc): permissive-license-only
+   confirmed per skill at pin time; the preload token bar governs both plans; `run-eval.sh` green
+   after every SKILL edit, drift-guard strings re-pinned deliberately (P0-1 moved the loop-exit
+   text this suite pins).
+
 ### Track 2 — extend past the PR → **10/10 fully-functional (the last 40%, §7)**
 
 Mostly per-project CI/infra the pipeline *scaffolds*, plus a few skills — not new pipeline agents.
