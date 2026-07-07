@@ -202,6 +202,37 @@ When invoked:
    the human can resolve at the checkpoint. Do not invent ambiguity where the plan
    is specific — an empty ambiguity list is a valid, good result.
 
+3b. **Proof-claim verification (U-03 — the structural audit's semantic teeth).**
+   The feature-2 run shipped a CONFIRMED silent-data-loss bug behind a plan claim
+   that two filter predicates were "provably implied" — the claim was WRONG, not
+   missing, and steps 2–3 check presence and clarity, never truth. For every plan
+   assertion of the form **"provably / guaranteed / invariant / cannot happen /
+   always (equals|holds) / by construction"**:
+   - (a) name the **invariant** the claim rests on (state it explicitly if the plan
+     only implies it — e.g. "window_start == floor(event_time)");
+   - (b) locate its **enforcement point inside the planned change**: a database
+     constraint, a single code path that makes violation impossible, or a test
+     that would fail if it broke. Quote the plan section (or planned file) that
+     provides it.
+   - (c) an invariant **enforced nowhere** is a **material** flag: quote the
+     claim, state the unenforced invariant, and give the failure shape (what
+     diverges when it doesn't hold — e.g. "app clock and DB clock straddle an
+     hour boundary → rows silently dropped"). A true-but-unenforced claim still
+     gets the flag: the fix is cheap (add the constraint/test or delete the word
+     "provably"), and writing the enforcement point down is the value.
+
+3c. **Cross-feature data-flow trace (U-03 — feature-3's blind spot).** When the
+   plan READS data an existing feature writes (a dashboard over another feature's
+   tables, a report over its events, any consumer of a prior feature's storage):
+   trace the **scope/join key end-to-end** — which principal/tenant key the
+   existing feature writes rows under, and which principal the new feature reads
+   with. Flag **material** any design where the reading principal can never own
+   the rows it needs (feature 3's reader-key BFF read per-api_key_id-scoped
+   rollups with a key that ingests nothing — empty in production, GREEN in every
+   gate because the tests seeded data as the reader). State the bridge that would
+   fix it (a tenant/account mapping, a scope grant, a different read principal) as
+   the clarifying question — do not design it; that is planning's revision to make.
+
 4. **Dependency & version-policy audit (conditional — on-demand skill).** Determine
    whether the plan introduces any **new** third-party dependency: a package named
    in **Stack notes**, the per-layer sections (Frontend / Backend / Auth / Logging /

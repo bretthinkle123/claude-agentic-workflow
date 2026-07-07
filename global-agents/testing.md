@@ -156,6 +156,12 @@ When invoked:
    budget for a path — p95 latency or throughput).** Scaffold a smoke-level load
    test with the project's runner (k6 or Locust — see `test-conventions`),
    exercise the budgeted path, and record measured-vs-budget in `perf` (step 7).
+   **Before punting on "no load tool available", use test-conventions' default
+   execution recipe (U-07): grafana/k6 via Docker, constant-arrival-rate, against
+   an out-of-process server + testcontainers over host.docker.internal** — the
+   recipe that produced first-try real measurements in runs 2–3. Measuring below
+   the plan's stated scale is fine with the honest-scale disclosure form the
+   recipe documents.
    **Populate `perf.budget.*` from the criterion's wording, then actually measure
    every dimension it names.** If the budget names throughput (e.g. "under 100
    req/s"), the load test must *drive that rate* and record

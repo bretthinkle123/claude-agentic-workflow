@@ -247,6 +247,35 @@ When invoked:
    `stride_mechanisms_verified` count and `stride_mechanisms_missing` count in
    the `security-status.json` output (step 9).
 
+   **PRESENCE IS NOT EFFICACY (U-02).** The M3 run verified 15/15 mechanisms
+   "present" while the RLS backstop was inert, the append-only claim was
+   unenforced, and the throttle keyed on the load balancer's own IP — every named
+   mechanism existed, so a presence check could not fail. For each mechanism, also
+   answer the per-category **efficacy question** and record the answer (with
+   file:line evidence) in the report's 6d section; an answer of "no" is a
+   **critical**, same as an absent mechanism:
+   - **Topology:** if the plan or infra declares a proxy/load balancer in front of
+     the app, is client-IP trust actually configured (ProxyHeaders middleware /
+     `forwarded-allow-ips` / equivalent)? Are the LB's probe paths (e.g.
+     `/health/ready`) exempt from pre-auth throttles? (M3 shipped a Tier-1
+     throttle keyed on `request.client.host` behind an ALB — one bucket per node —
+     and a throttleable readiness probe.)
+   - **DB privilege:** for every RLS policy — does the app role OWN the table,
+     and if so is FORCE ROW LEVEL SECURITY set (owners bypass non-FORCE RLS
+     regardless of BYPASSRLS)? For every "append-only"/"immutable" claim — does a
+     REVOKE or trigger actually enforce it, or is UPDATE/DELETE still granted?
+   - **Async runtime:** inside async handlers, are CPU-hard KDF calls (Argon2id,
+     bcrypt) and blocking SDK calls (sync boto3, sync redis) moved off the event
+     loop (thread pool / async client), or do they stall every request on the
+     loop?
+   - **Contract drift:** for each facade contract the plan names (secret rotation
+     re-fetch, scrubbing, redaction), name the CONSUMER and verify it honors the
+     contract — e.g. does the DB engine re-resolve credentials after rotation, or
+     resolve once at creation? Does the error scrubber cover query_string/url, or
+     only headers/body?
+   These four classes are exactly what the M3 series shipped past three clean
+   scans; each is checkable by inspection, no scanner needed.
+
    **e. Log-sink safety** — inspect every logging call in the change set that
    includes request-derived or user-controlled data:
    - **Log forging / injection:** raw user input containing newlines or CR written

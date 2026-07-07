@@ -39,6 +39,24 @@ else pyramid>`. Record realized per-tier counts in the results file.
 - Mock at the boundary you own (the repository/client interface), not deep
   internals. Never mock the unit under test.
 
+## Shared scaffolding — rule of two (U-21)
+
+The **second** time a fixture, seed block, or harness function is needed, it moves to
+`conftest.py` (or a shared helper module) and both call sites import it — never a second
+copy. Three consecutive runs copy-pasted instead: run 2 repeated a raw-SQL seed block 5×
+in one file and forked a ~275-line k6 harness; run 3 forked the harness AGAIN and the
+copy dropped the docstring explaining *why* nearest-rank-over-raw is required. Copies
+drift silently and each fork re-decides settled questions. Specifically:
+- **seed/fixture SQL** → one conftest fixture, parameterized;
+- **perf harnesses** → one shared module; **scenario names are parameters, never
+  string literals duplicated across the JS/Python boundary** (the forked harnesses
+  still tag every scenario `"ingest"` — a hidden coupling that mislabels non-ingest
+  measurements);
+- carry the comments/docstrings with the code — a copy that sheds its rationale is
+  how conventions decay.
+Advisory (a convention, not a gate): /code-review and /simplify flag violations; this
+rule exists so the suite never creates them.
+
 ## Runner & coverage
 
 - Run: `<e.g. pytest --cov=src --cov-report=term-missing>`
@@ -92,6 +110,20 @@ These run **only when the change set triggers them** (the testing agent's steps
   runner: `<e.g. k6 run script.js | Locust>`. Budget source: the acceptance
   criterion (p95 latency / throughput); record results vs budget in
   `test-results.json.perf`. Reported unless the budget is an acceptance criterion.
+  **Default execution recipe (U-07 — attempt this BEFORE punting on "no load tool"):**
+  run **grafana/k6 via Docker** (`docker run --rm -i grafana/k6 run -`), executor
+  `constant-arrival-rate` at the budgeted rate, against an **out-of-process** app
+  (real server, e.g. multi-worker uvicorn — never the in-process test client) with
+  real backing stores (testcontainers), networked via `host.docker.internal`.
+  Exclude a short warm-up window from measurement (cache/pool population); compute
+  the true nearest-rank percentile over k6's raw per-request samples (below); cycle
+  the key space per the plan's workload note. This exact recipe produced real
+  measurements first-try in runs 2–3 after run 1 punted without it.
+  **Measuring below the plan's stated scale is legitimate WITH disclosure** — copy
+  run 2's honest form into `perf.scenario`: seeded partition smaller than the
+  plan's ceiling for loop-runtime reasons ⇒ say "directional measurement at this
+  scale, not a claim the budget is verified at the full ceiling", plus the actual
+  seeded size. Never imply the ceiling was tested.
   **Criterion-completeness:** measure *every* dimension the budget names — if the
   budget states a throughput (e.g. "under 100 req/s"), drive that rate and record
   `perf.measured.throughput_rps`; serial p95 alone does not satisfy it. The deploy
@@ -131,6 +163,16 @@ test that asserts the property must exercise the variable that would actually br
   one principal across two IPs still shares a bucket. Asserting "a different owner is
   unaffected" against an *un-throttled* endpoint proves nothing. (This is the A-N2 bug: the
   limiter was IP-keyed, and the AC test used the unlimited endpoint for the cross-owner case.)
+- **Production-shaped fixtures for every read path (U-03 — feature 3's blind spot).** The
+  data an integration read-path test consumes MUST be produced by a **different principal**
+  than the one reading it, unless isolation is the explicit assertion. Feature 3's dashboard
+  tests ingested events *as the reader key itself* and asserted cross-tenant reads come back
+  empty — thereby encoding the exact production topology (customers ingest under their own
+  keys; the reader owns nothing ⇒ dashboard permanently empty) as a PASSING isolation test.
+  A green suite whose fixtures satisfy the code instead of the real-world contract certifies
+  the bug. When a fixture must make the reader its own producer (rare), add a one-line
+  stated justification in the test. Adversarial-review prompt for `test-quality.json`:
+  **"which of these fixtures would a production topology falsify?"**
 - **Any uniqueness/self-reference-bounded resource** (transfer, link, merge, follow) → an
   **A == A self-reference** case asserting a clean 4xx, not a 5xx. (A-N1: `from==to` hit an
   unhandled DB CHECK → 500.)

@@ -69,6 +69,25 @@ Use 1–2 trigger questions per category:
 - **Elevation of Privilege** — Can a low-privilege actor gain higher access
   (missing authorization checks, over-permissioned roles)?
 
+**Every mitigation must state its ENABLING CONDITIONS, not just its name (U-02).**
+The M3 series shipped three "verified-present" mechanisms that were inert because
+the condition making them work was never written down, so no downstream check could
+test it. In the Mitigation cell (or a footnote it references), state:
+- for an **IP-keyed throttle**: how the client IP is derived behind the declared
+  proxy/LB (trusted forwarded headers + mechanism), and which probe paths are exempt;
+- for an **RLS policy**: which role owns the table and whether FORCE is required
+  (a table owned by the app role needs FORCE ROW LEVEL SECURITY — owners bypass
+  non-FORCE RLS regardless of BYPASSRLS);
+- for an **append-only / immutable** claim: the enforcing REVOKE or trigger, not
+  just the intent;
+- for a **scrubber / redaction** mitigation: the exact scope (headers, body,
+  query_string, url) — an unscoped "before_send strip" left query-string PII
+  leaking in M3;
+- for a **rotation / re-fetch** contract: the consumer that must honor it (e.g.
+  the DB engine re-resolves credentials, not just "the facade supports rotation").
+A named mechanism without its enabling condition is an incomplete mitigation —
+plan-audit flags it, and security's 6d efficacy questions will fail it.
+
 ## Step 2b — Map each threat to ASVS 5.0.0 requirements
 
 For each threat, cite the ASVS requirement(s) its mitigation satisfies in the

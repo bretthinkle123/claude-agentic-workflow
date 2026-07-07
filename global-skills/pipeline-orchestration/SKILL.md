@@ -183,6 +183,29 @@ zero-LLM summary of `run-log.jsonl` — per-stage model/status/retries, the
 **inverted-pyramid flag** (a `pyramid`-strategy feature whose unit count is below
 integration+e2e). Read-only; never part of a gate.
 
+## Prompts are for experiments, definitions are for keeps (U-12)
+
+A lesson that worked when delivered via an orchestrator prompt gets moved into the
+owning agent definition or skill **the same week**. The feature-2 run proved three
+run-1 lessons worked as prompt instructions (temp-output routing, explicit
+delegated-criteria marking, the k6 recipe) — and all three existed nowhere durable
+until they were codified. A behavior that lives only in a prompt depends on the
+orchestrator remembering; a behavior in a definition survives every session. When
+you find yourself re-teaching an agent something in a prompt, that is the signal to
+edit the definition instead.
+
+## M4 correctness-review pilot (U-03 — advisory, measured, this run only)
+
+For the M4 run ONLY: after implementation passes smoke and before arming the loop,
+run one scoped correctness review over the diff's **data-path queries and
+state-changing logic** (not the full multi-angle review — that stays at the
+pre-checkpoint placement). Advisory: findings route to debugging like any other
+input; nothing gates on it. Rationale: across three runs, the pre-checkpoint
+/code-review was the SOLE catcher of each run's deepest bug (topology/RLS class,
+window_start data loss, reader-key empty dashboard) — this pilot measures whether a
+narrow early pass catches that class before the loop churns, at what cost. Record
+catch-vs-cost in the M4 retrospective; keep or drop the step on that data.
+
 ## Bootstrap (once per project)
 
 Run `bash ~/.claude/pipeline-templates/bootstrap-project.sh` from inside the
