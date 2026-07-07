@@ -167,6 +167,14 @@ string and those files — never assume it can see the conversation.
      # after the deployment line is logged, makes .pipeline/run-summary.json the true whole-run
      # summary the retrospective quotes. Keep 4c too (the loop-GREEN snapshot still has value
      # if a run stops before deployment).
+7. LEDGER DELTAS (U-10 — post-ship, do this before closing the run). For every
+     verifier-CONFIRMED /code-review finding the human deferred (and any production incident
+     later triaged), append a row to `docs/finding-ledger.md`: {finding, class,
+     escaped-because, action}. The `action` MUST be one of: a new efficacy question (U-02) /
+     a new planted eval defect (U-23) / a new deterministic check / an explicit
+     `accepted:<reason>`. An escape with no decision is itself a defect — `tests/suites/static.sh`
+     asserts every row has an action. This is what turns a one-time escape into a permanent
+     check instead of a re-discovery cost; the retrospective's "ledger deltas" section prompts it.
 ```
 
 ## Telemetry — logged automatically on every stage

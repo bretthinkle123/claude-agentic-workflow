@@ -1,0 +1,9 @@
+{
+  "agent": "plan-audit",
+  "prompt": "Audit .pipeline/plan.md per your step 3b proof-claim verification (U-03). Write .pipeline/plan-audit.md.",
+  "must_flag": [
+    { "id": "provably-implied", "grep": "provably implied|window_start|enforcement point|invariant|floor", "where": "plan-audit.md" }
+  ],
+  "planted_marker": "provably implied",
+  "notes": "Origin R2-1. The invariant the claim rests on (window_start == floor(event_time)) is enforced NOWHERE — window_start is floored app receive-time, event_time is DB now(). Step 3b must flag it material (claim enforced nowhere). A structural completeness/ambiguity audit alone cannot catch it — the claim is present and clearly worded, just false."
+}
