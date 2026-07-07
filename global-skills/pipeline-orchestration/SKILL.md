@@ -16,6 +16,13 @@ string and those files — never assume it can see the conversation.
 ## Stage sequence
 
 ```
+0elicit. OPTIONAL REQUIREMENTS ELICITATION (TA/A-1 — operator-run, human-facing, BEFORE
+   branching; NOT an agent stage, NOT orchestrator-invoked). When the brief is thin/ambiguous
+   or the feature touches money/auth/PII, the operator runs the `requirements-elicitation`
+   skill on the main thread: a relentless pre-planning interview that writes
+   `.pipeline/requirements.md` (resolved/open/out-of-scope). Planning then treats it as the
+   authoritative brief. Skip for a well-specified small change. The orchestrator never launches
+   this — it is the human's call.
 0pre. BRANCH FIRST (U-16b). Create and switch to the feature branch BEFORE planning, and
    record the feature slug once: `git checkout -b <feature-branch>` then set
    `.pipeline/state.json .feature` to a stable slug. In the M3 series the branch was created

@@ -46,7 +46,7 @@ new source.
 
 | name | upstream | pin | license | imported into | notes | scan date | status |
 |---|---|---|---|---|---|---|---|
-| grill-me (seed) | github mattpocock/skills | *(pin at import)* | MIT | `global-skills/requirements-elicitation/` (planned, TA-3 / A-1) | ported house-style, NOT vendored-verbatim; repo contains shell scripts — full read-through required | pending | PLANNED |
+| grill-me (concept) | github mattpocock/skills | `8515a08` | MIT | `global-skills/requirements-elicitation/` | concept only ("relentless interview to sharpen a plan"), written house-style — NOT vendored-verbatim. Upstream grill-me SKILL.md is a 1-line trigger to a `/grilling` skill; nothing copied, no scripts touched. | 2026-07-07 | IMPORTED |
 | handoff (pattern) | github mattpocock/skills | `8515a08` | MIT | `global-skills/pipeline-orchestration/` prose (U-06 warm-resume) | idea cherry-pick only, no artifact copied: "reference `.pipeline/*` artifacts by path, don't re-summarize; name the unit + skills the resumed agent needs". Upstream SKILL.md read (10 lines, no scripts). | 2026-07-07 | IMPORTED |
 
 *(SK first-pass imports append rows here as they land — see the SK build-ready addendum in
