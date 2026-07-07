@@ -110,6 +110,12 @@ string and those files — never assume it can see the conversation.
      -> ADVISORY only: design-review.json never gates and is NOT in the loop-exit predicate (visual
         diff is too brittle to block on; the human design-approved checkpoint is the teeth).
         documentation surfaces any over-budget screen/a11y breach in the PR.
+     -> U-14 DISCLOSE-THE-SKIP: if this run USED a design source (a design-approved marker or a
+        design-spec.md exists) but .pipeline/ui.env is ABSENT, the stage silently no-ops and the
+        built UI's fidelity is machine-checked by nothing (feature 3 — first design-source run, no
+        ui.env). documentation MUST record "design-review (FE Layer 4): skipped — ui.env not wired"
+        in the PR so the skip is visible, not silent. (Wiring the stage itself — baselines, axe —
+        stays the deferred front-end workstream; this only makes the gap legible.)
 4e. DAST STAGE (DAST Layer 1 — CONDITIONAL, advisory, HTTP-surface only; skipped otherwise):
      run iff .pipeline/dast.env exists (the project opted into runtime scanning). Boots an ephemeral
      instance, runs OWASP ZAP's PASSIVE baseline against it (headers/cookies/info-leaks as SERVED),

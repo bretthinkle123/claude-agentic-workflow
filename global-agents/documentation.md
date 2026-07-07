@@ -95,9 +95,17 @@ When invoked:
    breach (from `visual_over_budget` / `a11y_over_budget`). It is **advisory** (visual
    diff is brittle; the human design-approved checkpoint is the real fidelity gate) — present
    it as reviewer context the human weighs, never as a pass/fail.
+   **Disclose a skipped design review (U-14):** if this run used a design source
+   (`.pipeline/design-approved` OR `.pipeline/design-spec.md` exists) but
+   `.pipeline/design-review.json` does NOT (the `ui.env`-gated stage never ran), add the
+   line **"Design review (FE Layer 4): skipped — ui.env not wired"** so the reviewer knows
+   the built UI's visual fidelity was machine-checked by nothing (feature 3's silent gap).
    **Runtime security (DAST Layer 1):** when `.pipeline/dast-review.json` exists, add a
    **DAST (runtime)** section — the OWASP ZAP passive-baseline `alerts_by_severity` tally and
-   any `over_budget` severity bands (with the offending alert names). It is **advisory** (a
+   any `over_budget` severity bands (with the offending alert names). **If
+   `.target_reached` is `false` (U-14), say so prominently** — the scan seeded on a
+   non-page (e.g. host root while the UI is at `/dashboard`), so its "within budget"
+   verdict scanned nothing real and must not read as a clean bill. It is **advisory** (a
    passive baseline runs post-GREEN, outside the security loop; the pre-merge scanners + human
    diff review stay the teeth) — present it as reviewer context, never as a pass/fail. Note that
    the gating DAST layers run in CI against staging, not in this run.

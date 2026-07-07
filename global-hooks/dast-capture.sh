@@ -62,6 +62,23 @@ if ! curl -sf -m 5 "$PROBE" >/dev/null 2>&1; then
   exit 0
 fi
 
+# U-14: the health precheck above proves the APP is up, not that the SCAN TARGET is a
+# real page. In run 3 DAST_TARGET_URL was the bare root (`/`) while the dashboard lived
+# at `/dashboard`; /health answered 200, the precheck passed, and ZAP spidered a 404 —
+# "within budget" then certified a scan of nothing. Probe DAST_TARGET_URL ITSELF (the
+# spider seed) and record its status. A >=400 seed means the scan won't traverse the
+# real surface; dast-review surfaces target_reached:false as a WARN (advisory — never
+# blocks; Layer 1 stays advisory). Deterministic: a direct status read, not log parsing.
+TARGET_STATUS="$(curl -s -o /dev/null -m 5 -w '%{http_code}' "$DAST_TARGET_URL" 2>/dev/null || echo 000)"
+TARGET_REACHED=false
+[ "$TARGET_STATUS" -ge 200 ] 2>/dev/null && [ "$TARGET_STATUS" -lt 400 ] 2>/dev/null && TARGET_REACHED=true
+printf '{"target_reached":%s,"status":%s,"url":"%s","ran_at":"%s"}\n' \
+  "$TARGET_REACHED" "${TARGET_STATUS:-0}" "$DAST_TARGET_URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > .pipeline/dast-target-probe.json
+if [ "$TARGET_REACHED" != "true" ]; then
+  echo "[dast-capture] WARNING: DAST_TARGET_URL ($DAST_TARGET_URL) returned HTTP $TARGET_STATUS — the spider seed is not a live page. For a served-UI target set DAST_TARGET_URL to the served route (e.g. /dashboard). Scanning anyway; target_reached:false will be flagged." >&2
+fi
+
 # The app runs on the HOST; ZAP runs in a CONTAINER, where localhost is the container, not the host.
 # Rewrite loopback → host.docker.internal (Docker Desktop resolves it; --add-host maps it on Linux).
 SCAN_URL="$DAST_TARGET_URL"
