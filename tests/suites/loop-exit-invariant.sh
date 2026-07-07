@@ -28,7 +28,7 @@ echo "-- loop-exit ≡ gate --"
 # GREEN := security-status.status=="clean" AND loop-exit-predicate(test-results)==true
 # GREEN security predicate (audit B6): clean AND no High/Critical OSV without a waiver.
 # Kept byte-equivalent to deployment-gate.sh's CVE floor and the SKILL's security jq.
-SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0) and ((.data_surface.unprotected // []) | length == 0) and (.asvs.reconciled != false)'
+SEC_PREDICATE='.status=="clean" and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null) and ((.input_surface.uncontrolled // []) | length == 0) and ((.data_surface.unprotected // []) | length == 0) and (.asvs.reconciled != false) and (.scan_reconciled != false)'
 
 pred_green() {
   local w="$1"
@@ -73,6 +73,9 @@ row "clean + unprotected sensitive field"     ''                                
 row "clean + data surface reconciled"         ''                                          '.data_surface={unprotected:[]}'
 row "clean + asvs unreconciled"               ''                                          '.asvs={reconciled:false}'
 row "clean + asvs reconciled"                 ''                                          '.asvs={reconciled:true}'
+row "clean + scan unreconciled (U-09)"        ''                                          '.scan_reconciled=false'
+row "clean + scan reconciled (U-09)"          ''                                          '.scan_reconciled=true'
+row "clean + no scan_reconciled field (U-09)" ''                                          'del(.scan_reconciled)'
 # U-01 by_id rows (single-file recomputation — gate and predicate must agree):
 row "U-01 by_id honesty: flag flipped false"  '.criteria_covered.by_id[0].covered=false'  ''
 row "U-01 invalid delegate enum"              '.criteria_covered.by_id[0].delegated="frontend"' ''
@@ -195,6 +198,8 @@ fi
   printf '{"status":"clean","data_surface":{"unprotected":[]}}\n'
   printf '{"status":"clean","asvs":{"reconciled":false}}\n'
   printf '{"status":"clean","asvs":{"reconciled":true}}\n'
+  printf '{"status":"clean","scan_reconciled":false}\n'
+  printf '{"status":"clean","scan_reconciled":true}\n'
 } > "$TMP/sec.jsonl"
 jq -c -f "$TMP/skill-sec.jq" "$TMP/sec.jsonl" > "$TMP/sec-skill.out" 2>/dev/null
 jq -c "$SEC_PREDICATE"       "$TMP/sec.jsonl" > "$TMP/sec-ref.out"   2>/dev/null

@@ -62,7 +62,8 @@ string and those files — never assume it can see the conversation.
               and ((.osv_max_cvss // 0) < 7 or (.osv_waiver // null) != null)
               and ((.input_surface.uncontrolled // []) | length == 0)
               and ((.data_surface.unprotected // []) | length == 0)
-              and (.asvs.reconciled != false)' security-status.json   AND
+              and (.asvs.reconciled != false)
+              and (.scan_reconciled != false)' security-status.json   AND
        jq -e '.status == "pass"
               and ( (.criteria_covered // {}) as $c
                     | if ($c.by_id // null) == null

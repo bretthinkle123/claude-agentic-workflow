@@ -206,6 +206,22 @@ if [ "$ASVS_RECONCILED" = "false" ]; then
   exit 2
 fi
 
+# Scan-count reconciliation floor (U-09). reconcile-scans.sh (a security Stop hook) recomputes
+# each per-tool finding count from the hash-named .pipeline/<tool>.json artifact and sets
+# `.scan_reconciled=false` when a recorded count doesn't match its artifact, an artifact is
+# missing/altered, a claimed scan has no execution stamp, or a code-shaped changed file wasn't
+# in semgrep's scanned paths. The M3 series recorded per-tool counts with no independent recount
+# (a checkov 58 that reproduces to 59; execution claims whose artifacts were a prior run's) — this
+# is the deterministic backstop, same shape as the ASVS floor. Same `== "false"` semantics: absent
+# field ⇒ not "false" ⇒ no block (pre-U-09 project / no scanner wrappers). Mirrored in the loop-exit
+# security predicate (SKILL + loop-exit-invariant.sh) so loop-exit == gate. Stamp FRESHNESS and
+# finding TRIAGE stay non-gating by design.
+SCAN_RECONCILED=$(jq -r '(.scan_reconciled)' "$SECURITY_STATUS" 2>/dev/null || echo null)
+if [ "$SCAN_RECONCILED" = "false" ]; then
+  echo "Blocked: $SECURITY_STATUS .scan_reconciled is false — a per-tool scan count does not match a recomputation of the hash-named artifact it was taken from (or a claimed scan is unstamped / a changed file went unscanned). See .pipeline/scan-reconciliation.json and re-scan." >&2
+  exit 2
+fi
+
 # ASVS Tier-1 SAST floor (ASVS-DET). asvs-sast.sh (a Stop hook on the security agent, agent-independent)
 # writes .pipeline/asvs-sast.json with a deterministic count of high-precision ASVS violations (JWT
 # alg:none 9.1.2, password fast-hash 11.4.2, non-CSPRNG 11.5.1, insecure cipher 11.3.1). This is the

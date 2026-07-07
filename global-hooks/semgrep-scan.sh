@@ -23,9 +23,17 @@ HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
 
 # EG side-track: opt into the default-deny egress network when the operator provisions it
 # (export PIPELINE_EGRESS_NETWORK=<name>; see global-hooks/egress-proxy/). Unset ⇒ default bridge.
+set +e
 MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
   ${PIPELINE_EGRESS_NETWORK:+--network "$PIPELINE_EGRESS_NETWORK"} \
   -v "${HOST_DIR}:/src" \
   -w /src \
   "$IMAGE" \
   semgrep "$@"
+_rc=$?
+# U-09: stamp the execution (tool, args, exit) into .pipeline/scan-log.jsonl so a report
+# can only claim "executed" for a tool with a THIS-pass stamp. Output goes to the agent's
+# stdout redirect (.pipeline/semgrep.json); reconcile-scans.sh hashes + recounts it. The
+# stamp writes a different file, so it never pollutes the tool's JSON on stdout.
+"$(dirname "${BASH_SOURCE[0]}")/stamp-scan.sh" semgrep "$_rc" "" "$@" >/dev/null 2>&1 || true
+exit "$_rc"

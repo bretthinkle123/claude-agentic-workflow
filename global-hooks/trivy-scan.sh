@@ -34,6 +34,7 @@ HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
 # EG side-track: when the operator has provisioned the default-deny egress network
 # (global-hooks/egress-proxy/), export PIPELINE_EGRESS_NETWORK=<name> and this container joins it
 # (its only route out is the allow-listing proxy). Unset ⇒ default bridge, unchanged behavior.
+set +e
 MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
   ${PIPELINE_EGRESS_NETWORK:+--network "$PIPELINE_EGRESS_NETWORK"} \
   --entrypoint trivy \
@@ -43,3 +44,8 @@ MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
   -w /src \
   "$IMAGE" \
   "$@"
+_rc=$?
+# U-09: stamp the execution into .pipeline/scan-log.jsonl (reconcile-scans.sh recounts
+# the .pipeline/trivy-config.json artifact and gates on the match).
+"$(dirname "${BASH_SOURCE[0]}")/stamp-scan.sh" trivy "$_rc" "" "$@" >/dev/null 2>&1 || true
+exit "$_rc"

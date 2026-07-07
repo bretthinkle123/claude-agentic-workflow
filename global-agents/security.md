@@ -32,6 +32,8 @@ hooks:
         - type: command
           command: "$HOME/.claude/hooks/stamp-ran-at.sh security"
         - type: command
+          command: "$HOME/.claude/hooks/reconcile-scans.sh"
+        - type: command
           command: "$HOME/.claude/hooks/log-run.sh security"
 ---
 
@@ -502,9 +504,29 @@ When invoked:
                "reqs_verified": 12, "l1_l2_missing": [], "l3_in_scope_missing": [],
                "doc_advisory": [], "waivers": [], "reconciled": true },
      "osv_findings": 0, "osv_max_cvss": 0, "osv_waiver": null,
+     "semgrep_findings": 0, "checkov_findings": 0, "trivy_findings": 0,
+     "scan_artifacts": { "semgrep": "<sha256 of .pipeline/semgrep.json>", "osv": "<sha256 of .pipeline/osv.json>",
+                         "trivy": "<sha256 of .pipeline/trivy-config.json>", "checkov": "<sha256 of .pipeline/checkov.json>" },
      "input_surface": { "declared": 0, "implemented": 0, "uncontrolled": [], "reconciled": true },
      "data_surface": { "classified": 0, "sensitive": 0, "unprotected": [], "reconciled": true } }
    ```
+   - **`scan_artifacts` + per-tool counts (REQUIRED when you ran a scanner this pass; U-09).**
+     Run each scanner through its WRAPPER (`semgrep-scan.sh`, `osv-scan.sh`, `checkov-scan.sh`,
+     `trivy-scan.sh`), writing raw output to the conventional `.pipeline/<tool>.json` path
+     (`semgrep.json`, `osv.json`, `checkov.json`, `trivy-config.json`) — the wrappers stamp
+     each execution into `.pipeline/scan-log.jsonl`. For every tool you counted this pass,
+     record its per-tool count (`semgrep_findings` = `.results|length`; `osv_findings` = unique
+     vulnerability ids; `trivy_findings` = misconfigurations; `checkov_findings` =
+     `[.[].summary.failed]|add` — checkov.json is a top-level ARRAY, so this is the counting
+     convention, which may differ from a subtotal you eyeballed) AND the sha256 of the artifact
+     you counted from in `scan_artifacts`. The `reconcile-scans.sh` Stop hook RE-HASHES each
+     named artifact and RE-COUNTS it; a recorded number that doesn't match the recomputation, a
+     missing/altered artifact, or a claimed scan with no execution stamp sets
+     `.scan_reconciled=false` and **blocks the deploy gate + loop-exit** (U-09 — the M3 series
+     recorded a checkov 58 that reproduces to 59, and claimed executions whose artifacts were a
+     prior run's). A tool you did NOT run this pass (legitimately carried forward — infra
+     byte-identical) is simply OMITTED from `scan_artifacts`; say "carried forward" in the report
+     rather than claiming execution. Gitleaks is exempt (its in-scope filtering is triage).
    - `input_surface` (REQUIRED when the change exposes any input source — an HTTP route that
      accepts a body/query/path param, a form, a queue/message consumer, a file/CSV ingest, or
      a webhook receiver): reconcile the **implemented** input surface against the **declared**
