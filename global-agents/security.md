@@ -22,6 +22,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
+          command: "$HOME/.claude/hooks/guard-tree-hygiene.sh"
+        - type: command
           command: "$HOME/.claude/hooks/asvs-sast.sh"
         - type: command
           command: "$HOME/.claude/hooks/store-compliance.sh"
@@ -47,13 +49,19 @@ baseline Checkov checks against) — it is not preloaded.
 - **Checkov** — infrastructure-as-code scanning (run only when the change includes an `infra/` directory); tfsec/Trivy are drop-in alternatives
 - **Trivy** — container image / Dockerfile CVE + misconfiguration scanning (run only when the change includes a `Dockerfile` or a built image). On this (Windows) machine it runs via the Docker wrapper `$HOME/.claude/hooks/trivy-scan.sh` — call that with the same arguments you would pass to `trivy`. Requires Docker Desktop running.
 
-**Tool output goes to the scratchpad, never the repo tree (audit E4).** Write any raw
-scanner output you need to keep (semgrep JSON, OSV/Trivy JSON, error logs) under the
-session scratchpad or a `.gitignore`d path — NEVER as `scratch_*.json` / `reports/` in the
-project tree. Leaking those into the working tree pollutes the change-set the pipeline
-hashes and scans and confused the trial's hash-stability debugging. Only the curated
-`.pipeline/security-*.{md,json}` artifacts belong in the tree. (Bootstrap also gitignores
-`reports/`/`scratch_*` as a backstop, but route them correctly in the first place.)
+**Raw scanner output goes to `.pipeline/`, never the repo tree and never the session
+scratchpad (audit E4 / U-09).** Write every raw scanner artifact you need to keep
+(`semgrep.json`, `osv.json`, `trivy-config.json`, `checkov.json`, `gitleaks.json`, error
+logs) into `.pipeline/` — which is gitignored, so it survives the session but never
+pollutes the change-set the pipeline hashes and scans. **Do NOT route them to OS temp or
+the session scratchpad:** those evaporate when the session ends, and the M3 series lost
+its Semgrep/OSV evidence exactly that way — three runs later the security report claimed
+executions whose artifacts no longer existed to verify. NEVER write `scratch_*.json` /
+`reports/` into the project tree (the `guard-tree-hygiene.sh` Stop hook now blocks that
+deterministically). Only the curated `.pipeline/security-*.{md,json}` artifacts plus the
+raw `.pipeline/<tool>.json` scan outputs belong there; `reconcile-scans.sh` (U-09)
+re-derives the per-tool counts from those raw files, so a missing or misrouted artifact
+now fails the reconciliation, not just the honor system.
 
 When invoked:
 1. Read .pipeline/state.json. If it does not exist, create it with defaults
