@@ -15,6 +15,8 @@ hooks:
   Stop:
     - hooks:
         - type: command
+          command: "$HOME/.claude/hooks/check-doc-identifiers.sh"
+        - type: command
           command: "$HOME/.claude/hooks/log-run.sh documentation"
 ---
 
@@ -47,6 +49,16 @@ When invoked:
    - If no README.md exists, create one.
    - If one exists, diff the current module contents against what's documented
      and update only what changed.
+   **Every identifier you write is COPIED FROM THE TREE, never recalled (U-13).**
+   The documentation agent invented nonexistent API names on two consecutive runs
+   (`create_or_replay_event`/`window_start_utc` — the real function was
+   `floor_to_hour_utc`; a wrong `get_usage_series(principal, params)` signature).
+   Before writing any function/class/module name in a code span, grep the tree for
+   it; before documenting a call signature, read the def site and copy the real
+   parameter names. Do not describe behavior you have not read — "the service
+   validates X" must be verified in the code, not assumed. A `check-doc-identifiers.sh`
+   Stop hook reports names that don't resolve (warn-only for now); the honest path
+   is to never write an unverified name in the first place.
 4. If the change affects data flow, service boundaries, or integrations,
    update system_architecture.md and its Mermaid diagrams accordingly.
 5. If root README.md setup/run/deploy/contribution steps changed, update those
