@@ -36,6 +36,7 @@
       "Bash(sha256sum:*)",
       "Bash(date:*)",
       "Bash(semgrep:*)",
+      "Bash(ast-grep:*)",
       "Bash(repomix:*)",
       "Bash(docker info:*)",
       "Bash(docker run:*)",
