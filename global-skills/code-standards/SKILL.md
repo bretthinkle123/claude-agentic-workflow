@@ -32,6 +32,27 @@ Apply to every file you touch. Default backend is **Python**, default frontend
 | **Interface Segregation** | Implementers stub methods they don't need | Split the fat interface into focused ones |
 | **Dependency Inversion** | A module hard-news/imports a concrete dependency | Depend on an abstraction; inject the dependency |
 
+## Simplicity — the counterweight to SOLID (YAGNI)
+
+SOLID above says how to structure the abstraction you need; this says when NOT to add
+abstraction. The cheapest code is the code you don't write — require a *present* reason
+for every abstraction, dependency, and flag, never a hypothetical future one.
+
+- **No speculative abstraction.** Add an interface/strategy/base class only when a
+  second concrete case exists *now*. Open/Closed extends *when the variant arrives* — it
+  is not a license to pre-build every seam.
+- **Don't reinvent the standard library.** Reach for the language/stdlib built-in before
+  hand-rolling (dates, collections, path/URL parsing — and always vetted crypto, never
+  bespoke; see the security invariants).
+- **Earn every dependency.** A new package must outweigh its supply-chain + maintenance
+  cost; a few lines of stdlib usually beats a dependency for a small need.
+- **No dead flexibility.** Delete config flags, params, and code paths nothing exercises
+  — unused generality is untested liability, not a feature.
+- **Delete before you add.** When a change makes existing code redundant, remove it in
+  the same change.
+
+*(Anti-over-engineering heuristics adapted from DietrichGebert/ponytail, MIT — VENDORED.md.)*
+
 ## Facade and centralized modules
 
 Route cross-cutting concerns — **auth checks, logging, error handling, config
