@@ -240,3 +240,34 @@ installed globally via `npm install -g repomix` → 1.16.0. Node v24.13.0 presen
 
 **Kickoff prompt (verbatim, U-12):** "Run the pipeline from planning for the feature in
 PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack → planning.
+
+## M4 Entry 4 — 2026-07-08T17:50Z — planning phase complete; STOPPED at the human plan checkpoint
+
+- **Repomix pre-step (TA/B-1):** `repomix --output .pipeline/repomix-pack.xml` — 141 files,
+  149,426 tokens, Secretlint clean. Planning was told the pack path in its prompt; whether it
+  actually READ the pack is not evidenced in its final report — check at audit (measurement
+  surface 5).
+- **planning (opus, 1 attempt, no cap, 945 s, ~153k subagent tokens):** wrote `plan.md`,
+  `acceptance.md` (22 criteria, AC22 delegated to security; AC20 = p95 < 50 ms perf budget on
+  POST /v1/events with quotas active) — **and `tasks.md`**, claiming BOTH large-feature
+  triggers met. The M4 run plan expected the thin slice NOT to trigger decomposition —
+  **candidate threshold-calibration finding (F-M4-cand-2)**; grade at audit whether 22 ACs /
+  the file count genuinely crossed the ≥15-criteria/≥25-files thresholds or the thresholds are
+  mis-set for this size.
+- Key plan calls: strict quota enforcement via `SELECT … FOR UPDATE` on the quota row inside
+  the existing per-request transaction (CTE/SERIALIZABLE/advisory-lock alternatives dismissed);
+  admin = ingest-superset single key per tenant (Open Q3, wants human sign-off); RLS
+  enabling-condition flag (Open Q2); PUT /v1/quotas p95 < 100 ms as documented target, not
+  load-tested AC (Open Q1 — the elicitation's one Open item, defaulted as the skill
+  prescribes).
+- **plan-audit (sonnet, 1 attempt, 167 s):** 2 flags, **0 material**,
+  `revision_recommended: false` (verified from disk frontmatter, sha256 match) → no revision
+  pass. Advisories: no dedicated deadlock test behind the lock-ordering claim; Open Q3 deserves
+  explicit human sign-off.
+- Telemetry: both stage lines in `run-log.jsonl` with `feature=metric-quotas` — the hooks fired
+  correctly post-relocation.
+- Artifacts snapshotted to `run-evidence/m4/` (plan.md, acceptance.md, tasks.md, plan-audit.md).
+- **STOPPED per stage 1c: human plan checkpoint.** Operator to review `plan.md` + `plan-audit.md`
+  and create `plan-approved` — including the run plan's deliberate micro-test (attempt the bare
+  `touch .pipeline/plan-approved` from their own terminal once and record what happens —
+  settles the M3 U-04/P2-1 "what actually denied the touch" unknown).
