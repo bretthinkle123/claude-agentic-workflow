@@ -199,3 +199,44 @@ Notable for the scorecard grading later (interview quality, first live run):
 
 Operator interventions: interview answers only (the skill is operator-invoked and human-facing —
 these are not improvised interventions; the two-checkpoint budget is untouched).
+
+## M4 Entry 3 — 2026-07-08T17:30Z — working-copy relocation (operator setup, pre-kickoff; finding F-M4-cand-1)
+
+**Why.** The bare kickoff (U-12) was issued in the operator's existing session, whose working
+directory is the ORIGINAL `meterly-pipeline-test` clone — not the `-m4` clone Entry 1 set up.
+The engine's gates/telemetry are cwd-bound (agent-frontmatter hooks run `~/.claude/hooks/*.sh`
+against the session cwd; subagent shells start there), so running from that session against the
+`-m4` path would have measured the wrong tree. **Candidate finding (log as F-M4-… at audit):
+the kickoff has an unchecked environmental precondition — nothing verifies session cwd == the
+intended run repo; the orchestrator caught it manually.** Operator chose (explicit option
+selection): convert the original clone in place; the pipeline had NOT started, so this is
+operator setup, not a criterion-2 intervention.
+
+**Run-3 preservation first (all three durable):**
+1. Full `.pipeline/` archaeology (46 artifacts incl. all three retrospectives, `run-log.jsonl`,
+   `run-summary.json`, scan outputs, `plan.md`/`acceptance.md`, stale markers) → committed at
+   `examples/meterly/run-evidence/m3-final-pipeline/` (engine `d2294a1` + `600ba4a`).
+2. Uncommitted Phase-D working tree (46 files: dashboard feature, design bundle, run-3 CLAUDE.md/
+   PROJECT.md edits, docs/decisions/feature/usage-dashboard/) → committed on
+   `archive/run3-final` (`034f38d`), pushed to origin.
+3. Phase-C events-listing work remains `stash@{0}` (untouched).
+
+**Conversion.** Junk mangled-path dir (`C<U+F01A>/…/scratchpad/semgrep.json`, an accidental
+literal-path write from run 3) deleted, not archived (its content is a duplicate scan artifact).
+`feature/metric-quotas` created at `faabe9d`; leftover empty dirs (`design/`, `src/web/`,
+`tests/e2e/` pycache) removed — an empty `design/` would have wrongly triggered the design-spec
+stage. `.pipeline/` purged (incl. run-3's stale `plan-approved`/`design-approved` — U-15/D3
+deletion) and re-seeded with the M4 files from the `-m4` clone (state.json with
+`feature=metric-quotas`, smoke.env, dast.env, dast-budget.json, requirements.md). Entry-1 deltas
+copied over (settings.json, pipeline-ci.yml, PROJECT.md, 2× scripts/ci, ast-grep-rules skill).
+Tree verified: `diff -r` vs the `-m4` clone is identical modulo line-endings (git-normalized,
+status clean) and this clone's extras — the run-3 `.venv` (kept: smoke commands are
+venv-explicit; the `-m4` clone had none) and run-3's `.claude/settings.local.json` (kept:
+operator permission grants). `.coverage`/`.hypothesis` junk deleted. The `-m4` clone is now
+redundant; left in place untouched.
+
+**Tooling gap closed (operator setup):** `repomix` was not on PATH (TA/B-1 pre-step needs it) —
+installed globally via `npm install -g repomix` → 1.16.0. Node v24.13.0 present.
+
+**Kickoff prompt (verbatim, U-12):** "Run the pipeline from planning for the feature in
+PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack → planning.
