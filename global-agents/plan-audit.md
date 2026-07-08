@@ -58,6 +58,14 @@ When invoked:
      An untraced criterion is a flag. Once `.pipeline/acceptance.md` is emitted by
      planning, confirm it exists and lists each criterion with the file/layer it
      lives in and how it is verified; a criterion missing from it is a flag.
+   - **Task decomposition coverage (TA/A-3, only when `.pipeline/tasks.md` exists** —
+     planning emits it for large features, ≥25 files or ≥15 criteria). Verify the
+     decomposition is complete and traceable: the union of every task's *ACs advanced*
+     covers **every** `AC` id in `acceptance.md` (a criterion no task builds is a
+     **material** flag — it would ship unbuilt), every task traces back to a real
+     `plan.md` section (an orphan task with no plan basis is a flag), and `depends_on`
+     references only task IDs that exist (a dangling dependency is a flag). Absent
+     `tasks.md`, skip this check — small features need no decomposition.
    - **STRIDE mechanisms named** — every credible STRIDE threat carries a
      **concrete mechanism** (the specific library call / config key / validation
      class + the file it lives in), not abstract advice. A threat with only a

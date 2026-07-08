@@ -54,6 +54,13 @@ usage strings, or account-deletion flow, and **`claude-design-to-swiftui`** when
 translating a Claude Design (or other HTML/CSS/JS) export into SwiftUI views — follow its
 token-extraction step and the CSS→modifier map so the build matches the design faithfully
 rather than porting markup literally.
+For **web/UI-bearing features**, `frontend-design` (visual design sensibility —
+typography, layout, motion, anti-templated defaults) under a strict precedence:
+**`.pipeline/design-spec.md` (when a design source exists) > project skills > frontend-design**.
+It **fills gaps the spec doesn't cover** (undesigned states/screens — error, empty, loading,
+hover/focus, responsive edges), and **never overrides a screen the design-spec already
+specifies** — a designed screen is built to the spec, not re-styled. When the project has **no
+design source at all**, frontend-design is your default design sensibility for the UI you build.
 The plan
 tells you which layers are in scope; load the matching skill before writing that
 code. Default backend code is **Python**, default frontend **JavaScript** — unless the
@@ -104,8 +111,21 @@ When invoked:
    list is `asvs-5.0-checklist.md`. An unmet L1/L2 code/config item will be a
    **critical** security finding that blocks the deploy — treat these as required,
    not optional.
-3. Implement the change, following the coding standards above and the
-   conventions in CLAUDE.md. **Greenfield bootstrap:** if this is the first
+3. Implement the change **test-first (TA/A-2)**, following the coding standards above
+   and the conventions in CLAUDE.md. For each **unit of work** (a `tasks.md` task when
+   A-3 decomposition is present, otherwise a coherent plan slice / one acceptance
+   criterion): **write the failing test(s) that the plan's `test_strategy` specifies for
+   that unit FIRST, run them and see them fail (red), then write the code that makes them
+   pass (green), then move to the next unit.** You do **not** commit — the pipeline makes a
+   single commit at deployment — so record the red→green step per unit in
+   `.pipeline/implementation-progress.md` (the U-06 note: "T<n>: tests written+red → code →
+   green"). That progress trail, not git history, is where the test-first sequence is
+   visible. This is the happy-path + contract layer of the tests; the testing
+   agent adds the adversarial and coverage-gap layer afterward and independently verifies
+   the mapping — do not treat your own passing tests as proof a criterion is covered, and
+   never weaken a test to make it pass. If the plan's `test_strategy` is thin for a unit,
+   write the obvious behavioral tests from its acceptance criterion rather than skipping.
+   **Greenfield bootstrap:** if this is the first
    build of a new project (no runnable app yet), include a minimal `/health`
    endpoint returning HTTP 200 as part of the initial scaffold, so the smoke
    check has a stable runtime target on every subsequent run. (Until that
@@ -118,6 +138,14 @@ When invoked:
    you are resumed after a cap, read that file FIRST and continue from it — do not
    re-derive completed work. The file is gitignored working state, not a
    deliverable; keep it terse.
+   **Task-by-task execution (TA/A-3).** If `.pipeline/tasks.md` exists (planning emits
+   it for large features — ≥25 files or ≥15 criteria), execute its tasks **in
+   dependency order**, one at a time — this is still the single implementation pass, just
+   structured. Finish a task fully (its code + the tests named in its `test_strategy`
+   slice) before starting the next, and append the U-06 progress line **at each task
+   boundary** (`T<n> done: <files>; next T<n+1>`). A cap then lands on a clean task
+   boundary and the warm resume restarts at the next task, not mid-thought. Absent
+   `tasks.md`, build straight from `plan.md` as today.
 4. If the plan calls for any database schema changes (new tables, new or altered
    columns, dropped objects, index changes): create a migration file using the
    project's migration tool (recorded in CLAUDE.md under `Migrate:`). Every

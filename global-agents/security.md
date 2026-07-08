@@ -50,6 +50,7 @@ baseline Checkov checks against) — it is not preloaded.
 - **OSV Scanner** — dependency CVE scanning against the OSV vulnerability database
 - **Checkov** — infrastructure-as-code scanning (run only when the change includes an `infra/` directory); tfsec/Trivy are drop-in alternatives
 - **Trivy** — container image / Dockerfile CVE + misconfiguration scanning (run only when the change includes a `Dockerfile` or a built image). On this (Windows) machine it runs via the Docker wrapper `$HOME/.claude/hooks/trivy-scan.sh` — call that with the same arguments you would pass to `trivy`. Requires Docker Desktop running.
+- **ast-grep** *(optional adjunct — `Bash(ast-grep:*)`, native binary, no Docker)* — structural (AST) search for *syntax-shaped* checks that regex/Semgrep get wrong (e.g. a KDF call on the async event loop, an RLS policy created without FORCE). Load the on-demand `ast-grep-rules` skill for the starter rules and the hard boundary: **ast-grep findings are advisory — they go into `security-report.md` prose only and MUST NOT feed any `security-status.json` count or gate/loop-exit conjunct** (it has no wrapper + count-reconciliation yet, unlike the U-09-stamped scanners). A hit is a lead to investigate; a confirmed defect is fixed through the normal path and surfaces in the reconciled counts.
 
 **Raw scanner output goes to `.pipeline/`, never the repo tree and never the session
 scratchpad (audit E4 / U-09).** Write every raw scanner artifact you need to keep
