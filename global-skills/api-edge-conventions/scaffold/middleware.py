@@ -35,6 +35,10 @@ from starlette.responses import JSONResponse, Response
 HEALTH_PATHS = {"/health", "/health/ready", "/health/live"}
 
 
+TRUST_PROXY = False  # set from config; true ONLY when a proxy/LB is declared and the
+#                      plan states the trust mechanism. Defined before use below.
+
+
 def client_ip(request: Request) -> str:
     """Derive the real client IP. ENABLING CONDITION (U-02): behind an ALB/nginx,
     `request.client.host` is the PROXY node's IP — every client then shares one
@@ -48,9 +52,6 @@ def client_ip(request: Request) -> str:
         if xff:
             return xff.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
-
-
-TRUST_PROXY = False  # set from config; the plan MUST state the proxy trust mechanism
 
 
 # --- 2. Security headers (set on EVERY response, including errors) ---------------
@@ -81,8 +82,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # limit is approached and on every 429 (attack signal).
 
 async def _rate_limit(redis, key: str, limit: int, window_s: int) -> tuple[bool, int]:
-    """Sliding-window counter in Redis. Returns (allowed, retry_after_seconds).
-    Replace with a token-bucket Lua script for smoother shaping if preferred."""
+    """FIXED-window counter in Redis. Returns (allowed, retry_after_seconds). Simple and
+    atomic, but it allows a burst across a window boundary (up to 2x the limit in a short
+    span). For production prefer a true SLIDING window or a token-bucket Lua script — the
+    skill names both; this is the minimal correct starting point, not the smoothest."""
     now = time.time()
     bucket = f"rl:{key}:{int(now // window_s)}"
     count = await redis.incr(bucket)
@@ -171,7 +174,10 @@ def error_response(code: str, message: str, request: Request, status: int | None
                    headers: dict | None = None) -> JSONResponse:
     """One response shape for every error. `message` is safe-to-expose (no internals);
     NEVER leak a stack trace, exception type, SQL, or file path. Echo the requestId so
-    a user report ties to a server log line (logging-conventions sets it)."""
+    a user report ties to a server log line.
+    CONTRACT: the request-id middleware (logging-conventions' `request_logger`) MUST set
+    `request.state.request_id` — its scaffold does (in addition to the structlog contextvar).
+    If you swap in a different logger, expose the id on `request.state` or the echo is null."""
     body = {"error": {"code": code, "message": message,
                       "requestId": getattr(request.state, "request_id", None)}}
     return JSONResponse(body, status_code=status or _STATUS_BY_CODE.get(code, 500),
