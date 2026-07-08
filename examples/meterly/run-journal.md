@@ -113,3 +113,63 @@ the browser-side API-key exposure problem.
   merged engine is what drives M4.
 - Evidence directory created: `examples/meterly/run-evidence/m4/` (rule 0 — evidence lives in
   the engine repo, committed as we go).
+
+## M4 Entry 1 — 2026-07-08T17:06:27Z — brownfield working copy set up (operator setup, not pipeline friction)
+
+**Fresh clone.** `bretthinkle123/meterly-pipeline-test` cloned (full history, non-shallow) into
+`c:\Users\brett\OneDrive\Documents\GitHub\meterly-pipeline-test-m4`.
+
+**HEAD verification vs run 3's recorded final state.** GitHub `origin/main` = `0d914ee` (the empty
+base — run 3's feature work was never merged; PR #1's branch is the only pushed history). The
+only pushed app state is `origin/feature/usage-metering-ingest` @
+`faabe9d6e59533dd144ce7895881dbe54fd7ddd2` — **exactly the SHA this journal records as run 3's
+base** ("feature/usage-dashboard @ faabe9d", Phase D entry). MATCH. Note the *uncommitted* parts
+of run 3's final state (Phase C events-listing in `stash@{0}`, Phase D dashboard tree) were never
+pushed and are NOT part of the M4 brownfield base — M4 builds on the committed corpus at
+`faabe9d` (feature 1: POST /v1/events + GET /v1/usage), which is what the quotas slice needs.
+
+**Bootstrap re-run** (`bootstrap-project.sh` with run 3's smoke values, venv-explicit/quote-free).
+Wrote only missing files: `.claude/skills/ast-grep-rules/` (NEW skill from the TA overhaul),
+`.pipeline/state.json`, `.pipeline/smoke.env` (same three values as run 3), per-project memory
+for the new path. Skipped everything tracked at `faabe9d` — including the planning-filled
+`test-conventions` / `semgrep-ruleset-guide` skills (untouched, per the never-overwrite rule).
+
+**Template deltas merged by hand** (project files were bootstrap-pinned at the run-1-era engine):
+
+- `.claude/settings.json` → rebuilt to the current `project-settings.json` contract, preserving
+  the project-only allows (`Bash(curl:*)`, `Bash(osv-scanner:*)`, `Bash(checkov:*)`). Net new:
+  `defaultMode: auto`; scoped `Read(./**)`/`Read(~/.claude/**)`/`Write(./**)`/`Edit(./**)`
+  replacing the old broad `Read`/`Write`/`Edit`; `WebFetch`/`WebSearch`/`Skill`/`TodoWrite`;
+  MCP allows (`context7`, `aws-knowledge`, `terraform`, `figma`, `sentry`);
+  `Bash(git branch/git push/gh pr)`; TA tools (`ast-grep`, `repomix`, `markitdown`);
+  `Bash(npm ci/npm install/pip install)`; the `ask` block (force-push + settings self-edit);
+  deny additions (`~/.ssh`, `~/.aws`, `~/.claude/.credentials.json`);
+  `enableAllProjectMcpServers`; the full `autoMode` environment/soft_deny/hard_deny block
+  (input-control enforcement — marker forgery + egress + credential reads).
+- `.github/workflows/pipeline-ci.yml` → added the new advisory `mutation` job (U-22): `if: false`,
+  `<MUTATION_CMD>`/`<MUTATION_SCOPE>` placeholders left as shipped, install step filled with the
+  project's poetry pin so enabling it later is one edit. No other drift (header comment aside,
+  every other job matched the current template with placeholders filled).
+- `scripts/ci/` (bootstrap-pinned hook copies) → `guard-source-markers.sh` and `dast-review.sh`
+  had drifted from the current engine hooks; re-copied from `~/.claude/hooks/`.
+  `asvs-sast.sh`, `lockfile-check.sh`, `store-compliance.sh` already matched.
+- `.pipeline/smoke.env` → freshly generated; identical values to run 3
+  (start `.venv/Scripts/python.exe -m uvicorn src.main:app --port 8000`, health
+  `http://localhost:8000/health`, build `.venv/Scripts/python.exe -m scripts.smoke_import_check`).
+- New template files: `.pipeline/dast.env` + `.pipeline/dast-budget.json` carried forward
+  (DAST L1 opt-in — the app serves an HTTP surface; seed set to `http://localhost:8000/docs`
+  per the template's U-14 live-route rule, `enable_docs` defaults true). `renovate.json` already
+  tracked and identical. `design-budget.json`/`ui.env` NOT copied (Design source: none).
+  `.mcp.json` not created (run 3 had none).
+- Other workflow templates (`build-provenance`/`dast-staging`/`deploy`/`dr-drill`/`load-campaign`/
+  `scheduled-rescan`): all byte-identical to current templates — no merge needed.
+
+**PROJECT.md** overwritten with the M4 quotas brief verbatim (deliberately thin, per run
+discipline — window semantics, race behavior, admin-key provisioning, 429-vs-throttle precedence
+all left unstated for requirements-elicitation to surface). `Design source: none`.
+
+**Branch (0pre BRANCH FIRST, U-16b).** `feature/metric-quotas` created at `faabe9d`;
+`.pipeline/state.json .feature = "metric-quotas"`. All merged deltas ride uncommitted in the
+run's change-set (M `.claude/settings.json`, M `pipeline-ci.yml`, M `PROJECT.md`,
+M `scripts/ci/{guard-source-markers,dast-review}.sh`, ?? `.claude/skills/ast-grep-rules/`) —
+the deployment agent makes the first commit. Pipeline NOT started.
