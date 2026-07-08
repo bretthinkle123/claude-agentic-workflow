@@ -288,3 +288,26 @@ PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack �
   checks noted; next-step pointer (T3 file list) present. Warm resume issued to the SAME agent
   (context intact) pointing at the progress file + tasks.md/plan.md by path, "continue from
   T3, do not restart" — running in background.
+
+## M4 Entry 6 — 2026-07-08T20:08Z — implementation attempt 2 capped at T6; T5 caught a REAL concurrency bug
+
+- **Attempt 2 (warm resume, sonnet): T3, T4, T5 completed** (quota schemas/repo/service/route +
+  error envelope + enforcement on the winning-insert branch + concurrency tests), then **capped
+  again mid-T6** (k6 perf scenario — stopped while investigating a failing run log). Breadcrumb
+  left: run-log line `status:"capped", attempt:2, files_changed:30`. Full suite green at T5:
+  121 passed.
+- **Standout for the scorecard (U-03/A-2 axis): the T5 test-first concurrency pass caught a
+  genuine correctness bug in T4's locked-read query and fixed it pre-loop.** The single-statement
+  `SELECT … LEFT JOIN usage_rollup … FOR UPDATE OF q` gave lock-waiters a FRESH re-read
+  (EvalPlanQual) of only the LOCKED quotas row — the joined, non-locked `usage_rollup` row was
+  still read from the pre-wait snapshot, so 20 concurrent posts against a cap of 10 all read the
+  same stale total and ALL got admitted (20/20 201s). Invisible to every sequential test. Fix:
+  two round-trips in the same transaction — lock the quotas row alone, THEN a separate
+  `SELECT total_quantity FROM usage_rollup` under the held lock (fresh READ COMMITTED snapshot).
+  Re-verified empirically (serialized waiters see 0,1,2,…, capped at L) and 3× repeated
+  concurrency-test runs green. Progress file documents the subtlety in the repo docstring.
+  **This is exactly the R2-1/R3-1 escape class (data-path read feeding state-changing logic at
+  a window boundary) — caught in-stage this run, before security/testing/code-review.** Note
+  for the U-03 keep/drop/subsume decision: the test-first charter (A-2) surfaced it, not the
+  U-03 review step (which hasn't run yet).
+- Warm resume 2 issued: T6 only (k6 quota scenario, DAST context, docs). Running in background.
