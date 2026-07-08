@@ -271,3 +271,20 @@ PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack �
   and create `plan-approved` — including the run plan's deliberate micro-test (attempt the bare
   `touch .pipeline/plan-approved` from their own terminal once and record what happens —
   settles the M3 U-04/P2-1 "what actually denied the touch" unknown).
+
+## M4 Entry 5 — 2026-07-08T18:20Z — plan approved (micro-test PASSED); implementation attempt 1 capped, warm-resumed
+
+- **Plan checkpoint passed.** Operator said "go"; `.pipeline/plan-approved` present on disk
+  (0-byte file, mtime 13:52 local). **Micro-test result (U-04/P2-1 residual): the bare human
+  `touch .pipeline/plan-approved` from the operator's own terminal SUCCEEDED** — the marker
+  guard blocks subagent creation, not the human's TTY. Settled.
+- **implementation attempt 1 (sonnet): CAPPED** at maxTurns 60 (93 tool uses, ~170k subagent
+  tokens, 860 s; stopped mid-T3 sentence). Cap-out breadcrumb left per audit T1:
+  `log-run.sh implementation "" capped` → run-log line `status:"capped", attempt:1,
+  files_changed:22`.
+- **A-2/C-2 machinery working as designed:** `.pipeline/implementation-progress.md` existed at
+  cap time — T1 (migration 0003: quotas table + api_keys.scope) and T2 (scope plumbing +
+  seed --admin) recorded done, test-first red→green per task, with existing-suite regression
+  checks noted; next-step pointer (T3 file list) present. Warm resume issued to the SAME agent
+  (context intact) pointing at the progress file + tasks.md/plan.md by path, "continue from
+  T3, do not restart" — running in background.
