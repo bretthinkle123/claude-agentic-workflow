@@ -20,8 +20,12 @@ def _hash_user(uid: str) -> str:
 async def request_logger(request, call_next):
     """Bind requestId + traceId, then log request start and completion
     (duration, status, hashed userId)."""
+    request_id = str(uuid.uuid4())
+    # Bind for logs AND expose on request.state so downstream middleware/handlers can echo
+    # it (the api-edge error-envelope reads request.state.request_id).
+    request.state.request_id = request_id
     structlog.contextvars.bind_contextvars(
-        request_id=str(uuid.uuid4()), trace_id=_trace_id(request)
+        request_id=request_id, trace_id=_trace_id(request)
     )
     log, start = get_logger(), time.monotonic()
     op = f"{request.method} {request.url.path}"

@@ -49,5 +49,7 @@ new source.
 | grill-me (concept) | github mattpocock/skills | `8515a08` | MIT | `global-skills/requirements-elicitation/` | concept only ("relentless interview to sharpen a plan"), written house-style — NOT vendored-verbatim. Upstream grill-me SKILL.md is a 1-line trigger to a `/grilling` skill; nothing copied, no scripts touched. | 2026-07-07 | IMPORTED |
 | handoff (pattern) | github mattpocock/skills | `8515a08` | MIT | `global-skills/pipeline-orchestration/` prose (U-06 warm-resume) | idea cherry-pick only, no artifact copied: "reference `.pipeline/*` artifacts by path, don't re-summarize; name the unit + skills the resumed agent needs". Upstream SKILL.md read (10 lines, no scripts). | 2026-07-07 | IMPORTED |
 
+| ponytail (concept) | github DietrichGebert/ponytail | `main` (concept) | MIT | `global-skills/code-standards/` (YAGNI section) | anti-over-engineering heuristics (no speculative abstraction / don't reinvent stdlib / earn dependencies / no dead flexibility / delete before add) — concept adapted house-style, no text copied; balances the existing SOLID table | 2026-07-07 | IMPORTED (SK-2) |
+
 *(SK first-pass imports append rows here as they land — see the SK build-ready addendum in
 `pipeline-june-analysis.md`.)*

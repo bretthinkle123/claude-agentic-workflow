@@ -11,7 +11,8 @@ a public API, a webhook receiver, or an outbound call to a third-party service.
 This skill covers the request-lifecycle mitigations that STRIDE names as threats
 (DoS, Tampering) but nothing else patterns for the build. Default backend is
 **Python (FastAPI)**; Express/Node equivalents are noted inline. Buildable default
-code, when scaffolded, lives in `scaffold/` (`middleware.py`).
+code is in `scaffold/` (`middleware.py` — the two-tier throttle, security headers,
+CORS, error-envelope, and idempotency, ready to adapt).
 
 **Scope boundary — this skill does NOT own:**
 - **Authentication / authorization middleware** → `auth-patterns` (`require_auth` /
