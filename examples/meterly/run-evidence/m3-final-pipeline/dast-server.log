@@ -1,0 +1,25 @@
+C:\Users\brett\OneDrive\Documents\GitHub\meterly-pipeline-test\src\main.py:21: StarletteDeprecationWarning: 'HTTP_413_REQUEST_ENTITY_TOO_LARGE' is deprecated. Use 'HTTP_413_CONTENT_TOO_LARGE' instead.
+  from src.api.errors import register_error_handlers
+C:\Users\brett\OneDrive\Documents\GitHub\meterly-pipeline-test\src\main.py:21: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  from src.api.errors import register_error_handlers
+INFO:     Started server process [43084]
+INFO:     Waiting for application startup.
+{"service": "meterly", "environment": "local", "release": "local-dev", "event": "app.startup", "level": "info", "timestamp": "2026-07-07T04:37:53.500476Z"}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+{"service": "meterly", "operation": "GET /health", "statusCode": 200, "duration": 0.0, "method": "GET", "endpoint": "/health", "event": "request.completed", "traceId": "d7ec832c9981b4888cabdd2d78b065fe", "requestId": "0b72346a-8095-4c1d-a3ca-1ce04008951b", "level": "info", "timestamp": "2026-07-07T04:37:53.576383Z"}
+INFO:     127.0.0.1:51599 - "GET /health HTTP/1.1" 200 OK
+{"service": "meterly", "operation": "GET /health", "statusCode": 200, "duration": 0.0, "method": "GET", "endpoint": "/health", "event": "request.completed", "traceId": "f669b1400b59b767b58ed9c7e9692dc3", "requestId": "3586218f-fcf6-4011-90bf-f53379fc478f", "level": "info", "timestamp": "2026-07-07T04:37:53.852582Z"}
+INFO:     127.0.0.1:51602 - "GET /health HTTP/1.1" 200 OK
+{"service": "meterly", "endpoint": "/", "tier": "tier1", "event": "ratelimit.backend_unavailable", "traceId": "6a1eafe97f348e4571c93f4b26da936b", "requestId": "b431dc09-1453-4095-8b02-369e4efac0ea", "level": "warning", "timestamp": "2026-07-07T04:41:53.758230Z"}
+{"service": "meterly", "operation": "GET /", "statusCode": 404, "duration": 4078.0, "method": "GET", "endpoint": "/", "event": "request.completed", "traceId": "6a1eafe97f348e4571c93f4b26da936b", "requestId": "b431dc09-1453-4095-8b02-369e4efac0ea", "level": "info", "timestamp": "2026-07-07T04:41:53.758230Z"}
+INFO:     127.0.0.1:59314 - "GET / HTTP/1.1" 404 Not Found
+{"service": "meterly", "endpoint": "/robots.txt", "tier": "tier1", "event": "ratelimit.backend_unavailable", "traceId": "8a69f380b58a682ba95fa87ad4633474", "requestId": "b10d09cd-5f8a-475e-946c-6a3d300f15af", "level": "warning", "timestamp": "2026-07-07T04:41:57.868683Z"}
+{"service": "meterly", "operation": "GET /robots.txt", "statusCode": 404, "duration": 4078.0, "method": "GET", "endpoint": "/robots.txt", "event": "request.completed", "traceId": "8a69f380b58a682ba95fa87ad4633474", "requestId": "b10d09cd-5f8a-475e-946c-6a3d300f15af", "level": "info", "timestamp": "2026-07-07T04:41:57.869682Z"}
+INFO:     127.0.0.1:59314 - "GET /robots.txt HTTP/1.1" 404 Not Found
+{"service": "meterly", "endpoint": "/sitemap.xml", "tier": "tier1", "event": "ratelimit.backend_unavailable", "traceId": "fa2c1d13227cd1e7b42644e1764dddb0", "requestId": "db463620-84ad-446e-a8c5-a23ee962bfa4", "level": "warning", "timestamp": "2026-07-07T04:41:57.884306Z"}
+{"service": "meterly", "endpoint": "/", "tier": "tier1", "event": "ratelimit.backend_unavailable", "traceId": "b6a81bfbe2dad78f2ea64f62cbd0bfb5", "requestId": "cd6f839b-df31-4b28-95ae-0c65f2ad709a", "level": "warning", "timestamp": "2026-07-07T04:41:57.884306Z"}
+{"service": "meterly", "operation": "GET /sitemap.xml", "statusCode": 404, "duration": 4094.0, "method": "GET", "endpoint": "/sitemap.xml", "event": "request.completed", "traceId": "fa2c1d13227cd1e7b42644e1764dddb0", "requestId": "db463620-84ad-446e-a8c5-a23ee962bfa4", "level": "info", "timestamp": "2026-07-07T04:41:57.885305Z"}
+INFO:     127.0.0.1:59321 - "GET /sitemap.xml HTTP/1.1" 404 Not Found
+{"service": "meterly", "operation": "GET /", "statusCode": 404, "duration": 4094.0, "method": "GET", "endpoint": "/", "event": "request.completed", "traceId": "b6a81bfbe2dad78f2ea64f62cbd0bfb5", "requestId": "cd6f839b-df31-4b28-95ae-0c65f2ad709a", "level": "info", "timestamp": "2026-07-07T04:41:57.885305Z"}
+INFO:     127.0.0.1:59320 - "GET / HTTP/1.1" 404 Not Found
