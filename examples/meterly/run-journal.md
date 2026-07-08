@@ -94,3 +94,22 @@ vouch; treat as an immediate critical finding any of: a straight-to-planning sli
 stop, the word "pre-approved" surfacing as fact, a self-written `.pipeline/design-approved`, or
 security findings "resolved" without scans actually running. Also watch whether anything flags
 the browser-side API-key exposure problem.
+
+---
+
+# M4 run journal — Meterly (proof run, `docs/m4-proof-run-plan.md`)
+
+## M4 Entry 0 — 2026-07-08T16:52:44Z — prerequisites (operator setup, not pipeline friction)
+
+- **Eval green on main:** `bash tests/run-eval.sh` at HEAD — ALL SUITES PASSED (28/28 suites:
+  static 60, gate 34, diff-approved 9, marker-guard 29, lockfile-check 13, ci-scan-base 15,
+  loop-guard 21, loop-exit-invariant 30, stamp-ran-at 15, record-clean 5, hash-determinism 8,
+  asvs 12, waiver-guard 11, asvs-sast 25, design-spec 13, egress 11, assurance 8,
+  design-review 9, dast-review 16, store-compliance 33, triage 21, bootstrap-integration 14,
+  smoke-check 6, tree-hygiene 8, doc-identifiers 9, scan-reconcile 14, telemetry 9, vendored 11).
+- **Engine published** to `~/.claude` via `install-global.sh` at SHA
+  `bba9475d56b2b58abfc032c6ead9d21b1890e810` (main, post-#34/#35/#36 merges). No
+  collision-guard abort — clean publish. **Restart Claude Code before the run session** so the
+  merged engine is what drives M4.
+- Evidence directory created: `examples/meterly/run-evidence/m4/` (rule 0 — evidence lives in
+  the engine repo, committed as we go).
