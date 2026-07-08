@@ -1,0 +1,32 @@
+               
+               
+┌─────────────┐
+│ Scan Status │
+└─────────────┘
+  Scanning 96 files tracked by git with 1146 Code rules:
+                                                                                                                        
+  Language      Rules   Files          Origin      Rules                                                                
+ ─────────────────────────────        ───────────────────                                                               
+  <multilang>      53      96          Community    1146                                                                
+  python          273      39                                                                                           
+  terraform       114      21                                                                                           
+  yaml             39       7                                                                                           
+  bash              4       5                                                                                           
+  json              5       3                                                                                           
+  dockerfile        7       1                                                                                           
+                                                                                                                        
+                
+                
+┌──────────────┐
+│ Scan Summary │
+└──────────────┘
+✅ Scan completed successfully.
+ • Findings: 8 (8 blocking)
+ • Rules run: 491
+ • Targets scanned: 96
+ • Parsed lines: ~98.8%
+ • Scan skipped: 
+   ◦ Files matching .semgrepignore patterns: 8
+ • Scan was limited to files tracked by git
+ • For a detailed list of skipped files and lines, run semgrep with the --verbose flag
+Ran 491 rules on 96 files: 8 findings.

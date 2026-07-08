@@ -1,0 +1,15 @@
+2026-07-06T18:40:48Z	INFO	[misconfig] Misconfiguration scanning is enabled
+2026-07-06T18:40:49Z	INFO	[checks-client] Using existing checks from cache	path="/root/.cache/trivy/policy/content"
+2026-07-06T18:42:23Z	INFO	[terraform scanner] Scanning root module	file_path="infra"
+2026-07-06T18:42:23Z	WARN	[terraform parser] Variable values were not found in the environment or variable files. Evaluating may not work correctly.	module="root" variables="alert_email, container_image, environment"
+2026-07-06T18:42:24Z	INFO	[terraform scanner] Scanning root module	file_path="infra/envs/prod"
+2026-07-06T18:42:24Z	WARN	[terraform parser] Variable values were not found in the environment or variable files. Evaluating may not work correctly.	module="root" variables="alert_email, container_image"
+2026-07-06T18:42:24Z	INFO	[terraform scanner] Scanning root module	file_path="infra/envs/staging"
+2026-07-06T18:42:24Z	WARN	[terraform parser] Variable values were not found in the environment or variable files. Evaluating may not work correctly.	module="root" variables="alert_email, container_image"
+2026-07-06T18:42:35Z	INFO	Detected config files	num=25
+
+📣 [34mNotices:[0m
+  - Version 0.72.0 of Trivy is now available, current version is 0.71.2
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+

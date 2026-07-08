@@ -1,0 +1,63 @@
+{
+  "status": "clean",
+  "critical_count": 0,
+  "warning_count": 2,
+  "fixed_count": 0,
+  "total_findings": 5,
+  "ran_at": "2026-07-07T03:39:19Z",
+  "scope": "diff",
+  "since_commit": "faabe9d6e59533dd144ce7895881dbe54fd7ddd2",
+  "stride_mechanisms_verified": 9,
+  "stride_mechanisms_missing": 0,
+  "stride_new_threats": 0,
+  "asvs": {
+    "l1_l2_universal": true,
+    "in_scope_l3": [],
+    "triggered_chapters": [
+      "V1",
+      "V2",
+      "V3",
+      "V4",
+      "V8",
+      "V13",
+      "V14",
+      "V15",
+      "V16"
+    ],
+    "na_chapters": [
+      "V5",
+      "V7",
+      "V9",
+      "V10",
+      "V11",
+      "V17"
+    ],
+    "newly_triggered": [
+      "V3"
+    ],
+    "reqs_verified": 18,
+    "l1_l2_missing": [],
+    "l3_in_scope_missing": [],
+    "doc_advisory": [],
+    "waivers": [],
+    "reconciled": true
+  },
+  "semgrep_findings": 0,
+  "gitleaks_findings_in_scope": 0,
+  "osv_findings": 1,
+  "osv_max_cvss": 6.8,
+  "osv_waiver": null,
+  "checkov_findings_in_scope": 1,
+  "input_surface": {
+    "declared": 1,
+    "implemented": 1,
+    "uncontrolled": [],
+    "reconciled": true
+  },
+  "data_surface": {
+    "classified": 2,
+    "sensitive": 1,
+    "unprotected": [],
+    "reconciled": true
+  }
+}

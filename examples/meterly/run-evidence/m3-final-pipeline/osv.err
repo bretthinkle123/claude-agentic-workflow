@@ -1,0 +1,5 @@
+Warning: --output has been deprecated in favor of --output-file
+Scanning dir .
+Starting filesystem walk for root: C:\
+Scanned C:\Users\brett\OneDrive\Documents\GitHub\meterly-pipeline-test\poetry.lock file and found 78 packages
+End status: 14 dirs visited, 26 inodes visited, 1 Extract calls, 7.8506ms elapsed, 7.8505ms wall time
