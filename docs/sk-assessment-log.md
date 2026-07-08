@@ -28,6 +28,33 @@ audits), so the genuinely-additive public deltas are few. One clear win landed
 (`code-standards` YAGNI); the rest are logged sufficient. This is the honest delta-only
 outcome — SK does not pad a preloaded skill to look busy.
 
+## Lower-threshold polish pass + domain deep-scan (2026-07-07)
+
+At Brett's request, ran a looser-than-delta-only polish pass over all 34 skills (mechanical
+sweep) plus a line-by-line deep read of the 4 domain skills previously only structure-scanned.
+
+**Mechanical sweep (all 34):** clean. Every cross-skill reference, hook reference, `scaffold/X`
+file, and `docs/*.md` reference resolves. No stale content (the "planned"/"not yet built" hits
+are all legitimate). No redundancy/unclear-ownership — the skills that could overlap are cleanly
+bounded and cross-reference instead of duplicating.
+
+**Deep-scan of the 4 domain skills — all exemplary, no findings:**
+- `swift-conventions` — current (Swift 6 / iOS 17 / MV+Observation, not cargo-culted MVVM);
+  accessibility, error handling, concurrency, testing all covered; honest xccov-gap note.
+- `claude-design-to-swiftui` — outstanding CSS→SwiftUI translation guide, correct on the subtle
+  conversions (line-height, border-radius circular-vs-continuous, box-shadow radius≈blur/2, hex).
+- `app-store-submission-requirements` / `google-play-submission-requirements` — thorough + current
+  (privacy manifest/Data-safety, Required-Reason APIs, targetSdk floor, account-deletion incl.
+  Play's stricter web path, IAP/Play Billing), cross-referenced to store-compliance.sh + DP.
+
+**One capability gap found + fixed (not a skill-text issue):** `api-edge-conventions` referenced a
+`scaffold/(middleware.py)` that didn't exist, though `auth-patterns` and `logging-conventions` both
+ship scaffolds. Built the FastAPI middleware scaffold (two-tier throttle + headers + CORS +
+error-envelope + idempotency). Build-level efficiency, not skill enrichment.
+
+**Polish-pass conclusion:** at the looser bar, still zero worthwhile skill-text edits — the skills
+are exceptionally maintained. The only actionable item was the api-edge capability gap.
+
 ## Later pass (deferred)
 The remaining agents (`plan-audit`, `testing`, `documentation`, `deployment`, `debugging`)
 and their skills — assess when the first pass's value is proven, per the SK addendum. Note
