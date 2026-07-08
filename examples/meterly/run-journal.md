@@ -173,3 +173,29 @@ all left unstated for requirements-elicitation to surface). `Design source: none
 run's change-set (M `.claude/settings.json`, M `pipeline-ci.yml`, M `PROJECT.md`,
 M `scripts/ci/{guard-source-markers,dast-review}.sh`, ?? `.claude/skills/ast-grep-rules/`) —
 the deployment agent makes the first commit. Pipeline NOT started.
+
+## M4 Entry 2 — 2026-07-08T17:15:32Z — requirements-elicitation (operator pre-step, first live run)
+
+Ran `/requirements-elicitation` in the M4 working copy; the interviewer grounded itself in the
+code first (hour-window flooring, api_key_id tenancy, tier-2 throttle envelope, idempotent
+replay path) before asking. 16 questions over 4 rounds; operator answered minimally (took the
+recommended option throughout). `.pipeline/requirements.md` written: **14 resolved, 1 open, 8
+out-of-scope**; snapshot committed at `run-evidence/m4/requirements.md`.
+
+Notable for the scorecard grading later (interview quality, first live run):
+
+- It surfaced **all four deliberately-unstated ambiguities** from the run plan: window
+  semantics (→ existing UTC hour window), race behavior at the quota edge (→ strict atomic
+  check-and-increment), admin-key provisioning (→ expand-only `scope` column + seed-script
+  flag), and 429-vs-throttle precedence (→ tier-2 first; distinct `quota_exceeded` code).
+- It also caught a real **brief self-contradiction** unprompted: "ONE expand-only migration
+  (a quotas table)" vs the admin mechanism needing an `api_keys.scope` column → resolved as
+  one revision containing both expand-only changes.
+- Beyond the plants: tenancy keying (per api_key_id — the brief's `{customer_id, metric}` was
+  under-keyed), boundary semantics (R+Q>L), replay-vs-quota interaction (replay wins, 200),
+  limit bounds (>=1; 0 is not a kill switch), mid-window effect (immediate), envelope contents
+  (Retry-After only), PUT edge stack (normal), data classification (non-sensitive operational).
+- One honest `Open` left for planning: a latency budget for PUT /v1/quotas itself.
+
+Operator interventions: interview answers only (the skill is operator-invoked and human-facing —
+these are not improvised interventions; the two-checkpoint budget is untouched).
