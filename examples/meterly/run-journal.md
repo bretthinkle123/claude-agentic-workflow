@@ -910,3 +910,26 @@ M4P-9…16 written. First fully adjudicable run (all six criteria final).
   setup / host provisioning (gate arming), journaled per rule 0 — not a mid-run touchpoint.
   Step 2 (reset + feature staging) deliberately NOT started; it waits for the post-restart
   fresh session.
+
+## M4″ Entry 1 — 2026-07-09T22:53Z — Step 2: per-feature reset + feature/quota-admin staged (post-restart)
+
+- **IDE restarted** before this step (operator) — the published SKILL-level fixes
+  (pre-flight, 5a, step-8 run-started filter) are live in the session, not stale.
+- **Brownfield base:** main @ `ef3fb3f` (PR #3 merge — usage CSV export). Pulled clean.
+- **Reset per the skill's per-feature reset:** stale markers (plan-approved, diff-approved)
+  and all prior stage artifacts removed; kept smoke.env, dast.env, dast-budget.json,
+  state.json (+ historical .pipeline/archive/). Three stray .coverage.* files from the M4′
+  test runs deleted. `loop-guard.sh reset` → budget 5 cycles / 1800s compute / 7200s wall.
+  **`.pipeline/run-started` stamped (2026-07-09T22:53:12Z)** — first run with the
+  provenance anchor the step-8 transcript filter consumes (F-M4′-7 fix under test).
+- **Branch `feature/quota-admin` created; `.pipeline/state.json .feature = "quota-admin"`;
+  retry counters zeroed.**
+- **PROJECT.md overwritten verbatim** (6 lines): quota administration — list and delete;
+  GET /v1/quotas (admin-scoped) lists; DELETE /v1/quotas removes {customer_id, metric};
+  existing auth, no behavior change to POST /v1/events when no quota exists; pipeline-ci
+  must be green on the PR (required merge check); design source none. Thin on purpose —
+  tenant scoping of list/delete deliberately unstated (the planted IDOR/DB-privilege
+  efficacy trap), likewise delete idempotency vs 404, pagination, in-flight enforcement
+  effect, response envelope, delete audit logging. Setup session did NOT expand it.
+- **Pipeline NOT started.** Next: Step 3 elicitation (operator-run, new session), then the
+  bare kickoff (U-12) in a fresh session.
