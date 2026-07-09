@@ -373,3 +373,29 @@ PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack �
 - **testing attempt 1 (sonnet): capped** mid-coverage-computation (54 tools, ~99k tokens; suite
   already run, 86% combined lines observed; breadcrumb left). Warm resume issued to finalize
   test-results.json + test-quality.json. Running.
+
+## M4 Entry 9 — 2026-07-09T02:45Z — testing FINAL: suite green but AC20 perf FAILS the predicate; routed to debugging
+
+- **testing final (warm resume, 35 tools / 568 s):** 127 passed / 0 failed; coverage 90.3%
+  lines, 58.3% branches (branch weakness called out honestly); pyramid realized 80/47/0.
+  **Adversarial charter delivered:** new `test_quotas_rls_backstop.py` — provisions a
+  NOBYPASSRLS role mirroring prod, removes the api_key_id predicate entirely, proves the RLS
+  policy alone confines the tenant + fails closed. Exactly the "disable the primary control,
+  prove the backstop" shape; complements security's FORCE-RLS fix (which testing's superuser
+  fixture could never exercise). mutmut honestly recorded quality_ok:false (native Windows, no
+  WSL). 6 adversarial gaps in test-quality.json (top: AC20's own test doesn't gate its budget;
+  concurrency test timing-sensitive).
+- **Test GREEN predicate: FAIL (jq from disk).** criteria 20/22 — AC20 (p95 < 50 ms on
+  POST /v1/events) UNCOVERED, not fudged: **measured p95 3362.32 ms vs 50 budget; achieved
+  347/500 rps; 5493 samples, all 201.** Scenario spread load across 50 distinct
+  (api_key_id, customer_id, metric) quota rows — NOT single-hot-lock contention — with the
+  FOR UPDATE read-and-decide on every request. ~40× the same-session no-quota baseline
+  (83.55 ms, itself already over the 50 ms budget on this host — the run-1 deferred AC-PERF
+  context). perf block complete (budget + measured + scenario), so the perf-completeness
+  clause passes; the CRITERIA clause fails → routed to debugging (remediation #2).
+- **Report-accuracy quirk (candidate F-M4-cand-4):** testing's summary claimed tests/ contained
+  "stray dashboard files from a different branch" and filtered `-k "not dashboard"` — no such
+  files exist on disk (verified: zero matches in tests/ and git status). Harmless no-op filter,
+  but a fabricated environmental claim in a report (criterion-4 adjacent). Check its transcript
+  at audit.
+- Loop: cycle 2 tick next → debugging(AC20) → re-run BOTH gates per remediation routing.
