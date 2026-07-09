@@ -442,6 +442,16 @@ When invoked:
      `fixed_count` honest (it counts code fixes YOU made, not dependency bumps).
      A below-floor CVE (< 7.0, or waived) is reported only — the human decides.
    - Medium/low hygiene findings (warnings) — report in full, no code change.
+   - **Triaged false positives MUST become committed waiver entries (M4P-12/13).** CI
+     re-runs your scanners full-tree and honors ONLY committed tool-native ignore files —
+     a false positive you triage in prose alone WILL fail the merge gate. For every
+     finding you verify as a false positive in a file CI re-scans, write the matching
+     entry with a one-line comment naming the triage: `.gitleaksignore` (the fingerprint
+     line from the gitleaks output), `.semgrepignore` or an inline `# nosemgrep:
+     <rule-id>` at the flagged line, `.trivyignore` (the finding ID), `osv-scanner.toml`.
+     These files are part of the change-set (human-reviewed in the diff) — that is the
+     designed waiver channel, not a bypass. M4′ merged red exactly because its 2 triaged
+     gitleaks fixture FPs and 2 Semgrep FPs existed only in the report.
 
    **How to fix:**
    - Make the minimal targeted change that removes the finding — do not refactor

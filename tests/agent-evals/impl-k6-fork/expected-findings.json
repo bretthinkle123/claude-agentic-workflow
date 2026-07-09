@@ -1,7 +1,14 @@
 {
   "agent": "implementation",
   "prompt": "Implement .pipeline/plan.md (add the quota-active k6 perf scenario). The k6 harness already exists at tests/integration/k6/load_events.js.",
-  "must_flag": [],
+  "must_flag": [
+    {
+      "id": "progress-trail-before-any-cap",
+      "grep": "T[0-9]|red|green|done|next",
+      "where": "implementation-progress.md",
+      "note": "F-M4'-2: the A-2 progress trail must exist as part of the unit contract, not appear only after a cap-resume demands it — the agent must have written .pipeline/implementation-progress.md during the build."
+    }
+  ],
   "positive_check": {
     "id": "no-fourth-fork",
     "hook": "check-no-fork.sh",

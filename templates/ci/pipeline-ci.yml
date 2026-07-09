@@ -62,12 +62,23 @@ jobs:
             echo "::error::Unfilled placeholders in enabled CI jobs. bootstrap fills TEST/BUILD; implementation fills INSTALL; testing fills COVERAGE_FLOOR from CLAUDE.md's done-bar."
             exit 1
           fi
-          MPAT="<MUTATION"; MPAT="${MPAT}_CMD>|<MUTATION_SCOPE>"
-          if ! grep -qE '^\s*if: false' "$F" && grep -qE "$MPAT" "$F"; then
-            echo "::error::mutation job enabled but its placeholders are unfilled."
+          # Opt-in jobs (mutation, codeql) may keep placeholders ONLY while `if: false`
+          # gates them — one gate per opt-in job (M4P-15: codeql shipped enabled with a
+          # literal placeholder matrix and was red on every run).
+          M1="<MUTATION"; C1="<CODEQL"   # composed so these lines never match themselves
+          NGATES=$(grep -cE '^\s*if: false' "$F")
+          NOPT=0
+          grep -qE "${M1}_CMD>|${M1}_SCOPE>" "$F" && NOPT=$((NOPT+1))       # mutation tokens present
+          grep -qE "${C1}_LANGUAGE>|${C1}_BUILD_MODE>" "$F" && NOPT=$((NOPT+1))  # codeql tokens present
+          if [ "$NGATES" -lt "$NOPT" ]; then
+            echo "::error::an opt-in job (mutation/codeql) appears enabled while its placeholders are unfilled — gate it with 'if: false' or fill the tokens."
             exit 1
           fi
       - name: Install dependencies (from lockfile)
+        # CONTRACT (M4P-9): <INSTALL_CMD> must make the project package importable from a
+        # SUBPROCESS spawned anywhere in the repo (pip install -e . / poetry install WITH
+        # the root package) — M4′ shipped tests whose seed-script subprocess did
+        # `import src…` and worked only against the local venv's cwd resolution.
         run: <INSTALL_CMD>
       - name: Build
         run: <BUILD_CMD>
@@ -78,6 +89,10 @@ jobs:
         # CLAUDE.md's done-bar on its first run (same figure the local deploy gate rides,
         # so CI and the local gate can't disagree). Branch coverage: surface in the job
         # summary, do NOT gate (mirrors the local posture; see test-conventions).
+        # TIMING ASSERTS STAY OUT (M4P-10, predicted by M4P-1 and confirmed at 5,612 ms on
+        # the 2-vCPU runner): tests that hard-assert wall-clock budgets must carry the
+        # project's perf marker and be EXCLUDED here (e.g. `-m "not perf"` in <TEST_CMD>).
+        # Timing is owned by local runs + the load-campaign workflow against staging.
 
   # mutation — U-22: run mutation testing HERE, on the Linux runner, not on the author's
   # host. mutmut needs a POSIX environment (WSL on Windows), so the local pipeline honestly
@@ -128,6 +143,10 @@ jobs:
   # NOTE: if the repo has CodeQL "default setup" enabled in Settings, disable it first —
   # it rejects uploads from advanced (workflow) configurations like this one.
   codeql:
+    # OPT-IN like mutation (M4P-15): as bootstrapped the matrix carries literal
+    # placeholders, so an enabled job fails on every run — vacuous red that trains people
+    # to ignore the gate. Flip to `true` only after filling <CODEQL_LANGUAGE>/<CODEQL_BUILD_MODE>.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -165,9 +184,13 @@ jobs:
           echo "sha=$B" >> "$GITHUB_OUTPUT"
           [ -n "$B" ] || echo "::warning::no resolvable scan base (single-commit repo) — diff-scoped checks skipped this run"
       - name: OSV scan (CVSS >= 7.0 fails — the B6 floor; honors committed osv-scanner.toml)
+        # Image pinned by DIGEST (M4P-14): the unpinned :latest broke on an upstream flag
+        # removal (--lockfile-scan-mode, exit 127) — the exact drift digest-pinning exists
+        # to prevent. Bump the digest deliberately, in a reviewed diff.
         run: |
-          docker run --rm -v "$PWD:/src" -w /src ghcr.io/google/osv-scanner:latest \
-            scan --lockfile-scan-mode=all -r /src
+          docker run --rm -v "$PWD:/src" -w /src \
+            ghcr.io/google/osv-scanner@sha256:5116601dedc01c1c580eb92371883ec052fc4c13c3fbc109d621a63ac416d475 \
+            scan -r /src
       - name: Lockfile integrity vs merge base (exit 2 blocks; exit 1 = warn, annotated not failed)
         if: steps.base.outputs.sha != ''
         run: |

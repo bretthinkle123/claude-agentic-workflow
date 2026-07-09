@@ -66,6 +66,12 @@ bytecode, and the exclusion filter deselected nothing.
 `.github/workflows/pipeline-ci.yml` still carries `<COVERAGE_FLOOR>`, fill it from
 CLAUDE.md's done-bar figure and embed it as a real gate in the test command (e.g.
 `--cov-fail-under=<N>`) — CI's placeholder guard fails the merge gate until you do.
+**Timing asserts never ride the CI merge gate (M4P-10).** Any test that hard-asserts a
+wall-clock budget must carry the project's perf marker (`@pytest.mark.perf` or
+equivalent) so CI's test invocation excludes it (`-m "not perf"`) — M4′'s locally-green
+3,000 ms assert measured 5,612 ms on the 2-vCPU CI runner under coverage tracing,
+exactly as predicted. The budget stays enforced locally and by the load-campaign
+workflow against staging; CI asserts the test *runs*, not the wall clock.
 **Never delete or weaken a test to make the suite green** — but *correcting* a test that
 asserts **wrong** behavior is not weakening (a test that certifies a bug is itself a
 defect; fix its assertion, note it, and let the now-failing case route to debugging).

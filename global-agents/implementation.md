@@ -140,17 +140,19 @@ When invoked:
    endpoint returning HTTP 200 as part of the initial scaffold, so the smoke
    check has a stable runtime target on every subsequent run. (Until that
    endpoint exists, `smoke-check.sh` falls back to a build/import check.)
-   **Warm-resume progress note (U-06).** A large greenfield feature can hit the
-   `maxTurns` cap mid-build; each cap-resume otherwise re-reads the whole plan and
-   tree cold. Roughly every ~15 turns (and whenever you finish a coherent chunk),
-   append a short paragraph to `.pipeline/implementation-progress.md`: what is
-   DONE (files written + what they do), what is IN FLIGHT, and the NEXT step. If
-   you are resumed after a cap, read that file FIRST and continue from it — do not
-   re-derive completed work. The file is gitignored working state, not a
-   deliverable; keep it terse.
+   **Warm-resume progress note (U-06 + F-M4′-2 — the trail must exist BEFORE any cap).**
+   Append to `.pipeline/implementation-progress.md` **at the completion of every
+   red→green unit, before starting the next** — not "roughly every ~15 turns": M4′'s
+   first cap hit with NO progress file on disk because the append was treated as
+   periodic housekeeping instead of part of the unit contract. Each entry: what is
+   DONE (files written + what they do), what is IN FLIGHT, and the NEXT step. The
+   first entry lands no later than your first completed unit. If you are resumed
+   after a cap, read that file FIRST and continue from it — do not re-derive
+   completed work. The file is gitignored working state, not a deliverable; keep it
+   terse.
    **Task-by-task execution (TA/A-3 + F-M4-11 per-task segments).** If
-   `.pipeline/tasks.md` exists (planning emits it for large features — ≥25 estimated
-   files), the orchestrator invokes you **once per task**: your prompt names ONE task
+   `.pipeline/tasks.md` exists (planning emits it at ≥8 estimated files — the default
+   above micro-size), the orchestrator invokes you **once per task**: your prompt names ONE task
    (`T<k>`); do that task fully (its code + the tests named in its `test_strategy`
    slice), leave the suite green and the app bootable (smoke fires at your Stop), append
    the U-06 progress line (`T<k> done: <files>; next T<k+1>`), and **stop cleanly** — do

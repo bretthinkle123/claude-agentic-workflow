@@ -338,11 +338,14 @@ When invoked:
      (`criteria_covered`); plan-audit flags any untraced criterion. If PROJECT.md
      declares no explicit criteria, derive them from the feature's stated goals and
      note that in the file.
-   - **Task decomposition for large features (TA/A-3).** When the feature is large —
-     your estimated change set is **≥ 25 files** (the single trigger; the old
-     ≥15-acceptance-criteria leg was dropped after M4: it measured your own authoring
-     granularity, not the work, so a thin slice with 22 fine-grained ACs self-triggered
-     — F-M4-2) — ALSO emit **`.pipeline/tasks.md`**: an ordered list of small,
+   - **Task decomposition — the DEFAULT above micro-size (TA/A-3, recalibrated twice).**
+     When your estimated change set is **≥ 8 files**, ALSO emit **`.pipeline/tasks.md`**.
+     History of the threshold: the original ≥15-AC leg measured your own authoring
+     granularity and was dropped (F-M4-2); the ≥25-file leg then left the common
+     10–24-file band single-shot, which capped implementation twice on a ~14-file slice
+     (F-M4′-1) while per-task segments ran 0-cap everywhere they applied. Decomposition
+     is now the norm; only micro-changes (< 8 estimated files) build single-shot.
+     tasks.md is an ordered list of small,
      independently-buildable tasks that together deliver the plan. Each task row:
      **ID** (`T1`, `T2`, …) | **depends_on** (task IDs, or `—`) | **ACs advanced**
      (the `AC<n>` ids this task moves toward done) | **test_strategy slice** (the

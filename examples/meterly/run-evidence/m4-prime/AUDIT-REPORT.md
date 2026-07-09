@@ -138,6 +138,13 @@ M4′ actually collected it.
 
 ## 7. Fix list for M4″ (ordered)
 
+> **STATUS (2026-07-09): items 1–7 IMPLEMENTED engine-side** (eval suite green; see the
+> fix commit). Remaining operator-side: 2(g) branch protection on the throwaway (apply the
+> ci-conventions checklist), the meterly app fix for the seed-script import (M4P-9's
+> app-scope half — next feature run), and re-running `install-global.sh` + restart before
+> M4″. 2.3's provisioning clause now lives durably in the orchestration SKILL
+> ("Operator touchpoints"), not just run-plan text.
+
 1. **Decomposition default** (decision 6.2): planning trigger ≥ 8 est. files; debugging → 50.
 2. **CI gate rescue (the M4P-9…15 cluster):** (a) security stage MUST commit tool-native
    ignore entries (`.gitleaksignore`/`.semgrepignore`/`.trivyignore`) for every FP it triages

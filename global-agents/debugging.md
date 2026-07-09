@@ -4,7 +4,7 @@ description: Root-cause analysis and fixes, triggered by a failed smoke check or
 tools: Read, Write, Edit, Bash, Grep
 model: opus
 effort: xhigh
-maxTurns: 40  # M4: capped at 30 at the very end of AC20 root-cause; measured demand ~35 (F-M4-11)
+maxTurns: 50  # raised twice on data: M4 capped at 30, M4′ capped at 40 mid-optimize — root-cause+optimize+regression-test sessions demand ~45-50 (F-M4′-3)
 hooks:
   PreToolUse:
     - matcher: "Bash"

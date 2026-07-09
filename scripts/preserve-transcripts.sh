@@ -13,16 +13,38 @@
 # a sha256 MANIFEST so a later audit can verify nothing was altered.
 #
 # Usage:
-#   preserve-transcripts.sh <dest-dir> [session-dir]
+#   preserve-transcripts.sh <dest-dir> [session-dir] [since]
 #     dest-dir    : where .output copies land (e.g. <engine>/examples/<app>/run-evidence/<run>/transcripts)
 #     session-dir : optional explicit path to the session directory (the one containing
 #                   subagents/). Default: the most recently modified session under
 #                   ~/.claude/projects/<encoded-cwd>/ that has a subagents/ dir.
+#     since       : optional run-start filter (epoch seconds, or a file whose mtime is the
+#                   run start, e.g. .pipeline/state.json). F-M4′-7: a standing session's
+#                   store is CUMULATIVE across runs — M4′'s preservation swept 23 M4-era
+#                   transcripts into the M4′ evidence set. With `since`, only agent files
+#                   modified at/after the run start are copied; the manifest records each
+#                   file's mtime either way so provenance is auditable.
 # Exit codes: 0 ok; 1 integrity failure (empty/missing transcript); 2 usage/environment.
 set -uo pipefail
 
-DEST="${1:?usage: preserve-transcripts.sh <dest-dir> [session-dir]}"
+DEST="${1:?usage: preserve-transcripts.sh <dest-dir> [session-dir] [since]}"
 SESSION="${2:-}"
+SINCE_RAW="${3:-}"
+SINCE=0
+if [ -n "$SINCE_RAW" ]; then
+  if [ -f "$SINCE_RAW" ]; then SINCE=$(stat -c %Y "$SINCE_RAW" 2>/dev/null || echo 0)
+  else SINCE="$SINCE_RAW"; fi
+  case "$SINCE" in ''|*[!0-9]*) echo "[preserve-transcripts] bad 'since' value: $SINCE_RAW" >&2; exit 2 ;; esac
+fi
+
+# F-M4′-7 usability: fail loudly when this clearly isn't the pipeline project's repo —
+# run from the engine repo, the CWD-derived lookup silently found nothing in M4′.
+if [ -z "$SESSION" ] && [ ! -f .pipeline/state.json ]; then
+  echo "[preserve-transcripts] CWD has no .pipeline/state.json — this doesn't look like the" >&2
+  echo "                       pipeline project's repo. Run from the throwaway/app repo, or" >&2
+  echo "                       pass the session dir explicitly as arg 2." >&2
+  exit 2
+fi
 
 # --- locate the session dir when not given -----------------------------------------
 if [ -z "$SESSION" ]; then
@@ -62,7 +84,7 @@ copy_one() {  # $1 = source file, $2 = dest basename (without .output)
     FAIL=1
     return
   fi
-  cp "$src" "$out"
+  cp -p "$src" "$out"   # -p: keep the source mtime — the manifest's provenance column
   if [ ! -s "$out" ]; then
     echo "[preserve-transcripts] copy produced an empty file: $out" >&2
     FAIL=1
@@ -71,9 +93,16 @@ copy_one() {  # $1 = source file, $2 = dest basename (without .output)
   COPIED=$((COPIED + 1))
 }
 
+in_window() {  # $1 = file → 0 if at/after SINCE (or no filter)
+  [ "$SINCE" -eq 0 ] && return 0
+  local m; m=$(stat -c %Y "$1" 2>/dev/null || echo 0)
+  [ "$m" -ge "$SINCE" ]
+}
+
 # Named-agent sidechain traces.
 for f in "$SESSION"/subagents/agent-*.jsonl; do
   [ -e "$f" ] || continue
+  in_window "$f" || continue
   id="$(basename "$f")"; id="${id#agent-}"; id="${id%.jsonl}"
   copy_one "$f" "$id"
 done
@@ -82,6 +111,7 @@ done
 if [ -d "$SESSION/tool-results" ]; then
   for f in "$SESSION"/tool-results/*.txt; do
     [ -e "$f" ] || continue
+    in_window "$f" || continue
     id="$(basename "$f" .txt)"
     # A named agent id never collides with a task-result id; if it somehow does, the
     # richer sidechain trace wins and the text result is preserved with a suffix.
@@ -98,8 +128,10 @@ if [ "$COPIED" -eq 0 ]; then
   exit 1
 fi
 
-# --- integrity: manifest + duplicate detection --------------------------------------
-( cd "$DEST" && sha256sum ./*.output 2>/dev/null | sort -k2 ) > "$DEST/MANIFEST.sha256"
+# --- integrity: manifest (sha + source mtime, provenance-auditable) + duplicates -----
+( cd "$DEST" && for o in ./*.output; do
+    printf '%s  %s  mtime=%s\n' "$(sha256sum "$o" | cut -d' ' -f1)" "$o" "$(stat -c %Y "$o")"
+  done | sort -k2 ) > "$DEST/MANIFEST.sha256"
 
 DUPES="$(awk '{print $1}' "$DEST/MANIFEST.sha256" | sort | uniq -d)"
 if [ -n "$DUPES" ]; then

@@ -64,4 +64,34 @@ np="$(mktemp -d)"; _WORKDIRS+=("$np")
 ( cd "$np" && git init -q && printf 'Uses `made_up_name`.\n' > x.md && DOC_IDENT_ENFORCE=1 bash "$HOOK" ) >/dev/null 2>&1
 assert_eq 0 "$?" "no .pipeline/state.json → no-op even in enforce mode"
 
+# F-M4′-6a: MULTI-LINE def signature — correct documented args must NOT false-positive
+# (M4′: the single-line grep mangled the def into params "asyncdefcount_…" and flagged
+# every real caller).
+ml="$(mk_proj)"
+cat >> "$ml/src/dashboard_service.py" <<'PY'
+async def count_usage_rollups(
+    api_key_id,
+    metric,
+):
+    return 0
+PY
+printf 'Counts via `count_usage_rollups(api_key_id, metric)`.\n' > "$ml/src/README.md"
+( cd "$ml" && DOC_IDENT_ENFORCE=1 bash "$HOOK" ) >/dev/null 2>&1
+assert_eq 0 "$?" "F-M4′-6a: multi-line def signature, correct args → pass (no mangled-params FP)"
+
+# F-M4′-6b: docs/decisions/ design-record copies are excluded from the sweep.
+dd="$(mk_proj)"
+mkdir -p "$dd/docs/decisions/feature/x"
+printf 'Frontmatter key `repomix_pack_sha256` and invented `made_up_fn(a, b)`.\n' \
+  > "$dd/docs/decisions/feature/x/plan.md"
+( cd "$dd" && DOC_IDENT_ENFORCE=1 bash "$HOOK" ) >/dev/null 2>&1
+assert_eq 0 "$?" "F-M4′-6b: docs/decisions/ design-record copies excluded (no FP)"
+
+# F-M4′-6c: YAML frontmatter keys are not documented identifiers.
+fm="$(mk_proj)"
+printf -- '---\nrepomix_pack_sha256: abc\nmigration_added: false\n---\nBody uses `floor_to_hour_utc`.\n' \
+  > "$fm/src/README.md"
+( cd "$fm" && DOC_IDENT_ENFORCE=1 bash "$HOOK" ) >/dev/null 2>&1
+assert_eq 0 "$?" "F-M4′-6c: frontmatter keys skipped; real body identifier passes"
+
 finish doc-identifiers

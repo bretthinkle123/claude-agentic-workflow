@@ -189,6 +189,15 @@ string and those files — never assume it can see the conversation.
         (docs/dast-plan.md Layers 2-3).
 
 5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
+5a. DOC-CONTRACT RE-CHECK (M4P-11 — documentation edits AFTER the last test run, so it can
+     break tests that assert over doc content; M4′ shipped a red merge exactly this way:
+     the doc rewrite dropped the "Bearer" auth-scheme mention that
+     test_dast_context_documented asserts). After documentation stops, YOU re-run the
+     doc-asserting subset before presenting the diff:
+       grep -rlE '(docs/|README|system_architecture)' tests/ --include='test_*' \
+         | xargs <project test command>            # the tests that READ doc files — cheap, scoped
+     Any failure routes BACK to documentation (fix the doc, not the test), then re-check.
+     Never proceed to the checkpoint with a doc-contract test red.
 5b. HARD HUMAN DIFF-REVIEW CHECKPOINT (M5) — the deploy-side counterpart to plan-approved:
      -> run /code-review on the working diff as a STANDARD automated pre-step (review-only —
         NOT --fix: applying changes here would alter the tree and force a re-review). Surface its
@@ -218,11 +227,14 @@ string and those files — never assume it can see the conversation.
      asserts every row has an action. This is what turns a one-time escape into a permanent
      check instead of a re-discovery cost; the retrospective's "ledger deltas" section prompts it.
 8. EVIDENCE PRESERVATION (rule 0 / F-M4-7 — before teardown, when the run is instrumented):
-     bash ~/.claude/pipeline-templates/preserve-transcripts.sh <dest-dir>
+     bash ~/.claude/pipeline-templates/preserve-transcripts.sh <dest-dir> "" .pipeline/run-started
      # Copies every subagent trace from the session store (<session>/subagents/agent-<id>.jsonl
      # + <session>/tool-results/*.txt), ASSERTS each file non-empty, flags byte-identical pairs,
-     # and writes a sha256 MANIFEST. M4 preserved 14 empty transcript files by grepping the
-     # parent session JSONL instead — the gap surfaced only at audit. Never hand-copy transcripts.
+     # and writes a sha256+mtime MANIFEST. Arg 3 = run-start filter (run-started's mtime,
+     # stamped at the per-feature reset) —
+     # a standing session's store is CUMULATIVE across runs, and M4′ swept 23 prior-run
+     # transcripts into its evidence set without it (F-M4′-7). Run it FROM the app repo
+     # (it refuses a CWD with no .pipeline/state.json). Never hand-copy transcripts.
 ```
 
 ## Telemetry — logged automatically on every stage
@@ -297,6 +309,17 @@ is measured, not estimated. One-time trust check before first use: confirm its o
 are the LiteLLM pricing + Frankfurter FX pulls (no session-data egress). It is telemetry only —
 nothing in the pipeline reads it, and it never gates.
 
+## Operator touchpoints — what counts as an intervention (proof-gate criterion 2)
+
+Sanctioned, never counted against a run: the two human checkpoints (plan, diff); answers
+to a **pipeline-initiated** escalation, journaled verbatim, given by option-selection with
+no re-teaching content; and **host provisioning** — journaled environment maintenance
+(installing a scanner binary, starting Docker) that writes no pipeline artifact, instructs
+no agent, and changes no gate outcome (F-M4′-5: the M4′ mid-run ast-grep install was this
+class). Everything else operator-initiated mid-run — steering prompts, re-teaching,
+artifact edits — is an improvised intervention and a criterion-2 miss. When in doubt:
+journal it verbatim and let the audit adjudicate; the unjournaled touch is the real defect.
+
 ## Prompts are for experiments, definitions are for keeps (U-12)
 
 A lesson that worked when delivered via an orchestrator prompt gets moved into the
@@ -329,7 +352,10 @@ and pre-wire the smoke check). Before each new feature, remove any stale
 U-15/D3: deletion is not the forgery vector, it can only un-approve a prior feature,
 so `rm` is permitted; only CREATION is guarded, and creating them stays human-only)
 **and run `bash ~/.claude/hooks/loop-guard.sh reset`** so the circuit-breaker starts
-the next feature with a fresh budget.
+the next feature with a fresh budget. Also stamp the run start —
+`date -u +%Y-%m-%dT%H:%M:%SZ > .pipeline/run-started` — it is the provenance anchor
+step 8's transcript preservation filters on (state.json won't do: security/debugging
+rewrite it mid-run, so its mtime is late).
 
 **Large / brownfield target — optional repo map (TA/B-1).** Before invoking planning on a
 large or existing-code target, you MAY generate a single-file codebase map for the planning
@@ -354,7 +380,7 @@ Grep directly.
 | `plan.md` | planning | plan-audit, human, implementation, testing, documentation |
 | `plan-audit.md` | plan-audit | orchestrator (`revision_recommended`), planning (revision pass), human (advisory, non-gating) |
 | `acceptance.md` | planning | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag) |
-| `tasks.md` | planning (**only for large features** — ≥25 estimated files, the single trigger since F-M4-2; TA/A-3) | implementation (executes per-task segments in dependency order — see step 2), plan-audit (AC↔task coverage + orphan/dangling-dep flags). Absent on small features — no decomposition |
+| `tasks.md` | planning (**the default above micro-size** — ≥8 estimated files since F-M4′-1; TA/A-3) | implementation (executes per-task segments in dependency order — see step 2), plan-audit (AC↔task coverage + orphan/dangling-dep flags). Absent only on micro-changes (<8 files) — single-shot |
 | `requirements.md` | human (via `requirements-elicitation`, optional pre-planning; TA/A-1) | planning (authoritative brief when present; Open items → stated default or checkpoint question). **Operator's own words — input, never a gate** |
 | `plan-approved` | human | implementation (refuses to start without it) |
 | `surface-delta.md` | implementation | security (6f STRIDE-delta reconciliation — non-authoritative hint; the diff is source of truth) |

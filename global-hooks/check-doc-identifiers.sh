@@ -40,11 +40,20 @@ DIFF_REF="HEAD"
 git rev-parse --verify -q HEAD >/dev/null 2>&1 || DIFF_REF=""
 
 changed_md() {
-  if [ -n "$DIFF_REF" ]; then
-    git diff "$DIFF_REF" --name-only -z 2>/dev/null | tr '\0' '\n' | grep -E '\.md$' || true
-  fi
-  git ls-files -z --others --exclude-standard 2>/dev/null | tr '\0' '\n' | grep -E '\.md$' || true
+  # F-M4′-6: exclude docs/decisions/ — those are COPIES of pipeline artifacts (plan.md,
+  # plan-audit.md) retained as design records; sweeping them re-flags frontmatter keys
+  # and planning prose as "documented identifiers" (24 FP warnings in M4′).
+  {
+    if [ -n "$DIFF_REF" ]; then
+      git diff "$DIFF_REF" --name-only -z 2>/dev/null | tr '\0' '\n' | grep -E '\.md$' || true
+    fi
+    git ls-files -z --others --exclude-standard 2>/dev/null | tr '\0' '\n' | grep -E '\.md$' || true
+  } | grep -v '^docs/decisions/' || true
 }
+
+# Strip YAML frontmatter (--- ... ---) so keys like repomix_pack_sha256 aren't treated
+# as documented code identifiers (F-M4′-6).
+md_body() { awk 'NR==1 && $0=="---" {fm=1; next} fm && $0=="---" {fm=0; next} !fm' "$1"; }
 
 mapfile -t MD_FILES < <(changed_md | sort -u)
 [ "${#MD_FILES[@]}" -gt 0 ] || exit 0
@@ -63,12 +72,20 @@ resolve_exists() {  # $1 = bare identifier → 0 if it occurs in any non-doc sou
 # Returns non-empty (a reason string) on a mismatch, empty on OK/unknown. Searches
 # tracked (git grep) then the working tree (grep) so an uncommitted def is still seen.
 sig_mismatch() {  # $1 = name, $2 = comma-joined documented arg list
-  local name="$1" doc_args="$2" defline params
-  defline="$(git grep -hI -E "def[[:space:]]+${name}[[:space:]]*\(" -- '*.py' 2>/dev/null | head -1)"
-  [ -n "$defline" ] || defline="$(grep -RhI --include='*.py' --exclude-dir='.git' \
+  local name="$1" doc_args="$2" defline params deffile
+  # F-M4′-6: multi-line signatures. The old single-line grep captured only the first
+  # line of a def whose params span lines, so the paren extraction failed and the
+  # whole mangled line leaked into the "params" set (M4′'s `asyncdefcount_…` FPs).
+  # Find the def's file+line, then join lines until the first ')' before extracting.
+  deffile="$(git grep -nI -E "def[[:space:]]+${name}[[:space:]]*\(" -- '*.py' 2>/dev/null | head -1)"
+  [ -n "$deffile" ] || deffile="$(grep -RnI --include='*.py' --exclude-dir='.git' \
     -E "def[[:space:]]+${name}[[:space:]]*\(" . 2>/dev/null | head -1)"
-  [ -n "$defline" ] || return 0                       # not a python def we can see → skip
+  [ -n "$deffile" ] || return 0                       # not a python def we can see → skip
+  local df="${deffile%%:*}" dl="${deffile#*:}"; dl="${dl%%:*}"
+  defline="$(sed -n "${dl},$((dl+12))p" "$df" 2>/dev/null | tr '\n' ' ')"
+  case "$defline" in *\)*) : ;; *) return 0 ;; esac   # unreadably long signature → skip, don't guess
   params="$(printf '%s' "$defline" | sed -E 's/.*def[[:space:]]+'"$name"'[[:space:]]*\(([^)]*)\).*/\1/')"
+  case "$params" in *"def "*) return 0 ;; esac        # extraction failed → skip, never emit garbage
   # Normalize def params to a set of bare names (strip *, **, defaults, type hints).
   local defset; defset=" $(printf '%s' "$params" | tr ',' '\n' \
     | sed -E 's/[*]+//g; s/:.*$//; s/=.*$//; s/[[:space:]]//g' | grep -v '^$' | tr '\n' ' ') "
@@ -99,7 +116,7 @@ for f in "${MD_FILES[@]}"; do
       reason="$(sig_mismatch "$name" "$args")"
       [ -n "$reason" ] && hits="$hits"$'\n'"  $f: \`$name(...)\` — $reason"
     fi
-  done < <(grep -oE '`[A-Za-z_][A-Za-z0-9_]*(\([^`)]*\))?`' "$f" 2>/dev/null | tr -d '`')
+  done < <(md_body "$f" 2>/dev/null | grep -oE '`[A-Za-z_][A-Za-z0-9_]*(\([^`)]*\))?`' | tr -d '`')
 done
 
 # Persist the tally (F-M4-9): stderr evaporates at teardown, so the warn-only calibration

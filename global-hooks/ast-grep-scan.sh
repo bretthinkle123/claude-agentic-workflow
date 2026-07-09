@@ -13,8 +13,13 @@
 set -uo pipefail
 
 if ! command -v ast-grep >/dev/null 2>&1; then
-  echo "[ast-grep-scan] ast-grep not on PATH (npm install -g @ast-grep/cli). Skipping is a" >&2
-  echo "                DISCLOSED skip: report 'ast-grep unavailable' in security-report.md." >&2
+  # F-M4′-4: stamp the SKIP too — M4′'s cycle-1 disclosed skip left no scan-log line
+  # (this exit ran before the stamp), so the skip was provable only from report prose.
+  # exit_code 2 + the "skipped:" arg marker make "never ran" vs "ran, found nothing" vs
+  # "unavailable, disclosed" three distinct, auditable states.
+  "$(dirname "${BASH_SOURCE[0]}")/stamp-scan.sh" ast-grep 2 "" "skipped: binary not on PATH" >/dev/null 2>&1 || true
+  echo "[ast-grep-scan] ast-grep not on PATH (npm install -g @ast-grep/cli). Skip STAMPED" >&2
+  echo "                to scan-log.jsonl (exit 2); report 'ast-grep unavailable' in security-report.md." >&2
   exit 2
 fi
 
