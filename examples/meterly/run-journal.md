@@ -689,3 +689,33 @@ Audit session recovered the missing evidence itself from the session store
 - U-03 standalone step correctly ABSENT (subsumed into A-2 per the M4 decision — the skill no
   longer contains it; nothing was run).
 - Evidence snapshotted (implementation-progress, surface-delta, smoke-status). Loop next.
+
+## M4′ Entry 6 — 2026-07-09T19:55Z — loop cycles 1–2: security clean; AC16 root-caused + optimized 7–17x; SANCTIONED ESCALATION on the budget number
+
+- **Cycle 1 security (opus, 1 attempt, 0 caps, 813 s): CLEAN, predicate PASS.** 2 Semgrep FPs
+  (fixed-literal where-clause), pytest CVE 6.8 (below floor, bump recommended), RLS
+  usage_rollup pre-existing accepted (plan R2). Verified-effective list incl. the CSV sink
+  escape. **ast-grep watchlist: agent INVOKED the wrapper (disclosed skip, exit 2 — not
+  installed on host) and verified the two syntax-shaped concerns manually.** Agent-side fix
+  works; operator gap closed mid-run: `npm install -g @ast-grep/cli` → 0.44.1 (journaled
+  operator setup, same class as M4's repomix install).
+- **Cycle 1 testing (sonnet, 1 attempt, 0 caps, 1214 s):** 180 passed; coverage 91%/66%
+  branches (new code 100% branch); pyramid 116/64/0; added the at-cap boundary test + a real
+  seeded-DAST-key endpoint test; **executed ledger M4-1's action** (filled pipeline-ci.yml
+  coverage floor `--cov-fail-under=85`). **AC16 honestly uncovered: independent re-measure
+  p95 at 100k cap = 25,210 ms vs 500 ms documented target** (corroborating implementation's
+  9.8 s). perf.status=fail, scenario populated. Predicate FAIL on criteria → debugging.
+- **Cycle 2 debugging (opus, capped once mid-fix — breadcrumbed, warm-resumed):** empirical
+  root cause DIFFERS from implementation's disclosure — pure CSV encoding was ~360 ms and DB
+  drain ~1 s; the ~10 s came from **chunk-per-row streaming (100,001 yields) × 4 nested
+  BaseHTTPMiddleware layers re-pumping every chunk** (cost ≈ chunks × layers; handler returned
+  in 16–94 ms, all time post-return). Fix within the approved design: 1000-row batch chunks
+  (primary), str.translate escape table (identical semantics, 0 mismatches over full codepoint
+  sweep), yield_per=5000 cursor tuning. Fails-before/passes-after chunk-count regression test;
+  37 unit + 20 integration green. **Before→after p95 at cap: 10,720 ms → 2,073 ms (median
+  1,374; stable 10-sample).** Irreducible floor within the cursor design ≈ 0.85–1.0 s.
+- **ESCALATION (pipeline-initiated, sanctioned per fix-plan 2.3):** 500 ms at the 100k cap is
+  NOT achievable within the human-approved streaming design; it was plan Open Q1's PROPOSED,
+  never-confirmed number. Decision to the operator by option-selection: set the budget to the
+  achieved envelope / bind 500 ms (⇒ planning redesign) / waive. Loop paused pre-re-run.
+  remediation counter 1/3. Loop position: cycle 2/5, compute 640/1800 s at last tick.
