@@ -16,6 +16,15 @@ string and those files — never assume it can see the conversation.
 ## Stage sequence
 
 ```
+0flight. PRE-FLIGHT (F-M4-1/F-M4-4 — run before ANYTHING else, on the main thread):
+   (a) IDENTITY ASSERT: print `git rev-parse --show-toplevel`, `.pipeline/state.json .feature`
+       (if set), and PROJECT.md's feature — the session cwd MUST be the intended run repo.
+       Gates/telemetry are cwd-bound; M4's kickoff was issued in the wrong clone and only a
+       manual catch saved the run. On any mismatch: STOP and ask, never proceed.
+   (b) CACHE PURGE: delete stale build caches that can seed false environmental claims —
+       `find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .hypothesis \) \
+        -not -path './.git/*' -exec rm -rf {} +` (all regenerable junk; M4's "stray dashboard
+       files" claim grew from run-3 bytecode that survived a manual conversion).
 0elicit. OPTIONAL REQUIREMENTS ELICITATION (TA/A-1 — operator-run, human-facing, BEFORE
    branching; NOT an agent stage, NOT orchestrator-invoked). When the brief is thin/ambiguous
    or the feature touches money/auth/PII, the operator runs the `requirements-elicitation`
@@ -66,8 +75,20 @@ string and those files — never assume it can see the conversation.
               .pipeline/plan-audit.md, append ## Revision notes.")   # ONE pass only, no recursion
      -> review plan.md + plan-audit.md, then the HUMAN runs (in their own terminal, NOT the
         orchestrator — U-15/D1): touch .pipeline/plan-approved                    # human checkpoint
-2. Agent(implementation, "Implement .pipeline/plan.md.")     # SINGLE-SHOT — runs exactly once
-     -> smoke-check.sh (+ infra-validate.sh) fire on Stop
+2. IMPLEMENTATION — two shapes (F-M4-11):
+     WITHOUT .pipeline/tasks.md (small feature):
+       Agent(implementation, "Implement .pipeline/plan.md.")   # SINGLE-SHOT — runs exactly once
+     WITH .pipeline/tasks.md (planning emitted a decomposition): PER-TASK SEGMENTS —
+       invoke implementation once per task boundary (T1..Tn), continuing the SAME agent
+       (SendMessage; context stays warm, C-2 path) with "Do <Tk> ONLY, then stop cleanly."
+       Each segment must end with the suite green and the app bootable (the A-2 contract —
+       smoke-check fires at every segment Stop), so each segment logs a clean `pass` line.
+       Measured basis: M4's implementation needed ~130+ turns — no honest single budget fits
+       that, so a cap stopped meaning "failure" and started meaning "feature bigger than one
+       context window". Per-task segments restore the cap as a pure failure signal: a capped
+       SEGMENT is a real anomaly, breadcrumb it and investigate; never pre-emptively raise
+       maxTurns instead.
+     -> smoke-check.sh (+ infra-validate.sh) fire on Stop (every segment)
      -> if smoke fails: Agent(debugging, "<error>") up to max_retries, then re-smoke
      -> bash ~/.claude/hooks/loop-guard.sh reset      # arm the circuit-breaker for THIS feature
 
@@ -132,6 +153,10 @@ string and those files — never assume it can see the conversation.
      # run log + loop journal). The retrospective MUST quote per-stage model + cost from THIS
      # file, never hand-write them — the trial's retrospective mis-said implementation ran on
      # "opus" when the log (auto-derived from frontmatter) said sonnet.
+     # RE-STAMP-ON-SNAPSHOT (F-M4-8): any time you SNAPSHOT .pipeline/* to run evidence, re-run
+     # this script FIRST. A copied stale summary misreports the run — M4's journal quoted a
+     # 35.7% cap tax from a pre-documentation stamp; the log's truth was 37.5%. Staleness is
+     # detectable (totals.log_lines vs the run-log's line count) but must not be created.
      # ASSURANCE STAMP (iOS Layer 3 + store-compliance Layer E): if run-summary.json `.assurance`
      # != "standard" (a native-mobile target — Swift/iOS or Kotlin/Android — whose language gate
      # adapters aren't built yet; the stamp names which), the deterministic gates ran but analyzed
@@ -192,6 +217,12 @@ string and those files — never assume it can see the conversation.
      `accepted:<reason>`. An escape with no decision is itself a defect — `tests/suites/static.sh`
      asserts every row has an action. This is what turns a one-time escape into a permanent
      check instead of a re-discovery cost; the retrospective's "ledger deltas" section prompts it.
+8. EVIDENCE PRESERVATION (rule 0 / F-M4-7 — before teardown, when the run is instrumented):
+     bash ~/.claude/pipeline-templates/preserve-transcripts.sh <dest-dir>
+     # Copies every subagent trace from the session store (<session>/subagents/agent-<id>.jsonl
+     # + <session>/tool-results/*.txt), ASSERTS each file non-empty, flags byte-identical pairs,
+     # and writes a sha256 MANIFEST. M4 preserved 14 empty transcript files by grepping the
+     # parent session JSONL instead — the gap surfaced only at audit. Never hand-copy transcripts.
 ```
 
 ## Telemetry — logged automatically on every stage
@@ -277,17 +308,17 @@ orchestrator remembering; a behavior in a definition survives every session. Whe
 you find yourself re-teaching an agent something in a prompt, that is the signal to
 edit the definition instead.
 
-## M4 correctness-review pilot (U-03 — advisory, measured, this run only)
+## Correctness review — SUBSUMED into A-2 (U-03 decision, M4 audit 2026-07-09)
 
-For the M4 run ONLY: after implementation passes smoke and before arming the loop,
-run one scoped correctness review over the diff's **data-path queries and
-state-changing logic** (not the full multi-angle review — that stays at the
-pre-checkpoint placement). Advisory: findings route to debugging like any other
-input; nothing gates on it. Rationale: across three runs, the pre-checkpoint
-/code-review was the SOLE catcher of each run's deepest bug (topology/RLS class,
-window_start data loss, reader-key empty dashboard) — this pilot measures whether a
-narrow early pass catches that class before the loop churns, at what cost. Record
-catch-vs-cost in the M4 retrospective; keep or drop the step on that data.
+The M4 pilot ran and decided this: there is NO standalone post-smoke correctness-review
+stage. The M4 measurement showed the pilot's target class — a data-path read feeding
+state-changing logic at a boundary — was caught EARLIER by implementation's A-2
+test-first pass (the EvalPlanQual stale-join died in-stage), while the pilot's net add
+was one latent hardening at ~54k tokens + 3 finder agents. The pilot's checklist
+survives inside the A-2 test-first charter (implementation.md) and testing's
+adversarial charter: data-path reads feeding state changes, window/boundary semantics,
+lock-vs-snapshot behavior under concurrency, production-shaped fixtures. Do not
+re-introduce the standalone step; the pre-checkpoint /code-review remains the late net.
 
 ## Bootstrap (once per project)
 
@@ -302,10 +333,17 @@ the next feature with a fresh budget.
 
 **Large / brownfield target — optional repo map (TA/B-1).** Before invoking planning on a
 large or existing-code target, you MAY generate a single-file codebase map for the planning
-agent (which has no `Bash` of its own): `repomix --output .pipeline/repomix-pack.xml`
-(gitignored). Planning reads that one artifact instead of sweeping with Grep/Glob, and
-repomix's built-in Secretlint pass is a free secrets check on the inputs. Skip it for a
-small greenfield feature — the tree is cheap to Grep directly.
+agent (which has no `Bash` of its own). **Size it to fit the consumer (F-M4-6):** M4 produced
+a 149k-token pack; planning tried to read it, got "too large", and fell back to manual
+exploration — the pack was dead weight. Generate compressed and budgeted:
+`repomix --compress --output .pipeline/repomix-pack.xml` (gitignored), then check the token
+count repomix prints — **if it exceeds ~40k tokens, re-run scoped** (`--include` on the
+feature's likely surface) or skip the pack entirely and let planning explore directly.
+Tell planning the pack path AND require the consumption receipt: planning records the pack's
+sha256 + file/token counts in plan.md frontmatter (it can only get these by reading it);
+plan-audit verifies the sha against disk. repomix's built-in Secretlint pass is a free
+secrets check on the inputs. Skip it for a small greenfield feature — the tree is cheap to
+Grep directly.
 
 ## Interlock-file contract
 

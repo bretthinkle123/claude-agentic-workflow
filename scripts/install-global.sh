@@ -121,9 +121,11 @@ if [[ "$DRY_RUN" == false ]]; then
   cp "${REPO_ROOT}/scripts/bootstrap-project.sh" "${TEMPLATES_DEST}/bootstrap-project.sh"
   cp "${REPO_ROOT}/scripts/run-log-digest.sh"    "${TEMPLATES_DEST}/run-log-digest.sh"
   cp "${REPO_ROOT}/scripts/run-summary.sh"       "${TEMPLATES_DEST}/run-summary.sh"
+  cp "${REPO_ROOT}/scripts/preserve-transcripts.sh" "${TEMPLATES_DEST}/preserve-transcripts.sh"
   # Hooks and the operator scripts must be executable when invoked directly.
   chmod +x "${CLAUDE_HOME}/hooks/"*.sh "${TEMPLATES_DEST}/bootstrap-project.sh" \
-    "${TEMPLATES_DEST}/run-log-digest.sh" "${TEMPLATES_DEST}/run-summary.sh" 2>/dev/null || true
+    "${TEMPLATES_DEST}/run-log-digest.sh" "${TEMPLATES_DEST}/run-summary.sh" \
+    "${TEMPLATES_DEST}/preserve-transcripts.sh" 2>/dev/null || true
 
   # Record everything we just installed (CLAUDE_HOME-relative) so the next run's
   # collision guard recognizes these as ours and never false-flags a re-publish.

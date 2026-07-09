@@ -102,7 +102,21 @@ for f in "${MD_FILES[@]}"; do
   done < <(grep -oE '`[A-Za-z_][A-Za-z0-9_]*(\([^`)]*\))?`' "$f" 2>/dev/null | tr -d '`')
 done
 
+# Persist the tally (F-M4-9): stderr evaporates at teardown, so the warn-only calibration
+# data (the promote-or-not input) must live in an artifact. Written on EVERY run — a clean
+# run records {unresolved: []} so "no warnings" is distinguishable from "never ran".
+write_tally() {  # $1 = newline-separated hit lines (may be empty)
+  printf '%s' "$1" | jq -R -s \
+    --arg ran_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson files "${#MD_FILES[@]}" \
+    --argjson warn_only "$WARN_ONLY" \
+    '{ran_at:$ran_at, files_checked:$files, warn_only:($warn_only==1),
+      unresolved:(split("\n") | map(select(length>0) | ltrimstr("  ")))}' \
+    > .pipeline/doc-identifiers.json 2>/dev/null || true
+}
+
 if [ -n "$hits" ]; then
+  write_tally "$hits"
   echo "[check-doc-identifiers] Documentation names that don't resolve in the tree (U-13):" >&2
   printf '%s\n' "$hits" >&2
   echo "Copy identifiers from the tree, never from memory. Fix or remove the names above." >&2
@@ -112,4 +126,5 @@ if [ -n "$hits" ]; then
   fi
   exit 2
 fi
+write_tally ""
 exit 0

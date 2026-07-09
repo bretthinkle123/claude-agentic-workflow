@@ -44,6 +44,11 @@ set -euo pipefail
 # so it never appends a run-log line in an unrelated repo.
 [ -f .pipeline/state.json ] || exit 0
 
+# Hook start time — the freshness anchor for sibling-hook artifacts (F-M4-3): Stop hooks
+# in the same event array run CONCURRENTLY, so an artifact another hook writes (smoke
+# status) may not exist yet when this script reads it.
+HOOK_START=$(date +%s)
+
 STAGE="${1:?stage required}"
 # Model: derive from the agent's published frontmatter when not passed explicitly.
 # The Stop-hook wiring passes only <stage>, so $2 is normally empty -> read the
@@ -110,9 +115,25 @@ if [ "$STATUS" = "auto" ]; then
       STATUS=$(jq -r '.status // "unknown"' .pipeline/test-results.json 2>/dev/null || echo "unknown")
       ;;
     implementation)
-      # smoke-check.sh (earlier in the same Stop array) writes this fresh on every
-      # run, so it reflects the smoke result for the code just implemented.
-      STATUS=$(jq -r '.status // "unknown"' .pipeline/smoke-status.json 2>/dev/null || echo "unknown")
+      # smoke-check.sh is listed earlier in the same Stop array, but same-event hooks
+      # run CONCURRENTLY — frontmatter order is NOT execution order (F-M4-3: M4 logged
+      # attempt 3 as "unknown" 5 s before smoke-status.json's pass stamp landed). Wait
+      # (bounded) until smoke-status.json is at least as new as this hook's start
+      # before trusting it; if it never freshens, log "pending-smoke" — an explicit
+      # couldn't-know-yet, never a stale result and never a false "unknown".
+      SMOKE_FRESH=""
+      for _i in $(seq 1 20); do
+        if [ -f .pipeline/smoke-status.json ]; then
+          SMOKE_MTIME=$(stat -c %Y .pipeline/smoke-status.json 2>/dev/null || echo 0)
+          if [ "$SMOKE_MTIME" -ge $((HOOK_START - 2)) ]; then SMOKE_FRESH=1; break; fi
+        fi
+        sleep 1
+      done
+      if [ -n "$SMOKE_FRESH" ]; then
+        STATUS=$(jq -r '.status // "unknown"' .pipeline/smoke-status.json 2>/dev/null || echo "unknown")
+      else
+        STATUS="pending-smoke"
+      fi
       ;;
     debugging)
       if [ -f .pipeline/state.json ]; then
@@ -194,8 +215,11 @@ fi   # end U-16d capped-guard
 if [ -z "$NOTES" ]; then
   case "$STAGE" in
     implementation)
-      [ -f .pipeline/smoke-status.json ] && \
+      if [ "$STATUS" = "pending-smoke" ]; then
+        NOTES="smoke result not yet on disk at log time (concurrent Stop hooks)"
+      elif [ -f .pipeline/smoke-status.json ]; then
         NOTES="smoke $(jq -r '.status // "unknown"' .pipeline/smoke-status.json 2>/dev/null || echo unknown)"
+      fi
       ;;
     security)
       [ -f .pipeline/security-status.json ] && \

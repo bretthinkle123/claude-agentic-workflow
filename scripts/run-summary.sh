@@ -90,7 +90,7 @@ jq -rs \
         log_lines: length,
         capped_lines: (map(select(.status=="capped")) | length),
         loop_cap_events: $loop_caps,
-        suspected_underlog: (map(select(.status=="unknown" or .model=="unknown")) | length)
+        suspected_underlog: (map(select(.status=="unknown" or .status=="pending-smoke" or .model=="unknown")) | length)
       },
       models_used: (map(.model // "unknown") | unique),
       first_pass_clean: (

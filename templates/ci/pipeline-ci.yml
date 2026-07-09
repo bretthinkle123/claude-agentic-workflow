@@ -51,15 +51,33 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Placeholder guard (ledger M4-1 — a green job with live placeholders is vacuous)
+        # M4 shipped with <COVERAGE_FLOOR> unfilled and no coverage gate anywhere, and this
+        # job stayed green. Fail loudly instead. Patterns are composed so this step's own
+        # source lines can never match themselves.
+        run: |
+          F=.github/workflows/pipeline-ci.yml
+          PAT="<(INSTALL"; PAT="${PAT}_CMD|BUILD_CMD|TEST_CMD|COVERAGE_FLOOR)>"
+          if grep -nE "$PAT" "$F"; then
+            echo "::error::Unfilled placeholders in enabled CI jobs. bootstrap fills TEST/BUILD; implementation fills INSTALL; testing fills COVERAGE_FLOOR from CLAUDE.md's done-bar."
+            exit 1
+          fi
+          MPAT="<MUTATION"; MPAT="${MPAT}_CMD>|<MUTATION_SCOPE>"
+          if ! grep -qE '^\s*if: false' "$F" && grep -qE "$MPAT" "$F"; then
+            echo "::error::mutation job enabled but its placeholders are unfilled."
+            exit 1
+          fi
       - name: Install dependencies (from lockfile)
         run: <INSTALL_CMD>
       - name: Build
         run: <BUILD_CMD>
       - name: Test with coverage (floor = the local gate's figure)
         run: <TEST_CMD>
-        # Fail under <COVERAGE_FLOOR>% combined lines — the same figure the local deploy
-        # gate rides. Branch coverage: surface in the job summary, do NOT gate (mirrors
-        # the local posture; see test-conventions).
+        # <TEST_CMD> must EMBED the coverage floor as a real gate (e.g. pytest
+        # --cov-fail-under=<COVERAGE_FLOOR>) — the testing agent fills the floor from
+        # CLAUDE.md's done-bar on its first run (same figure the local deploy gate rides,
+        # so CI and the local gate can't disagree). Branch coverage: surface in the job
+        # summary, do NOT gate (mirrors the local posture; see test-conventions).
 
   # mutation — U-22: run mutation testing HERE, on the Linux runner, not on the author's
   # host. mutmut needs a POSIX environment (WSL on Windows), so the local pipeline honestly
