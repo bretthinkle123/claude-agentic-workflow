@@ -1,0 +1,491 @@
+diff --git a/.github/workflows/pipeline-ci.yml b/.github/workflows/pipeline-ci.yml
+index 600d34e..99912a9 100644
+--- a/.github/workflows/pipeline-ci.yml
++++ b/.github/workflows/pipeline-ci.yml
+@@ -63,10 +63,11 @@ jobs:
+       - name: Build
+         run: poetry run python -c "import src.main"
+       - name: Test with coverage (floor = the local gate's figure)
+-        run: poetry run pytest --cov=src --cov-branch
+-        # Fail under <COVERAGE_FLOOR>% combined lines — the same figure the local deploy
+-        # gate rides. Branch coverage: surface in the job summary, do NOT gate (mirrors
+-        # the local posture; see test-conventions).
++        run: poetry run pytest --cov=src --cov-branch --cov-fail-under=85
++        # Fail under 85% combined lines — CLAUDE.md's done-bar figure ("tests pass at
++        # >= 85% coverage"), the same figure the local deploy gate rides. Branch
++        # coverage: surface in the job summary, do NOT gate (mirrors the local
++        # posture; see test-conventions).
+ 
+   # mutation — U-22: run mutation testing HERE, on the Linux runner, not on the author's
+   # host. mutmut needs a POSIX environment (WSL on Windows), so the local pipeline honestly
+diff --git a/PROJECT.md b/PROJECT.md
+index ef22d91..bc052b4 100644
+--- a/PROJECT.md
++++ b/PROJECT.md
+@@ -1,6 +1,4 @@
+-Feature: per-customer metric quotas.
+-- PUT /v1/quotas (admin-scoped API key) sets {customer_id, metric, limit_per_window}.
+-- POST /v1/events returns 429 with a quota error envelope when the current-window rollup for that customer/metric would exceed the quota. Customers without a quota are unlimited (no behavior change).
+-- One expand-only migration: a quotas table.
+-- Existing perf budget applies: p95 < 50 ms under load on POST /v1/events.
++Feature: usage CSV export.
++- GET /v1/usage/export returns the caller's usage rollups (customer_id, metric, window_start, total_quantity) as CSV.
++- Existing API-key auth applies. No behavior change to any existing endpoint.
+ Design source: none.
+diff --git a/docs/system_architecture.md b/docs/system_architecture.md
+index d0b6170..7b98b3c 100644
+--- a/docs/system_architecture.md
++++ b/docs/system_architecture.md
+@@ -3,9 +3,10 @@
+ ## Overview
+ 
+ Meterly ingests metered usage events, serves aggregated per-customer/metric
+-counters, and enforces admin-set per-customer, per-metric usage caps
+-("quotas"). Three authenticated HTTP endpoints, one PostgreSQL database, one
+-Redis rate-limit store, running as a Docker container on ECS Fargate behind an ALB.
++counters (single-bucket read or a streamed CSV export), and enforces
++admin-set per-customer, per-metric usage caps ("quotas"). Four authenticated
++HTTP endpoints, one PostgreSQL database, one Redis rate-limit store, running
++as a Docker container on ECS Fargate behind an ALB.
+ 
+ ```
+ Client --HTTPS+API key--> ALB --> FastAPI (ECS Fargate, >=2 tasks)
+@@ -23,6 +24,7 @@ flowchart LR
+     FastAPI -->|"require_api_key: cache hit or Argon2id verify"| AuthDB[(RDS PostgreSQL: api_keys)]
+     FastAPI -->|"POST /v1/events: insert + quota check + rollup upsert"| EventsDB[(RDS PostgreSQL: events / usage_rollup / quotas)]
+     FastAPI -->|"GET /v1/usage: read rollup"| EventsDB
++    FastAPI -->|"GET /v1/usage/export: pre-flight COUNT + streamed SELECT"| EventsDB
+     FastAPI -->|"PUT /v1/quotas: upsert cap"| EventsDB
+     FastAPI -->|"DB credential fetch"| Secrets[Secrets Manager]
+     FastAPI -->|"traces/logs/errors"| Observability["CloudWatch / X-Ray / Sentry"]
+@@ -65,6 +67,63 @@ and reads a single `usage_rollup` row scoped by the caller's `api_key_id`
+ (`src/services/usage_service.py`, `src/repositories/usage_repo.py`). A missing
+ bucket returns zeros with 200, never 404.
+ 
++## Request flow — `GET /v1/usage/export`
++
++Same auth/throttle/error stack, plus a two-phase pre-flight-then-stream
++design (`src/api/routes/usage_export.py`,
++`src/services/usage_export_service.py`,
++`src/repositories/usage_repo.py`):
++
++1. `UsageExportQueryParams` validates the optional `customer_id`/`metric`/
++   `from`/`to` filters (`src/api/schemas/usage_export.py`) — reuses the same
++   `CustomerId`/`Metric` anchored allowlists as `events.py` and the same
++   `[now-90d, now+1h]` bound idiom as `usage.py`'s `window`, applied here to
++   a `[from, to]` range.
++2. **Pre-flight cap check** (`prepare_export`): a `COUNT(*)` over the
++   caller's rows (scoped by `api_key_id` first, plus the optional filters)
++   inside its own transaction. Over 100,000 rows -> 422
++   `validation_failed`, logged at `warn` (`usage.export.rejected`). This
++   runs, and fully resolves, *before* any response byte — once a
++   `StreamingResponse` is constructed the status line is already 200 and the
++   cap decision can no longer cleanly 422. Any *other* (non-cap) error here
++   propagates uncaught to the error-envelope boundary: a fail-closed generic
++   500, transaction rolled back, no stream ever started.
++3. **Stream** (`stream_export_csv`): a `StreamingResponse` whose body
++   generator is pulled by Starlette only after the handler returns, so it
++   opens its **own** tenant-scoped transaction (the `SET LOCAL
++   app.current_api_key_id` RLS-backstop setting and the server-side cursor
++   both need to stay valid for the whole stream, not just the pre-flight
++   phase). Yields the header row first, always (an empty result is a 200
++   header-only CSV, never 404), then one CSV-encoded row per record from
++   `stream_usage_rollups` (`ORDER BY window_start, customer_id, metric` — a
++   fixed literal, never client-derived — `LIMIT 100000`), each row written
++   into a reused `io.StringIO` via stdlib `csv.writer` (RFC 4180, CRLF,
++   `QUOTE_MINIMAL`) and drained to bytes immediately — constant memory
++   throughout. `customer_id`/`metric` text cells pass through
++   `src/api/csv_export.py`'s `escape_csv_text_cell` (the OWASP
++   formula-injection defense: a leading `= + - @ \t \r` gets a `'` prefix)
++   *before* reaching the writer; numeric/timestamp cells are formatted but
++   never escaped (they're server-generated, never attacker-controlled).
++   Logs exactly one `usage.export` audit event in a `finally` block
++   (`rowCount`, `capped`, `completed`, filter-presence booleans — never the
++   raw `customer_id`/`metric` values), so a client disconnect or a mid-stream
++   DB error still records what was actually sent.
++
++Response headers: `Content-Type: text/csv; charset=utf-8`,
++`Content-Disposition: attachment; filename="usage-export-<UTC
++timestamp>.csv"` (no tenant identifier in the filename), plus the inherited
++`nosniff` and (via the existing `/v1/usage`-prefix rule in
++`src/api/middleware.py`) `Cache-Control: no-store`.
++
++**Accepted risk — mid-stream failure truncates the CSV.** Once the 200
++status line and header bytes are on the wire, an unhandled error partway
++through the stream can no longer be converted to a clean error envelope; the
++client sees a truncated download it can re-request. This is strictly the
++*post-200* case — the pre-flight `COUNT` phase above is fully recoverable
++and does return the generic 500 envelope. Bounded by the row cap + Tier-2
++throttle + connection-pool sizing; batched keyset pagination is the future
++mitigation if this needs closing further.
++
+ ## Request flow — `PUT /v1/quotas`
+ 
+ Admin-scoped create-or-replace of a per-customer, per-metric usage cap.
+@@ -171,3 +230,34 @@ OTel/Sentry wiring-at-construction-time change vs. the plan's original
+ lifespan-hook placement. See `plan.md`'s "Open questions" section for the
+ accepted risks around key-revocation latency, `api_key_id`-as-tenant-scope,
+ and the Postgres app-role bootstrap's CI-network-reachability prerequisite.
++
++**`GET /v1/usage/export` p95 at the 100,000-row cap — resolved (was: plan
++§"Open questions" #1, originally unconfirmed).** The first measured p95
++(~10.7s locally / 25.2s on testing's independent re-measure) was root-caused
++during debugging to the streaming generator yielding **one chunk per row**:
++the app's four nested `BaseHTTPMiddleware` layers (`src/main.py`) each
++re-pump every streamed chunk through their own anyio memory-object-stream, so
++cost scaled with `chunk_count x middleware_layers` and dominated wall-clock
++time at the 100k-row cap — not CSV encoding or DB query time, which were both
++sub-second in isolation. Three within-design fixes closed the gap (see
++`.pipeline/debug-notes.md` for the full isolation profiling):
++- `src/services/usage_export_service.py` batches `_ROWS_PER_CHUNK = 1000`
++  encoded rows per yielded chunk (was one row per chunk) — the primary lever,
++  cutting chunk count ~1,000x at the cap while staying constant-memory (the
++  buffer holds at most one batch).
++- `src/api/csv_export.py`'s `escape_csv_text_cell` replaced its per-character
++  strip loop with a precompiled `str.translate` deletion table (semantics
++  verified identical across all C0/DEL codepoints).
++- `src/repositories/usage_repo.py`'s `stream_usage_rollups` tunes the
++  server-side cursor with `execution_options(yield_per=_STREAM_FETCH_BATCH)`
++  (`_STREAM_FETCH_BATCH = 5000`) — more rows fetched per DB round-trip,
++  cursor still never abandoned.
++
++Net effect: p95 dropped from ~10.7s to a stable **p95 ~1.6-2.1s** (10-sample
++measurement). The original 500ms target proved unreachable within the
++approved constant-memory-streaming design (an irreducible ~0.85-1.0s floor
++from the server-side cursor drain + per-row CSV encoding, even discounting
++middleware). The human confirmed a revised, binding budget of **p95 <=
++3,000ms at the 100,000-row cap** at the 2026-07-09 escalation, which
++`tests/integration/test_usage_export_perf.py` now hard-asserts (AC16); this
++session's re-run measured p95 1,643.87ms, comfortably under the bound.
+diff --git a/src/api/README.md b/src/api/README.md
+index 11ca706..d49e044 100644
+--- a/src/api/README.md
++++ b/src/api/README.md
+@@ -9,12 +9,15 @@ HTTP API layer: FastAPI route handlers, request/response schemas (Pydantic v2),
+ | File / Module | Responsibility |
+ |---|---|
+ | `routes/events.py` | `POST /v1/events` handler; calls `events_service.create_event`. |
+-| `routes/usage.py` | `GET /v1/usage` handler; calls `usage_service.read_usage`. |
++| `routes/usage.py` | `GET /v1/usage` handler; calls `usage_service.get_usage`. |
++| `routes/usage_export.py` | `GET /v1/usage/export` handler; two-phase pre-flight row-cap check (`usage_export_service.prepare_export`) then a `StreamingResponse` body (`usage_export_service.stream_export_csv`). Kept in its own module (not added to `usage.py`) so `GET /v1/usage`'s code path stays untouched. Declares explicit `responses=` OpenAPI metadata (200 `text/csv`, 422) since a `StreamingResponse` has no `response_model` to introspect. |
+ | `routes/quotas.py` | `PUT /v1/quotas` handler; composes auth -> Tier-2 throttle -> an `admin`-scope gate (403 `forbidden` otherwise) -> `quota_service.upsert_tenant_quota`. |
+ | `routes/health.py` | `GET /health` (liveness, no dependencies) and `GET /health/ready` (readiness, DB + migration check). |
+-| `schemas/events.py` | Pydantic models for POST /v1/events request and response; `extra='forbid'` contract enforcement. |
++| `schemas/events.py` | Pydantic models for POST /v1/events request and response; `extra='forbid'` contract enforcement. Also defines the `CustomerId`/`Metric` anchored-allowlist `constr` types reused by `schemas/usage.py` and `schemas/usage_export.py`. |
+ | `schemas/usage.py` | Pydantic models for GET /v1/usage request (query parameters) and response. |
++| `schemas/usage_export.py` | `UsageExportQueryParams` for GET /v1/usage/export — optional `customer_id`/`metric`/`from`/`to` filters (`from` bound via a Pydantic alias to the `from_` field, since `from` is a Python keyword), the same `[now-90d, now+1h]` range bound as `usage.py`, `extra='forbid'`. |
+ | `schemas/quotas.py` | Pydantic models for PUT /v1/quotas request (`customer_id`, `metric`, `limit_per_window`, `extra='forbid'`) and response (echo shape). |
++| `csv_export.py` | The CSV encoding facade for the export route: `EXPORT_HEADER`, `escape_csv_text_cell` (the OWASP CSV/formula-injection escape, applied at the encoding sink independent of upstream ingest validation), and the `format_window_start`/`format_total_quantity` value formatters. |
+ | `middleware.py` | Request-ID / trace-ID assignment, security headers (HSTS, CSP, X-Frame-Options), CORS (allows GET/POST/PUT). |
+ | `errors.py` | Error-envelope boundary: catches all unhandled exceptions and returns `{error:{code,message,requestId}}` with no stack/secret leakage. `AppError` lets a raised exception carry an explicit `app_code` (e.g. `quota_exceeded`) that overrides the default status->code map — needed because 429 is shared by two distinct codes (`rate_limited` vs `quota_exceeded`). |
+ 
+@@ -22,14 +25,15 @@ HTTP API layer: FastAPI route handlers, request/response schemas (Pydantic v2),
+ 
+ **Public surface:**
+ - Imported by `src/main.py` to register routes with FastAPI.
+-- Exposes `get_app()` function which returns the fully-configured FastAPI instance.
++- Exposes `create_app()` function (in `src/main.py`) which returns the fully-configured FastAPI instance.
+ 
+ **Dependencies:**
+ - `middleware.py` and `errors.py` are registered once at app construction (middleware stack + exception handler).
+ - Each route handler uses `require_api_key` guard from `src/auth` to enforce authentication.
+-- Route handlers call `src/services.{events_service, usage_service}` to execute business logic.
++- Route handlers call `src/services.{events_service, usage_service, usage_export_service}` to execute business logic.
+ - Schemas validate request bodies/parameters; malformed input raises Pydantic `ValidationError` → 422.
+ - Middleware and error boundary run for all routes, ensuring every response has proper headers and envelope shape.
++- `routes/usage_export.py` and `services/usage_export_service.py` both import `csv_export.py` for the column contract and formula-escape (never inlined at either call site).
+ 
+ **Middleware ordering (in `main.py`):**
+ 1. Request-ID / trace (outermost) — sets correlation context for all downstream logging.
+@@ -49,6 +53,7 @@ HTTP API layer: FastAPI route handlers, request/response schemas (Pydantic v2),
+ - `quantity` is a decimal > 0 (no zero or negative); `idempotency_key` is alphanumeric + underscore/dash.
+ - GET `/v1/usage` requires a timezone-aware ISO-8601 `window` parameter within 90 days past to 1 hour future (naive datetimes rejected).
+ - PUT `/v1/quotas`: `limit_per_window` is an integer `>= 1` (`<= 1e15`, BIGINT-safe); `customer_id`/`metric` reuse the same anchored allowlists as events; unknown fields (including a client-supplied `api_key_id`/`scope`) are rejected outright.
++- GET `/v1/usage/export`: every filter (`customer_id`, `metric`, `from`, `to`) is optional; `from`/`to` follow the same timezone-aware, `[now-90d, now+1h]`-bounded contract as `usage.py`'s `window`, plus `from <= to`; unknown query params (including a client-supplied `api_key_id`) are rejected outright. A result exceeding 100,000 rows is rejected 422 *before* any response byte (a pre-flight `COUNT`, not a mid-stream cutoff).
+ 
+ **Error handling:**
+ - Authentication failures (missing/invalid key) → 401/403 before handlers run.
+diff --git a/src/main.py b/src/main.py
+index 1215395..624b911 100644
+--- a/src/main.py
++++ b/src/main.py
+@@ -29,6 +29,7 @@ from src.api.routes.events import router as events_router
+ from src.api.routes.health import router as health_router
+ from src.api.routes.quotas import router as quotas_router
+ from src.api.routes.usage import router as usage_router
++from src.api.routes.usage_export import router as usage_export_router
+ from src.config.settings import get_settings
+ from src.db.session import dispose_engine
+ from src.logging import get_logger
+@@ -85,6 +86,7 @@ def create_app() -> FastAPI:
+     app.include_router(health_router)
+     app.include_router(events_router)
+     app.include_router(usage_router)
++    app.include_router(usage_export_router)
+     app.include_router(quotas_router)
+ 
+     # Must run after routes are mounted (FastAPIInstrumentor introspects them)
+diff --git a/src/repositories/README.md b/src/repositories/README.md
+index 9400c70..fb6b4da 100644
+--- a/src/repositories/README.md
++++ b/src/repositories/README.md
+@@ -8,15 +8,15 @@ Data access layer: SQL queries with parameterization, row-level scoping (by auth
+ 
+ | File / Module | Responsibility |
+ |---|---|
+-| `events_repo.py` | `create_or_replay_event(api_key_id, customer_id, metric, quantity, idempotency_key, window_start)` — INSERT ... ON CONFLICT ... DO NOTHING (idempotency). Also `upsert_rollup()` (called only on insert success). |
+-| `usage_repo.py` | `read_usage(api_key_id, customer_id, metric, window_start)` — SELECT from `usage_rollup` scoped by `api_key_id`. Returns None if missing (caller handles zero conversion). |
++| `events_repo.py` | `insert_event_if_new(session, *, api_key_id, customer_id, metric, quantity, idempotency_key, window_start)` — `INSERT ... ON CONFLICT (api_key_id, idempotency_key) DO NOTHING`, returning `None` on a duplicate. `find_event_by_idempotency_key(session, *, api_key_id, idempotency_key)` — reads back the original row on a duplicate replay. `increment_usage_rollup(session, *, api_key_id, customer_id, metric, window_start, quantity)` — the rollup upsert, called only after `insert_event_if_new` returns a row. |
++| `usage_repo.py` | `find_usage_rollup(api_key_id, customer_id, metric, window_start)` — SELECT from `usage_rollup` scoped by `api_key_id`. Returns None if missing (caller handles zero conversion). `count_usage_rollups(api_key_id, customer_id=None, metric=None, window_from=None, window_to=None)` — the export's pre-flight row-cap count over the same optional filters. `stream_usage_rollups(api_key_id, ..., limit)` — the export's server-side-cursor stream (`session.stream(...)`, yields `UsageRollupExportRecord`), ordered by a **fixed literal** `ORDER BY window_start, customer_id, metric` (never client-derived) with `LIMIT`. The count and stream queries share a `_export_filter_clause_and_params` helper so their WHERE clauses can never drift apart. |
+ | `api_keys_repo.py` | `find_active_key_by_key_id(key_id)` — SELECT from `api_keys` by public `key_id` (used by auth cache miss); returns the full row including `scope`. `create_api_key(..., scope="ingest")` — the only key-provisioning path. |
+ | `quotas_repo.py` | `upsert_quota(...)` — `INSERT ... ON CONFLICT (api_key_id, customer_id, metric) DO UPDATE ... RETURNING (xmax = 0) AS inserted`, reporting create-vs-replace in one round-trip. `read_tenant_quota_state_locked(...)` — the atomic check-then-decide: locks the quota row (`FOR UPDATE`), then reads the current-window rollup total as a **separate, fresh** statement (see *Notes* below for why). Returns `None` when no quota exists (unlimited, no lock taken). |
+ 
+ ## Relationships
+ 
+ **Public surface:**
+-- Imported by `src/services.{events_service, usage_service, quota_service}` to execute queries.
++- Imported by `src/services.{events_service, usage_service, usage_export_service, quota_service}` to execute queries.
+ - `api_keys_repo` is also imported by `src/auth.api_key` (credential lookup on cache miss).
+ - `quotas_repo` is imported by both `quota_service` (the upsert) and `events_service` (the read-and-decide).
+ 
+@@ -32,13 +32,13 @@ Data access layer: SQL queries with parameterization, row-level scoping (by auth
+ - If a query accidentally omits the `api_key_id` filter, RLS blocks it at the database level (defense-in-depth).
+ 
+ **Field projections (minimal surface):**
+-- `create_or_replay_event` returns only `{event_id, customer_id, metric, quantity, window_start, idempotent_replay}` — not the full row (which includes `created_at`, `event_time`, `api_key_id`).
+-- `read_usage` returns only `{customer_id, metric, window_start, total_quantity, event_count}` — not internal bookkeeping (`updated_at`, `api_key_id`).
++- `insert_event_if_new` / `find_event_by_idempotency_key` return an `EventRecord{id, api_key_id, customer_id, metric, quantity, idempotency_key, window_start}` — the service layer maps this to the minimal public response shape (not the full row is a service-layer concern, not a repo-layer projection).
++- `find_usage_rollup` returns only `{total_quantity, event_count}` — not internal bookkeeping (`updated_at`, `api_key_id`).
++- `stream_usage_rollups` yields `UsageRollupExportRecord{customer_id, metric, window_start, total_quantity}` — exactly the four exported columns, never `event_count`, `updated_at`, or `api_key_id`.
+ - `api_keys_repo.get_by_key_id` returns the full row (needed by auth for `secret_hash`, `rate_limit_per_sec`, `revoked_at`).
+ 
+ **Constraint enforcement:**
+-- `create_or_replay_event` relies on the `UNIQUE (api_key_id, idempotency_key)` constraint at the DB level to detect duplicates.
+-- If a duplicate key is encountered, PostgreSQL raises an `IntegrityError` (caught by service layer) → the service reads the original row instead.
++- `insert_event_if_new` relies on the `UNIQUE (api_key_id, idempotency_key)` constraint plus `ON CONFLICT DO NOTHING` (not a caught `IntegrityError`) — a duplicate insert returns no row, evaluated atomically by PostgreSQL. If no row is returned, the service calls `find_event_by_idempotency_key` to read the original row instead.
+ - `quantity > 0` and other domain constraints are enforced by CHECK constraints in the schema (verified at insert time).
+ 
+ ## Notes
+diff --git a/src/repositories/usage_repo.py b/src/repositories/usage_repo.py
+index 816cee0..3d7ff82 100644
+--- a/src/repositories/usage_repo.py
++++ b/src/repositories/usage_repo.py
+@@ -1,11 +1,12 @@
+ """Repository for reading `usage_rollup` — the O(1) aggregate lookup behind
+-`GET /v1/usage`.
++`GET /v1/usage`, and the count/stream queries behind `GET /v1/usage/export`.
+ 
+ Reads the pre-aggregated counter rather than summing `events` live, which is
+ what keeps the GET p95 budget bounded as ingest volume grows (see the plan's
+ "why reading the rollup" writeup).
+ """
+ 
++from collections.abc import AsyncIterator
+ from dataclasses import dataclass
+ from datetime import datetime
+ from decimal import Decimal
+@@ -56,3 +57,136 @@ async def find_usage_rollup(
+     if row is None:
+         return None
+     return UsageRollupRecord(total_quantity=row["total_quantity"], event_count=row["event_count"])
++
++
++@dataclass(frozen=True)
++class UsageRollupExportRecord:
++    """The four columns `GET /v1/usage/export` emits — deliberately excludes
++    `event_count`, `updated_at`, and `api_key_id` (ASVS 15.3.1 minimal-
++    projection rule; the caller's identity is never echoed back)."""
++
++    customer_id: str
++    metric: str
++    window_start: datetime
++    total_quantity: Decimal
++
++
++def _export_filter_clause_and_params(
++    *,
++    api_key_id: int,
++    customer_id: str | None,
++    metric: str | None,
++    window_from: datetime | None,
++    window_to: datetime | None,
++) -> tuple[str, dict]:
++    """Build the shared WHERE clause + bound-parameter dict for the export
++    count and stream queries, so the two statements can never drift apart.
++
++    Every fragment is a fixed literal chosen only by which filters are
++    *present*; the filter *values* always travel as bound parameters, never
++    concatenated into the SQL string.
++    """
++    clauses = ["api_key_id = :api_key_id"]
++    params: dict = {"api_key_id": api_key_id}
++    if customer_id is not None:
++        clauses.append("customer_id = :customer_id")
++        params["customer_id"] = customer_id
++    if metric is not None:
++        clauses.append("metric = :metric")
++        params["metric"] = metric
++    if window_from is not None:
++        clauses.append("window_start >= :window_from")
++        params["window_from"] = window_from
++    if window_to is not None:
++        clauses.append("window_start <= :window_to")
++        params["window_to"] = window_to
++    return " AND ".join(clauses), params
++
++
++async def count_usage_rollups(
++    session: AsyncSession,
++    *,
++    api_key_id: int,
++    customer_id: str | None = None,
++    metric: str | None = None,
++    window_from: datetime | None = None,
++    window_to: datetime | None = None,
++) -> int:
++    """Count the caller's rollup rows matching the optional filters.
++
++    Backs the export's pre-flight row-cap check (AC8) — an index-prefix scan
++    on `api_key_id`, scoped first (row-level-security invariant), cheap even
++    without a covering index on the export's ORDER BY (see the plan's
++    "Ordering vs. index" tradeoff writeup).
++    """
++    where_clause, params = _export_filter_clause_and_params(
++        api_key_id=api_key_id,
++        customer_id=customer_id,
++        metric=metric,
++        window_from=window_from,
++        window_to=window_to,
++    )
++    result = await session.execute(text(f"SELECT count(*) FROM usage_rollup WHERE {where_clause}"), params)
++    return result.scalar_one()
++
++
++# Rows fetched per server-side-cursor round-trip in `stream_usage_rollups`.
++# Bounds the client-side buffer (at most one batch is held, regardless of the
++# total result size — the constant-memory streaming invariant is preserved) and
++# trades a handful of extra rows of memory for far fewer cursor round-trips when
++# draining a large export.
++_STREAM_FETCH_BATCH = 5000
++
++
++async def stream_usage_rollups(
++    session: AsyncSession,
++    *,
++    api_key_id: int,
++    customer_id: str | None = None,
++    metric: str | None = None,
++    window_from: datetime | None = None,
++    window_to: datetime | None = None,
++    limit: int,
++) -> AsyncIterator[UsageRollupExportRecord]:
++    """Stream the caller's rollup rows matching the optional filters via a
++    server-side cursor, in deterministic order (AC9, AC13).
++
++    The `ORDER BY` clause is a fixed literal built from server-side column
++    names, never derived from client input, so the sort key is not a
++    tampering sink. `session.stream(...)` fetches from PostgreSQL via a
++    server-side cursor rather than buffering the whole result client-side —
++    the property the constant-memory streaming design depends on.
++
++    `yield_per` tunes *how many* rows that server-side cursor fetches per
++    round-trip (it does not abandon the cursor): the default single-row/small
++    partition fetch cost ~1s to drain 100,000 rows, versus ~0.6s at
++    `_STREAM_FETCH_BATCH`, while keeping memory bounded — at most one batch of
++    rows is buffered client-side, independent of the total result size.
++    """
++    where_clause, params = _export_filter_clause_and_params(
++        api_key_id=api_key_id,
++        customer_id=customer_id,
++        metric=metric,
++        window_from=window_from,
++        window_to=window_to,
++    )
++    params["limit"] = limit
++    result = await session.stream(
++        text(
++            f"""
++            SELECT customer_id, metric, window_start, total_quantity
++            FROM usage_rollup
++            WHERE {where_clause}
++            ORDER BY window_start, customer_id, metric ASC
++            LIMIT :limit
++            """
++        ).execution_options(yield_per=_STREAM_FETCH_BATCH),
++        params,
++    )
++    async for row in result.mappings():
++        yield UsageRollupExportRecord(
++            customer_id=row["customer_id"],
++            metric=row["metric"],
++            window_start=row["window_start"],
++            total_quantity=row["total_quantity"],
++        )
+diff --git a/src/services/README.md b/src/services/README.md
+index eb0f486..c7aacf6 100644
+--- a/src/services/README.md
++++ b/src/services/README.md
+@@ -9,20 +9,22 @@ Business logic layer: event ingestion (with idempotency and counter atomicity),
+ | File / Module | Responsibility |
+ |---|---|
+ | `events_service.py` | `create_event(principal, payload)` — inserts an event, checks the caller's quota (if any) on the winning-insert branch, and increments the hourly counter, all in one transaction; idempotent on `idempotency_key`. Raises `QuotaExceededError` (429 `quota_exceeded`) when `R + Q > L`, which rolls back the event insert. Returns the created/replayed event. |
+-| `usage_service.py` | `read_usage(api_key_id, customer_id, metric, window)` — reads the aggregated counter for a time bucket; returns zeros if the bucket is empty (never 404). |
++| `usage_service.py` | `get_usage(principal, query)` — reads the aggregated counter for the `(customer_id, metric, window)` bucket in `query` (a `UsageQueryParams`); returns zeros if the bucket is empty (never 404). |
++| `usage_export_service.py` | `prepare_export(principal, params)` — the pre-flight row-cap check: a `COUNT(*)` in its own transaction, raising a plain 422 `HTTPException` over `MAX_EXPORT_ROWS` (100,000) *before* any response byte; any other (non-cap) error propagates uncaught to the error-envelope boundary (fail-closed 500, no stream ever started). `stream_export_csv(principal, params)` — the `StreamingResponse` body generator: opens its own tenant-scoped transaction (Starlette pulls it only after the route returns), yields the header row first always (so an empty result is a 200 header-only CSV, never 404), then one CSV-encoded row per streamed rollup at constant memory (a reused `io.StringIO`, drained and reset per row), and logs one `usage.export` audit event in a `finally` block (fires even on a client disconnect or a mid-stream error). |
+ | `quota_service.py` | `upsert_tenant_quota(principal, payload)` — create-or-replaces the caller's cap for `(customer_id, metric)` in one transaction; maps the repository's insert-vs-replace signal to 201/200 and logs the `quota.upsert` audit event. |
+-| `time_windows.py` | `window_start_utc(ts: datetime)` — floors a timezone-aware timestamp to the hour (UTC); used by all three services. |
++| `time_windows.py` | `floor_to_hour_utc(timestamp: datetime)` — floors a timezone-aware timestamp to the hour (UTC); used by `events_service` and `usage_service`. |
+ 
+ ## Relationships
+ 
+ **Public surface:**
+-- Imported by `src/api.routes.{events, usage, quotas}` to execute the core business operations.
++- Imported by `src/api.routes.{events, usage, usage_export, quotas}` to execute the core business operations.
+ 
+ **Dependencies:**
+ - `events_service` imports `src/repositories.{events_repo, quotas_repo}` to insert the event, check the quota, and upsert the counter.
+ - `usage_service` imports `src/repositories.usage_repo` to read the rollup.
++- `usage_export_service` imports `src/repositories.usage_repo` (`count_usage_rollups`, `stream_usage_rollups`) and `src/api/csv_export.py` (the column contract + formula-escape facade) — it owns the `csv.writer`/`io.StringIO` streaming mechanics, `csv_export.py` owns only the encoding/escaping contract.
+ - `quota_service` imports `src/repositories.quotas_repo` to upsert the cap.
+-- All three services receive an authenticated `AuthenticatedPrincipal` from the route handler (set by `require_api_key` guard); `principal.scope` gates `PUT /v1/quotas` at the route layer before `quota_service` ever runs.
++- All services receive an authenticated `AuthenticatedPrincipal` from the route handler (set by `require_api_key` guard); `principal.scope` gates `PUT /v1/quotas` at the route layer before `quota_service` ever runs (the export has no scope gate — any authenticated key may export its own tenant's data).
+ - `time_windows` is imported by `events_service` and `usage_service` to floor timestamps.
+ 
+ **Transaction boundary:**
+diff --git a/tests/README.md b/tests/README.md
+index 0a6d78b..9860087 100644
+--- a/tests/README.md
++++ b/tests/README.md
+@@ -15,6 +15,7 @@ unit tests here, endpoint/migration/concurrency/perf tests under `integration/`.
+ | `test_app_smoke.py` | App-construction-level tests needing no DB/Redis: liveness, OpenAPI exposure, unauthenticated-denial/error-envelope shape. |
+ | `test_auth_api_key.py` | Split-token parsing and the in-process verification cache (Argon2id-vs-p95 cache mechanism). |
+ | `test_crypto.py` | `src/crypto` facade: Argon2id hash/verify, constant-time compare. |
++| `test_csv_export.py` | `src/api/csv_export.py` unit tests: `escape_csv_text_cell` (formula-trigger prefixing incl. leading-`-` `customer_id`, control-char stripping), RFC 4180 quoting via `csv.writer`, `format_window_start`/`format_total_quantity` value formatting (no scientific notation, UTC ISO-8601). |
+ | `test_dast_context_documented.py` | Asserts the DAST scanner auth context (header + token shape) is documented somewhere a DAST job's config can read it. |
+ | `test_db_session_isolation.py` | Regression guard for the `READ COMMITTED` isolation pin in `src/db/session.py` — the dependency the quota lock-then-read atomicity in `src/repositories/quotas_repo.py::read_tenant_quota_state_locked` relies on. |
+ | `test_dependency_pins.py` | Security-regression guard against a starlette CVE-carrying downgrade (pinned version stays at the patched release). |
+@@ -23,8 +24,10 @@ unit tests here, endpoint/migration/concurrency/perf tests under `integration/`.
+ | `test_schemas_events.py` | Validation-contract tests for `EventCreateRequest`. |
+ | `test_schemas_quotas.py` | Validation-contract tests for `QuotaPutRequest` (anchored `customer_id`/`metric` allowlists, `limit_per_window` bounds, injection rejection). |
+ | `test_schemas_usage.py` | Validation-contract tests for `UsageQueryParams`. |
++| `test_schemas_usage_export.py` | Validation-contract tests for `UsageExportQueryParams`: all-filters-optional, the `from`/`from_` alias binding, naive-datetime rejection, `from<=to` and `[now-90d, now+1h]` bound enforcement, `extra="forbid"` rejecting unknown/injected fields. |
+ | `test_slo_alarms_defined.py` | Static assertion that the declared SLO burn-rate + canary CloudWatch alarms exist in the Terraform source with the exact names `deploy.yml` expects. |
+-| `test_time_windows.py` | Tests for the UTC hour-flooring helper (`window_start_utc`) shared by `events_service`, `usage_service`, and `quota_service`. |
++| `test_time_windows.py` | Tests for the UTC hour-flooring helper (`floor_to_hour_utc`) shared by `events_service` and `usage_service`. |
++| `test_usage_export_service.py` | `src/services/usage_export_service.py` unit tests: `prepare_export` cap-boundary (exactly-at-cap passes, cap+1 → 422) and fail-closed non-cap-error propagation (AC22); `stream_export_csv` header-first-on-empty-result, audit-log fields (no raw `customer_id`), `completed=False` on a mid-stream failure, and the chunk-batching regression guard (`_ROWS_PER_CHUNK`). |
+ | `integration/` | Tests requiring a real Postgres/Redis (testcontainers) or a live HTTP process — see `tests/integration/README.md`. |
+ 
+ ## Relationships
+diff --git a/tests/integration/README.md b/tests/integration/README.md
+index 4dbdf4d..a19bbec 100644
+--- a/tests/integration/README.md
++++ b/tests/integration/README.md
+@@ -27,6 +27,8 @@ suite in `tests/` (no live DB/Redis there).
+ | `test_rate_limit.py` | Tier-2 (`api_key_id`-keyed) rate limiting: two principals on one IP get independent buckets; one principal across two IPs shares one bucket. |
+ | `test_seed_api_key_script.py` | `scripts/seed_api_key.py` provisions a key against a real database, including the `--admin` flag setting `scope='admin'` (default `scope='ingest'`). |
+ | `test_usage_endpoint.py` | `GET /v1/usage` integration tests (aggregation, tenant isolation). |
++| `test_usage_export_endpoint.py` | `GET /v1/usage/export` integration tests: header-only-CSV on an empty result, per-filter narrowing, deterministic ordering, two-tenant isolation, row-cap 422 with no partial body, formula-injection escape end-to-end, response headers (content-type/filename/nosniff/no-store), streaming-not-buffered (multi-chunk) sanity, OpenAPI-schema exposure (AC19), the seeded DAST key calling the export via `test_export_seeded_dast_key_can_call_the_export` (AC20), and the fail-closed pre-flight 500 on a forced `COUNT` error (AC22). |
++| `test_usage_export_perf.py` | Real-Postgres-testcontainer p95 timing sanity check for the export at the 100,000-row cap (AC16) — a 10-sample stable measurement asserting the human-confirmed `p95 <= 3,000ms` bound (not a k6 load test). |
+ | `k6/` | k6 load-test scripts driven by `test_perf_k6_load.py` — see `k6/README.md`. |
+ 
+ ## Relationships

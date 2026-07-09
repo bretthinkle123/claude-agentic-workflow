@@ -774,3 +774,29 @@ Audit session recovered the missing evidence itself from the session store
 - Evidence snapshotted (pr-description, review-manifest, doc-identifiers, run-log).
 - **STOPPED at the M5 hard human diff-review checkpoint** — operator to review and run
   `bash ~/.claude/hooks/approve-diff.sh`.
+
+## M4′ Entry 9 — 2026-07-09T21:40Z — DEPLOYMENT COMPLETE: PR #3 open; run closed end-to-end on engine 73485d1
+
+- **Human diff-approved** 20:54:01Z (approve-diff.sh; hash eb52dff6… == review-manifest —
+  currency held). All 8 /code-review findings deferred by the human → ledger.
+- **deployment (sonnet, 1 attempt, 0 caps, 166 s): PASS.** Gate verified every conjunct;
+  single hygienic commit `bcf16bb` (no .pipeline, no secrets); **PR #3:**
+  https://github.com/bretthinkle123/meterly-pipeline-test/pull/3. No production deploy
+  (CI post-merge owns it).
+- **6b re-stamp (whole-run truth):** stages=8, log_lines=14, **capped=3 → final cap tax
+  21.4%** (implementation ×2, debugging ×1; security/testing/documentation/deployment all
+  0-cap). vs M4's 35.3%: better, still >10% — criterion 1 verdict is the audit's.
+  suspected_underlog=0, first_pass_clean=false.
+- **§7 ledger deltas written:** M4P-1…M4P-8 in docs/finding-ledger.md (every deferred finding
+  has a row + action; M4P-3 is the durable record of the pure-ASGI middleware follow-up).
+- **Step-8 evidence preservation:** preserve-transcripts.sh → 40 transcripts + MANIFEST.sha256
+  into run-evidence/m4-prime/transcripts (non-empty asserted; one known dual-ID pair flagged
+  at source). NOTE for the ledger/audit: the script resolves the session store from CWD — run
+  from the engine repo it silently found no session; correct result required running it from
+  the throwaway repo (small F-M4′ usability candidate). Final .pipeline snapshot copied
+  (re-stamped run-summary, run-log, diff-approved, smoke-status).
+- **Remaining for M4′:** operator merges PR #3 → from-disk audit in a fresh session
+  (AUDIT-HANDOFF pattern; m4-prime evidence + docs/m4-prime-run-plan.md scorecard —
+  criterion-1 arithmetic on 14/3, criterion-2 adjudication of the one sanctioned AC16
+  escalation, the watchlist verdicts incl. both fixed-and-verified behaviors and the
+  implementation-budget miss).

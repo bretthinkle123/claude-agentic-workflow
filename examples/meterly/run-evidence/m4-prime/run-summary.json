@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-09T20:34:22Z",
+  "generated_at": "2026-07-09T20:57:35Z",
   "assurance": "standard",
   "stages": {
     "debugging": {
@@ -8,6 +8,24 @@
       "caps": 1,
       "models": [
         "opus"
+      ],
+      "last_status": "pass"
+    },
+    "deployment": {
+      "invocations": 1,
+      "attempts_max": 1,
+      "caps": 0,
+      "models": [
+        "sonnet"
+      ],
+      "last_status": "pass"
+    },
+    "documentation": {
+      "invocations": 1,
+      "attempts_max": 1,
+      "caps": 0,
+      "models": [
+        "sonnet"
       ],
       "last_status": "pass"
     },
@@ -58,7 +76,7 @@
     }
   },
   "totals": {
-    "log_lines": 12,
+    "log_lines": 14,
     "capped_lines": 3,
     "loop_cap_events": 0,
     "suspected_underlog": 0
