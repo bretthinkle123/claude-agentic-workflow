@@ -349,3 +349,27 @@ PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack �
     (+1 debugging cycle, ~54k tokens) on top of 3 finder agents. Early signal: **subsume into
     A-2**, pending the retrospective.
 - Next: arm loop-guard, enter security⇄debugging⇄testing.
+
+## M4 Entry 8 — 2026-07-09T02:20Z — loop cycle 1: security CLEAN with a real efficacy catch; testing capped once
+
+- Loop-guard armed 01:33:58Z (5 cycles / 1800s compute / 7200s wall). Cycle 1 tick ok.
+- **security attempt 1 (opus): capped** mid-Semgrep-triage (49 tools, ~115k tokens; breadcrumb
+  left). Partial artifacts were on disk (stamped as it went). **Warm resume finished in 12 tool
+  uses / 233 s.**
+- **security final: status=clean; GREEN predicate PASS via jq from disk** (max CVSS 6.8 < 7
+  gate floor, input/data surfaces controlled, asvs + scan reconciled). run-log line: attempt 2,
+  1 fixed / 0 critical / 8 warnings.
+- **Efficacy-class catch (scorecard criterion 3 candidate): the U-02 DB-privilege trap.**
+  Security proved the app role (`meterly_app`, via the same secrets facade Alembic uses) OWNS
+  `quotas` — table owners bypass non-FORCE RLS regardless of NOBYPASSRLS — so the plan's
+  `quotas_tenant_isolation` policy was inert (Open Q2's exact worry). Fixed in-diff:
+  `ALTER TABLE quotas FORCE ROW LEVEL SECURITY` added to migration 0003. Explicit api_key_id
+  predicates meant no exploitable IDOR; the backstop was dead, now live. Reported-not-fixed:
+  pytest 8.3.4 tmpdir CVEs (6.8, dev-only, below gate floor — bump recommended); pre-existing
+  events/usage_rollup non-FORCE RLS (outside diff — follow-up migration); 2 mutable-action-tag
+  warnings in pipeline-ci.yml; 3 Semgrep test-file ERRORs confirmed false-positive.
+- ast-grep invocation by security (TA measurement 5): not stated in its summary — verify at
+  audit from scan-log.jsonl/security-report.md.
+- **testing attempt 1 (sonnet): capped** mid-coverage-computation (54 tools, ~99k tokens; suite
+  already run, 86% combined lines observed; breadcrumb left). Warm resume issued to finalize
+  test-results.json + test-quality.json. Running.
