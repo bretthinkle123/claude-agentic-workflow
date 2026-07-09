@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-07-09T20:34:22Z",
+  "assurance": "standard",
+  "stages": {
+    "debugging": {
+      "invocations": 2,
+      "attempts_max": 2,
+      "caps": 1,
+      "models": [
+        "opus"
+      ],
+      "last_status": "pass"
+    },
+    "implementation": {
+      "invocations": 3,
+      "attempts_max": 3,
+      "caps": 2,
+      "models": [
+        "sonnet"
+      ],
+      "last_status": "pass"
+    },
+    "plan-audit": {
+      "invocations": 1,
+      "attempts_max": 1,
+      "caps": 0,
+      "models": [
+        "sonnet"
+      ],
+      "last_status": "pass"
+    },
+    "planning": {
+      "invocations": 2,
+      "attempts_max": 2,
+      "caps": 0,
+      "models": [
+        "opus"
+      ],
+      "last_status": "pass"
+    },
+    "security": {
+      "invocations": 2,
+      "attempts_max": 2,
+      "caps": 0,
+      "models": [
+        "opus"
+      ],
+      "last_status": "clean"
+    },
+    "testing": {
+      "invocations": 2,
+      "attempts_max": 2,
+      "caps": 0,
+      "models": [
+        "sonnet"
+      ],
+      "last_status": "pass"
+    }
+  },
+  "totals": {
+    "log_lines": 12,
+    "capped_lines": 3,
+    "loop_cap_events": 0,
+    "suspected_underlog": 0
+  },
+  "models_used": [
+    "opus",
+    "sonnet"
+  ],
+  "first_pass_clean": false
+}

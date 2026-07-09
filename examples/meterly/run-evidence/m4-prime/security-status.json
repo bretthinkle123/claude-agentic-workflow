@@ -1,0 +1,56 @@
+{
+  "status": "clean",
+  "critical_count": 0,
+  "warning_count": 4,
+  "fixed_count": 0,
+  "total_findings": 7,
+  "ran_at": "2026-07-09T20:21:47Z",
+  "scope": "diff",
+  "since_commit": "43da3203feb5e9be3d7684992b47209188d328b0",
+  "stride_mechanisms_verified": 8,
+  "stride_mechanisms_missing": 0,
+  "stride_new_threats": 0,
+  "asvs": {
+    "l1_l2_universal": true,
+    "in_scope_l3": [],
+    "triggered_chapters": [
+      "V1",
+      "V2",
+      "V4",
+      "V6",
+      "V8",
+      "V13",
+      "V14",
+      "V16"
+    ],
+    "reqs_verified": 16,
+    "l1_l2_missing": [],
+    "l3_in_scope_missing": [],
+    "doc_advisory": [],
+    "waivers": [],
+    "reconciled": true
+  },
+  "osv_findings": 2,
+  "osv_max_cvss": 6.8,
+  "osv_waiver": null,
+  "semgrep_findings": 4,
+  "checkov_findings": 0,
+  "trivy_findings": 0,
+  "scan_artifacts": {
+    "semgrep": "df3f07d6bdb6114ca6e27ac1c19f73ede643abbefbc7b645529ac78e40d6e7f4",
+    "osv": "9f84c11664440b613aac615bd314a6f2a55b399b9b2864cd74ef6396045447ef"
+  },
+  "input_surface": {
+    "declared": 1,
+    "implemented": 1,
+    "uncontrolled": [],
+    "reconciled": true
+  },
+  "data_surface": {
+    "classified": 0,
+    "sensitive": 0,
+    "unprotected": [],
+    "reconciled": true
+  },
+  "scan_reconciled": true
+}

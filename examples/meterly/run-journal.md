@@ -719,3 +719,29 @@ Audit session recovered the missing evidence itself from the session store
   never-confirmed number. Decision to the operator by option-selection: set the budget to the
   achieved envelope / bind 500 ms (⇒ planning redesign) / waive. Loop paused pre-re-run.
   remediation counter 1/3. Loop position: cycle 2/5, compute 640/1800 s at last tick.
+
+## M4′ Entry 7 — 2026-07-09T20:40Z — GREEN at cycle 3/5; DAST within budget; cap tax 3/12 at loop exit
+
+- **Human decision (option-selection): AC16 = p95 ≤ 3,000 ms at the 100k cap** (resolving plan
+  Open Q1; 500 ms recorded as requiring a design change). Orchestrator transcribed into
+  acceptance.md, marked human-confirmed.
+- **Cycle 3 security re-scan (1 attempt, 0 caps): CLEAN.** Perf fix preserved every invariant
+  (translate-table escape semantically identical, cursor/WHERE unchanged). **ast-grep 0.44.1
+  RAN and stamped scan-log.jsonl** (watchlist item F-M4-5 CLOSED live — structural SQL pass
+  corroborated the two Semgrep FP sites; KDF rule clean). 2 new low warnings (mutable
+  setup-python tags in pipeline-ci — pre-existing, follow-up). pytest CVE + RLS carry-overs
+  unchanged.
+- **Cycle 3 testing re-run (1 attempt, 0 caps):** perf test hard-asserts the confirmed bound
+  (10-sample stable p95, full-row-count check per sample): **measured p95 1,643.87 ms vs
+  3,000 budget — PASS.** AC16 covered → 21/22 + AC18 delegated. Targeted 57/57 green; prior
+  full-suite 180/180 + coverage 91%/66% stand (no production code changed since).
+- **Both GREEN predicates PASS (jq from disk) → loop exit GREEN, cycle 3 of 5.** loop-guard
+  done stamped; 4c re-stamp: stages=6, log_lines=12, **capped=3 (impl×2, debugging×1) —
+  cap tax 25% at loop exit**, suspected_underlog=0. The 0-cap Track-2 expectation missed;
+  criterion 1 verdict waits on final whole-run lines but is on track to miss again —
+  single-shot implementation budget is the remaining offender (F-M4′ candidate from Entry 5).
+- **DAST L1: within budget** (target_reached true via /docs; 0 high / 3 med / 4 low / 5 info;
+  same hygiene profile as M4). U-13 doc-identifiers.json: not present at this point (hook runs
+  with documentation — check after that stage).
+- Evidence snapshotted (14 artifacts incl. re-stamped run-summary + scan-reconciliation).
+  Documentation next.

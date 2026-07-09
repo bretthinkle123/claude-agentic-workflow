@@ -1,0 +1,202 @@
+{
+  "status": "pass",
+  "ran_at": "2026-07-09T20:32:17Z",
+  "scope": "diff",
+  "since_commit": "43da3203feb5e9be3d7684992b47209188d328b0",
+  "tested_change_hash": "0a8d18dda7adff3c2df5a4f86bd606d655434cddd5468253cebffa04b63f21f0",
+  "test_strategy": "pyramid",
+  "total": 180,
+  "passed": 180,
+  "failed": 0,
+  "skipped": {
+    "count": 4,
+    "tests": [
+      "tests/integration/test_perf_k6_load.py::test_events_ingestion_load (deselected: no k6 binary on PATH in this sandbox, verified this session via `which k6`)",
+      "tests/integration/test_perf_k6_load.py (3 additional k6-driven tests in the same module, same reason)"
+    ]
+  },
+  "failures": [],
+  "tests_by_type": {
+    "unit": 116,
+    "integration": 64,
+    "e2e": 0
+  },
+  "criteria_covered": {
+    "total": 22,
+    "covered": 21,
+    "by_id": [
+      {
+        "id": "AC1",
+        "covered": true,
+        "test": "tests/test_csv_export.py::test_export_header_matches_the_brief_column_order + test_rfc4180_quoting_via_stdlib_csv_writer_for_comma_quote_and_newline; tests/integration/test_usage_export_endpoint.py::test_export_is_header_only_csv_for_empty_result",
+        "reason": "header order, CRLF, RFC4180 quoting verified at both unit and end-to-end tiers"
+      },
+      {
+        "id": "AC2",
+        "covered": true,
+        "test": "tests/test_schemas_usage_export.py::test_all_filters_omitted_is_valid, test_accepts_well_formed_filters; tests/integration/test_usage_export_endpoint.py::test_export_customer_id_filter_narrows_the_result, test_export_metric_filter_narrows_the_result, test_export_from_to_window_filter_narrows_the_result, test_export_with_no_filters_returns_all_caller_rows",
+        "reason": "each filter independently narrows the row set; all-omitted returns full set"
+      },
+      {
+        "id": "AC3",
+        "covered": true,
+        "test": "tests/test_schemas_usage_export.py::test_from_alias_binds_to_from__field, test_rejects_naive_from_datetime, test_rejects_naive_to_datetime, test_rejects_from_after_to, test_accepts_from_equal_to_to, test_rejects_from_too_far_in_the_past, test_rejects_to_too_far_in_the_future",
+        "reason": "naive-reject, inverted-range-reject, and both window-bound edges (90d/1h) exercised"
+      },
+      {
+        "id": "AC4",
+        "covered": true,
+        "test": "tests/test_schemas_usage_export.py::test_rejects_injection_in_customer_id, test_rejects_unknown_fields; tests/integration/test_usage_export_endpoint.py::test_export_malformed_query_param_returns_422, test_export_unknown_query_param_returns_422",
+        "reason": "422 envelope + extra=forbid verified at unit and integration tiers"
+      },
+      {
+        "id": "AC5",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_endpoint.py::test_export_rate_limit_two_principals_one_ip_get_independent_buckets",
+        "reason": "discriminating two-principals-one-IP shape (not the weak same-owner-only form) proves the Tier-2 throttle is keyed on api_key_id, not client IP"
+      },
+      {
+        "id": "AC6",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_endpoint.py::test_export_requires_authentication, test_export_any_authenticated_scope_may_export_ingest_and_admin",
+        "reason": "no/invalid key -> 401; both ingest- and admin-scoped keys -> 200 (no scope gate)"
+      },
+      {
+        "id": "AC7",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_endpoint.py::test_export_tenant_isolation_excludes_other_tenants_rows",
+        "reason": "IDOR/BOLA shape: two tenants share a customer_id value; tenant A's export excludes tenant B's row by value, not just by count"
+      },
+      {
+        "id": "AC8",
+        "covered": true,
+        "test": "tests/test_usage_export_service.py::test_prepare_export_passes_when_exactly_at_cap_boundary (added this session), test_prepare_export_rejects_over_cap_with_422; tests/integration/test_usage_export_endpoint.py::test_export_row_cap_returns_422_with_no_partial_body",
+        "reason": "both sides of the boundary now covered (exactly-at-cap passes, cap+1 rejects) plus the no-partial-body integration proof"
+      },
+      {
+        "id": "AC9",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_endpoint.py::test_export_streaming_delivers_multiple_discrete_chunks",
+        "reason": "genuine socket-level chunk-boundary proof via an out-of-process uvicorn server (the in-process ASGITransport was independently verified unusable for this by implementation and re-confirmed by reading the fixture and its cited httpx internals)"
+      },
+      {
+        "id": "AC10",
+        "covered": true,
+        "test": "tests/test_csv_export.py::test_leading_formula_trigger_is_quote_prefixed, test_leading_dash_customer_id_is_escaped, test_embedded_control_characters_are_stripped; tests/integration/test_usage_export_endpoint.py::test_export_formula_injection_is_escaped_end_to_end",
+        "reason": "every OWASP trigger char parametrized at unit tier, plus the reachable leading-dash case end-to-end"
+      },
+      {
+        "id": "AC11",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_endpoint.py::test_export_response_headers",
+        "reason": "content-type, filename regex (no tenant id), nosniff, no-store all asserted; filename pinned to a full regex, not a substring exclusion"
+      },
+      {
+        "id": "AC12",
+        "covered": true,
+        "test": "tests/test_usage_export_service.py::test_stream_export_csv_is_header_only_on_empty_result; tests/integration/test_usage_export_endpoint.py::test_export_is_header_only_csv_for_empty_result",
+        "reason": "200 header-only CSV verified at unit and integration tiers, never 404"
+      },
+      {
+        "id": "AC13",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_endpoint.py::test_export_deterministic_ordering",
+        "reason": "rows inserted out of customer_id order; export asserts sorted order over a seeded multi-row set"
+      },
+      {
+        "id": "AC14",
+        "covered": true,
+        "test": "tests/test_csv_export.py::test_total_quantity_formats_as_plain_decimal_no_scientific_notation, test_window_start_formats_as_utc_iso8601_with_offset",
+        "reason": "format assertions at both scale-6 boundary and offset-formatting"
+      },
+      {
+        "id": "AC15",
+        "covered": true,
+        "test": "full suite run this session: tests/integration/test_events_endpoint.py, tests/integration/test_usage_endpoint.py, tests/integration/test_quotas_endpoint.py all green unchanged; verified this session via `git diff HEAD --name-only` + `git ls-files --others` that no file under alembic/versions/ was added or modified",
+        "reason": "negative criterion: existing endpoint suites pass unchanged and no new migration exists"
+      },
+      {
+        "id": "AC16",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_perf.py::test_export_p95_timing_meets_the_confirmed_3000ms_budget_at_the_row_cap",
+        "reason": "debugging root-caused the true bottleneck (chunk-per-row streaming fanned out through 4 nested BaseHTTPMiddleware layers, not CSV encoding) and fixed it within the approved design (batched chunking, precompiled str.translate escape, tuned yield_per on the server-side cursor). The HUMAN confirmed a revised, binding budget of p95 <= 3,000ms at the 100,000-row cap at the 2026-07-09 escalation (superseding the original 500ms aspiration, recorded as unreachable within the mandated constant-memory streaming design -- see .pipeline/debug-notes.md). The test now HARD-ASSERTS this bound over a 10-sample stable measurement; this session's re-run measured p95=1,643.87ms / min=1,093.57ms / median=1,385.42ms, comfortably under the 3,000ms bound and consistent with debug-notes' own stable-sample figures (min 1,139ms / median 1,374ms / p95 2,073ms)."
+      },
+      {
+        "id": "AC17",
+        "covered": true,
+        "test": "tests/test_usage_export_service.py::test_stream_export_csv_logs_completion_audit_event, test_prepare_export_rejects_over_cap_with_422, test_stream_export_csv_completion_is_false_on_mid_stream_failure",
+        "reason": "info event with rowCount/capped/completed and no raw customer_id; warn event on over-cap; completed=false on mid-stream failure"
+      },
+      {
+        "id": "AC18",
+        "covered": false,
+        "delegated": "security",
+        "test": null,
+        "reason": "delegated to the security stage per acceptance.md frontmatter (delegated_criteria: [AC18]) -- ASVS reconciliation, not a test-suite assertion"
+      },
+      {
+        "id": "AC19",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_endpoint.py::test_openapi_schema_exposes_the_export_route_and_responses",
+        "reason": "served /openapi.json includes the route with its 200 text/csv and 422 responses"
+      },
+      {
+        "id": "AC20",
+        "covered": true,
+        "test": "tests/integration/test_usage_export_endpoint.py::test_export_seeded_dast_key_can_call_the_export (added this session)",
+        "reason": "the pre-existing test_seed_api_key_script.py proves the script persists a working key row but never calls any endpoint with the printed key -- this was a genuine gap; the added test runs the real seed script and calls the export route with its printed key, closing it"
+      },
+      {
+        "id": "AC21",
+        "covered": true,
+        "test": "tests/test_dast_context_documented.py::test_bearer_split_token_auth_context_is_documented (pre-existing, feature-agnostic); tests/integration/test_usage_export_endpoint.py exercises the identical Bearer mtr_live_<key_id>_<secret> shape throughout",
+        "reason": "inherited coverage from a pre-existing, unchanged test plus this feature's own integration tests using the same auth shape"
+      },
+      {
+        "id": "AC22",
+        "covered": true,
+        "test": "tests/test_usage_export_service.py::test_prepare_export_propagates_non_cap_error_uncaught; tests/integration/test_usage_export_endpoint.py::test_export_forced_pre_flight_count_error_returns_generic_500",
+        "reason": "unit proves the error is not swallowed; integration proves it maps to a generic 500 envelope (no stack/SQL/internal path) with no partial CSV body -- both distinguish this pre-flight case from the accepted post-200 mid-stream case"
+      }
+    ]
+  },
+  "resilience": {
+    "migration_roundtrip": "n/a",
+    "property_tests": 0,
+    "concurrency": "n/a"
+  },
+  "perf": {
+    "budget": {
+      "p95_ms": 3000,
+      "throughput_rps": null
+    },
+    "measured": {
+      "p95_ms": 1643.87,
+      "throughput_rps": null
+    },
+    "scenario": {
+      "concurrency": 1,
+      "workload": "sequential export requests of the caller's full 100,000-row usage_rollup set, in-process ASGI transport against a real Postgres testcontainer, 10-sample stable measurement (revised from a 2-sample directional run)",
+      "contention": "none -- single client, single tenant, no concurrent requests",
+      "sample_count": 10,
+      "optional_egress": "none (no webhook/external call on this path)",
+      "note": "budget revised from the plan's originally-proposed 500ms (unconfirmed) to a HUMAN-confirmed p95<=3,000ms at the 2026-07-09 debugging escalation, after a genuine within-design optimization pass (batched chunking, precompiled CSV escape, tuned yield_per) reduced p95 from ~10.7s to a stable ~1.4-2.1s; see .pipeline/debug-notes.md"
+    },
+    "status": "pass"
+  },
+  "coverage": {
+    "combined": {
+      "lines": 91,
+      "branches": 66,
+      "functions": null
+    },
+    "unit": {
+      "lines": null,
+      "branches": null
+    },
+    "integration": {
+      "lines": null,
+      "branches": null
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "quality_ok": false,
+  "quality_waiver": null,
+  "ran_at": "2026-07-09T20:23:18Z",
+  "mutation": {
+    "tool": "mutmut",
+    "configured_scope": ["src/api/csv_export.py", "src/services/usage_export_service.py", "src/api/schemas/usage_export.py"],
+    "scope": [],
+    "score": null,
+    "killed": 0,
+    "survived": 0,
+    "threshold": null,
+    "note": "mutmut refuses to run on native Windows (`mutmut --version` prints 'To run mutmut on Windows, please use the WSL' -- verified this session), matching the project's own CI comment that mutation testing is deliberately deferred to the Linux CI job (pipeline-ci.yml's `mutation` job, currently `if: false` pending <MUTATION_CMD>/<MUTATION_SCOPE>). Not run locally this session; scope could not be exercised at all (0 of configured_scope), so quality_ok is honestly false rather than claimed true against an unmeasured scope."
+  },
+  "adversarial_review": {
+    "gaps": [
+      {
+        "area": "AC16 / usage_export_service.py + usage_repo.py",
+        "gap": "RESOLVED this session: debugging root-caused the true bottleneck (chunk-per-row streaming fanning out through 4 nested BaseHTTPMiddleware layers, not CSV encoding) and fixed it within the approved design (batched chunking, precompiled str.translate escape, tuned yield_per). The HUMAN confirmed a revised, binding budget of p95 <= 3,000ms at the escalation (superseding the original 500ms aspiration, which the debug notes show is not achievable within the mandated constant-memory streaming design). The perf test now hard-asserts the confirmed bound over a 10-sample stable measurement (this session's re-run: p95 1,643.87ms, min 1,093.57ms, median 1,385.42ms -- comfortably under 3,000ms and consistent with debug-notes' own stable-sample figures). Remaining residual gap: only 10 samples in this run (smoke-sized, single concurrency=1 client) -- a wider/longer soak or concurrent-client load run would build more confidence in production but is not required by the confirmed AC wording.",
+        "severity": "low"
+      },
+      {
+        "area": "AC9 streaming-not-buffered",
+        "gap": "The chunk-count>1 assertion is a reasonable proxy for 'not fully buffered' but does not directly measure peak memory. A future regression that buffers the whole result client-side but still happens to flush in more than one TCP segment (e.g. due to buffering N rows at a time rather than 1) would still pass this test. A memory-ceiling assertion (e.g. tracemalloc peak during the stream) would close this more tightly.",
+        "severity": "medium"
+      },
+      {
+        "area": "usage_repo.py count_usage_rollups / stream_usage_rollups",
+        "gap": "No test exercises a combination of ALL four filters simultaneously (customer_id + metric + from + to together) -- each filter is tested in isolation. The shared `_export_filter_clause_and_params` helper makes this low-risk (the WHERE-clause construction is compositional and unit-testable by inspection), but an integration test combining all four would remove the remaining inference.",
+        "severity": "low"
+      },
+      {
+        "area": "usage_export_service.py stream_export_csv",
+        "gap": "No test drives a client disconnect mid-stream against the real integration server (running_server fixture) to observe the `completed=False` log path under real ASGI/ASGI-middleware conditions -- the unit test simulates this by raising inside a mocked generator, which proves the finally-block logic but not that Starlette's real disconnect handling reaches it the same way in production.",
+        "severity": "low"
+      },
+      {
+        "area": "usage_repo.py line 130 (count_usage_rollups' `return result.scalar_one()`)",
+        "gap": "Coverage reports this exact line as missed despite count_usage_rollups being called by many passing tests (cap-boundary, cap-exceeded, filter tests) -- worth a follow-up look (likely a coverage/line-mapping artifact from the f-string SQL literal spanning multiple source lines, not a real untested branch, but not independently confirmed this session).",
+        "severity": "low"
+      }
+    ]
+  }
+}
