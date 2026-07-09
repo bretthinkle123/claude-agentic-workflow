@@ -660,3 +660,32 @@ Audit session recovered the missing evidence itself from the session store
 - **STOPPED at the human plan checkpoint.** Operator: review plan.md (esp. Open Q1 p95 target,
   Open Q2 no-index ordering tradeoff, Open Q3 RLS FORCE deferral) + plan-audit.md, then
   `touch .pipeline/plan-approved` from your own terminal.
+
+## M4′ Entry 5 — 2026-07-09T19:00Z — implementation COMPLETE (smoke pass) after 2 caps; telemetry fixes verified live
+
+- **Plan approved** (bare human touch, 14:08 local — works, as settled in M4).
+- **implementation (sonnet, single-shot — no tasks.md): capped TWICE** (attempts 1–2
+  breadcrumbed; 85+60 tool uses), finalized clean on attempt 3 (65 tools). **Watchlist MISS ×2
+  against the 0-cap expectation (F-M4′ candidate):** a ~16-file single-shot slice still doesn't
+  fit one budget — and the per-task-segment fix only engages when tasks.md exists, so the
+  single-shot path's budget is the unfixed residual. Second candidate: the A-2 progress file
+  did NOT exist at cap 1 (written only after the resume prompt demanded it) — the trail
+  contract didn't bind under cap pressure again.
+- **Delivered:** GET /v1/usage/export — csv_export.py facade (RFC 4180 + OWASP formula escape),
+  usage_export schema/service/route, repo count+stream functions (existing find untouched),
+  router registration, README/system-architecture updates; 5 new test files (18 endpoint tests).
+  No migration, no infra. **Suite 178 passed, coverage 88% (≥85 gate)**; self-check: diff ==
+  plan's files-affected list, api_key_id-scoped queries, extra=forbid + reused allowlists.
+- **Two honest in-stage findings:** (1) httpx ASGITransport buffers the whole body (upstream
+  bug) making in-process streaming asserts meaningless → switched to out-of-process uvicorn for
+  the streaming sanity test; (2) **AC16 perf data point: p95 at the 100k cap ≈ 9.8 s vs the
+  plan's PROPOSED-and-open 500 ms** — root cause per-row Python CSV encoding, not DB; recorded
+  in system_architecture "Known deviations" as Open-Q1 data, not unilaterally resolved. Expect
+  this to surface at the testing gate → likely sanctioned escalation.
+- **Smoke: PASS** (18:51:30Z). **F-M4-3 fix verified live:** attempt-3 run-log line stamped
+  1 s AFTER smoke-status with correctly-derived `status:"pass", notes:"smoke pass"` — no
+  "unknown". Loop-guard re-armed at the canonical post-implementation point (fresh 5/1800/7200
+  budget; the Step-2 early reset's burned wall-clock discarded).
+- U-03 standalone step correctly ABSENT (subsumed into A-2 per the M4 decision — the skill no
+  longer contains it; nothing was run).
+- Evidence snapshotted (implementation-progress, surface-delta, smoke-status). Loop next.
