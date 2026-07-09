@@ -507,3 +507,23 @@ Full audit at `run-evidence/m4/AUDIT-REPORT.md`; §8 entry "M4 run (Meterly quot
   reviewed_change_hash). Decisions: U-03 subsume into A-2; U-06 cap persists on sonnet@25
   (protocol → haiku@35; audit recommends sonnet@35 as M5's variable); U-13 don't promote —
   instrument the tally first; gate RESET → fix list (AUDIT-REPORT §7) then M4′.
+
+## M4 Entry 14 — 2026-07-09 — transcript recovery + question (a) closed; fix plan updated
+
+Audit session recovered the missing evidence itself from the session store
+(`~/.claude/projects/<meterly>/d6fd840f…/`): the per-agent files live in `subagents/agent-<id>.jsonl`
+(the original preservation grepped the parent JSONL instead — that's the whole F-M4-7 mechanism).
+
+- **13/14 empty transcripts recovered and committed** (planning 488 KB, plan-audit 169 KB, U-03
+  debugging, both cycle-3 re-runs, 8 finders). `b01lex8rm`: no source anywhere — unrecoverable,
+  impact nil. `b79on0wti` ≡ `bl2q7axu7` are identical **at the platform source**
+  (`tool-results/`) — same content under two result IDs, nothing lost (revises §7b delta 4).
+- **Question (a) CLOSED: planning did NOT consume the repomix pack.** It tried
+  `Read(.pipeline/repomix-pack.xml)`, hit "too large to read whole" (149k-token pack), and fell
+  back to 30 targeted file reads. F-M4-6 upgraded to a **pack-sizing defect**; fix plan 3.4 now
+  includes a ~40k-token pack budget (`repomix --compress`/`--include` scoping) + sha-in-frontmatter
+  consumption evidence.
+- Criterion 5 restated: **MISS at teardown, cured post-hoc** — still a process miss for M4, made
+  deterministic for M4′ by fix 1.4 (now with the correct copy sources).
+- Operator action 1 (perishable codeburn export) is DONE; remaining operator items: diff
+  approval → deployment → addendum, and the three retrospective sign-offs.

@@ -25,3 +25,17 @@ turn-by-turn traces); full traces live in the operator's local Claude Code sessi
 (codeburn's data source). Known open transcript questions: (a) whether planning actually
 Read .pipeline/repomix-pack.xml (measurement surface 5); (b) the testing agent's
 false "stray dashboard files" claim (F-M4-cand-4); (c) whether security invoked ast-grep.
+
+## Recovery addendum (2026-07-09, audit session)
+
+The original preservation left 14 files at 0 bytes — it grepped the parent session JSONL by
+agentId instead of copying the per-agent store. Recovered from
+`~/.claude/projects/<meterly>/d6fd840f…/subagents/agent-<id>.jsonl`: all 13 `a…` transcripts
+(planning 488 KB, plan-audit 169 KB, U-03 debugging, security re-scan, testing re-run, and the
+8 finder agents). `b…` files are TaskOutput text results from `<session>/tool-results/`;
+`b79on0wti` ≡ `bl2q7axu7` are byte-identical **at that source** (same content under two result
+IDs — nothing lost). `b01lex8rm` has no source anywhere in the session store and remains 0
+bytes (unrecoverable; impact nil — every stage and finder is otherwise accounted for). All
+three open questions above are now answered in AUDIT-REPORT.md §2: (a) NO — planning tried to
+read the pack, got "too large to read whole", fell back to 30 direct file reads; (b) inherited
+stale-.pyc claim, not fabrication; (c) NO ast-grep invocation.

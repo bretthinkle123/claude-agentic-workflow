@@ -42,7 +42,7 @@ is the latest entry; no `diff-approved`, no deployment, no PR). Criteria 4–6 a
 | 2 | Improvised interventions beyond the 2 checkpoints | 0 | **0 improvised.** Adjudication: interview answers (Entry 2) = operator pre-step the run plan itself prescribes; Entry-3 relocation + option selection = pre-kickoff setup (pipeline not started; logged as F-M4-1 anyway); plan-checkpoint "go" = sanctioned checkpoint 1; the AC20 budget decision (Entries 10–11) = a **pipeline-initiated escalation** under the debugging-escalation protocol, journaled verbatim, answered by option-selection with no re-teaching — ruled *sanctioned*, not improvised. Strict-letter reading ("any other intervention") would count it; noted, does not change the run verdict (criterion 1 already resets). | **PASS** (adjudicated) |
 | 3 | Security catches efficacy-class defects, or /code-review confirms zero escapes | ≥ 1 | **Both clauses satisfied.** Security caught the FORCE-RLS owner-bypass in-diff (security-report.md #3: app role owns `quotas` ⇒ non-FORCE RLS inert — the exact R1-1 DB-privilege class, i.e. the U-02 efficacy question working in-stage), fixed via `ALTER TABLE quotas FORCE ROW LEVEL SECURITY`. /code-review pre-step: 8 findings, **0 new CONFIRMED correctness bugs**. | **PASS** |
 | 4 | Report-claim reconstructability | every claim artifact-backed | "Executed" scan claims carry scan-log stamps + sha256 (`security-status.json` scan_artifacts semgrep `c7c0c34c…`, osv `9f84c116…`; 5 scan-log lines; 3 archived per-attempt reports in `.pipeline/archive/`). "Covered" claims: by_id complete, 21/22 + AC22 delegated-with-reason. Perf claims backed by raw sample counts (7441 quota / 7467 baseline). Blemish: testing's environmental "stray dashboard files" sentence (§2c) is a non-artifact-backed *environment* claim, outside the criterion's executed/covered/verified letter. | **PASS (provisional** — re-adjudicate after deployment + 6b re-stamp) |
-| 5 | Evidence preservation — full run reconstructable after teardown | yes | **Currently failing at the transcript level:** 14/34 transcript files are 0 bytes (planning, plan-audit, U-03 debug, security re-scan, testing re-run among them); open question (a) was unresolvable *because* of this. run-summary snapshot stale (§0.1); `smoke-status.json` not yet in the evidence dir. Everything else reconstructed cleanly (this audit answered every other question from disk). | **MISS (provisional** — recoverable if the operator re-exports the empty transcripts from the session JSONL and re-snapshots post-deployment) |
+| 5 | Evidence preservation — full run reconstructable after teardown | yes | **MISS at teardown, CURED post-hoc (2026-07-09 recovery pass):** 14/34 transcript files were 0 bytes because the preservation step grepped the parent session JSONL instead of copying the per-agent store (`<session>/subagents/agent-<id>.jsonl`). All 13 `a…` transcripts recovered from that store (33/34 now non-empty; planning 488 KB, plan-audit 169 KB); `b01lex8rm` has no source anywhere (unrecoverable, impact nil — every stage + finder otherwise accounted for); the `b79on0wti`≡`bl2q7axu7` duplicate is identical **at the platform source** (`tool-results/`), so nothing was lost there. The criterion still counts as a process miss for this run — the gap existed until an auditor hunted the session store — but the evidence set is now complete. run-summary staleness (§0.1) stands. | **MISS (cured post-hoc**; fix 1.4 makes it deterministic) |
 | 6 | Ledger — every escape has a row + action | yes | 13 M4 rows written by this audit (`docs/finding-ledger.md` §"M4 deltas"): 8 /code-review findings + 5 telemetry/process escapes, each with an action. | **PASS (provisional** — final check post-deployment) |
 
 **Verdict: RESET.** Criterion 1 is a hard miss at ~4× the threshold; criterion 5 is a miss as the
@@ -53,12 +53,15 @@ fix list (§7) lands first, then M4′.
 
 ## 2. The three open transcript questions
 
-**(a) Did planning actually read `.pipeline/repomix-pack.xml`? — UNRESOLVED (unresolvable from
-disk).** The pack exists in the live `.pipeline/` (produced by the orchestrator pre-step), but
-`transcripts/a62a4b9fae3247ab0.output` (planning) is **0 bytes**, so there is no record of its
-Read calls. Nothing in plan.md quotes pack-only content that would prove consumption indirectly.
-*What would resolve it:* re-export planning's trace from the operator's local session JSONL
-(codeburn's data source) and grep its tool calls for the pack path.
+**(a) Did planning actually read `.pipeline/repomix-pack.xml`? — RESOLVED (2026-07-09 recovery
+pass): NO, and the root cause is pack sizing, not agent behavior.** Planning's transcript
+(recovered from the session store, 488 KB) shows: the prompt named the pack path; planning
+issued `Read(.pipeline/repomix-pack.xml)`; the read failed as oversized and planning said
+verbatim *"The repomix pack is too large to read whole. Let me explore the actual source tree
+directly"*, then fell back to 30 targeted file Reads (a sensible fallback). The TA/B-1 pre-step
+produced a 149k-token pack for a consumer that cannot ingest it — F-M4-6 upgrades from
+"unevidenced" to **confirmed not-consumed, pack-sizing defect** (fix: compress/scope the pack to
+fit, or have planning read it in slices; see fix plan 3.4).
 
 **(b) Did security invoke `ast-grep`? — RESOLVED: NO.** `scan-log.jsonl` has exactly 5 lines
 (semgrep ×4, osv ×1), no ast-grep. No `"command":"…ast-grep…"` tool call exists in any non-empty
@@ -227,11 +230,14 @@ A second pass against the engine source and the non-empty transcripts refined fi
 3. **F-M4-5 root cause corrected: definition defect, not agent negligence.** `security.md:53`
    labels ast-grep an "*optional adjunct*" with no trigger condition — skipping it was
    spec-compliant. It also has no U-09 wrapper, so even a run would leave no scan-log stamp.
-4. **F-M4-7 worsened: a transcript was lost even among the non-empty files.**
-   `b79on0wti.output` and `bl2q7axu7.output` are byte-identical (one finder stored under two
-   IDs ⇒ another finder's output is gone), and the directory holds 34 files against the INDEX's
-   claim of 33. Two preservation paths exist — session-JSONL extracts (`a…`, the path that
-   produced all 14 empties) and TaskOutput text captures (`b…`) — neither asserts integrity.
+4. **F-M4-7 refined twice.** First pass: `b79on0wti.output` ≡ `bl2q7axu7.output` byte-identical,
+   34 files vs the INDEX's 33. Recovery pass (2026-07-09): the duplicate is identical **at the
+   platform source** (`<session>/tool-results/` stores the same content under both IDs) — no
+   finder output was lost; and the 14 empties happened because preservation grepped the parent
+   session JSONL instead of copying `<session>/subagents/agent-<id>.jsonl`. All 13 recoverable
+   transcripts recovered (33/34 non-empty); `b01lex8rm` has no source anywhere (unrecoverable,
+   impact nil). Fix 1.4's copy source is now specified: `subagents/` + `tool-results/`, with
+   non-empty + integrity asserts.
 5. **Turn-demand data mined for the cap fixes** (journal tool-counts anchored to maxTurns at
    cap): security total demand ≈ 38–45 turns vs cap 30; testing ≈ 70–75 vs 50; documentation
    ≈ 37–40 vs 25 (so the U-06 protocol's haiku@35 — and even sonnet@35 — would likely *still*

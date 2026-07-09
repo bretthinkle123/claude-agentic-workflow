@@ -348,10 +348,19 @@ genuine bug to fix before the next run; the `maxTurns` bump (F4) is a one-line q
 - **F-M4-6 — repomix consumption unevidenced.** Pack produced (141 files / ~149k tokens,
   Secretlint clean) but whether planning read it is **unresolvable from disk** — see F-M4-7.
   Resolution path: re-export planning's trace from the operator session JSONL.
+  *Resolved 2026-07-09 (recovered transcript): planning attempted the Read, got "too large to
+  read whole", and fell back to 30 direct file reads — **confirmed not consumed; pack-sizing
+  defect** (149k tokens exceeds the consumer). Fix: m4-prime-fix-plan 3.4 (compress/scope to a
+  ~40k budget + sha-in-frontmatter evidence).*
 - **F-M4-7 — transcript preservation gap: 14 of 34 `.output` files are 0 bytes**, including
   planning, plan-audit, U-03 debugging, and both cycle-3 re-runs. The handoff's "33 transcripts
   preserved" claim is overstated; question (a) died on this. Preservation must assert non-empty
   bytes per INDEX row; re-export the empty ones before the session JSONL ages out.
+  *Resolved 2026-07-09: root cause was the copy source — preservation grepped the parent session
+  JSONL instead of copying `<session>/subagents/agent-<id>.jsonl`. 13/14 recovered and committed
+  (33/34 non-empty); `b01lex8rm` unrecoverable (no source, impact nil); the `b79…`≡`bl2q…`
+  duplicate is identical at the platform source (nothing lost). Deterministic fix:
+  m4-prime-fix-plan 1.4.*
 - **F-M4-8 — stale run-summary quoted as current.** `run-summary.json` (generated 03:34:32Z,
   pre-documentation) says 5/14 = 35.7%; the actual log is 16 lines / 6 caps = 37.5%. Journal and
   handoff both quote the stale figure. Re-stamp on every snapshot; the B7 rule needs the artifact
