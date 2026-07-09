@@ -876,3 +876,37 @@ M4P-9…16 written. First fully adjudicable run (all six criteria final).
 - Feature staged next (fresh post-restart session): quota administration (list + delete),
   branch `feature/quota-admin`, planted efficacy trap = tenant scoping of admin list/delete
   (IDOR/DB-privilege class), thin brief per docs/m4-double-prime-run-plan.md.
+
+## M4″ Entry 0b — 2026-07-09 — M4P-16 closed (operator): main protected; repo made public; review-count fix; CI baseline red
+
+- **Operator report (verbatim substance):** branch protection applied on
+  meterly-pipeline-test main — strict required status checks on all seven blocking contexts
+  (build-and-test, sast, deps, secrets, containers-iac, asvs-markers, store-compliance;
+  codeql deliberately excluded per the alert-only convention, mutation/deploy-verify inert),
+  required PR review with stale-review dismissal, enforce_admins on, force pushes and
+  deletions blocked. **M4P-16 closed.**
+- **Wrinkle: repo made PUBLIC.** GitHub returned 403 for both classic protection and
+  rulesets on a private free-plan repo. Operator verified safety first: full-history
+  Gitleaks scan → 3 hits, all generic-api-key FPs on idempotency_key test fixtures
+  (e.g. test_schemas_events.py:18). No real secrets in history. Side effect: CodeQL +
+  Actions minutes now free.
+- **Solo-maintainer deadlock resolved (orchestrator, operator-supplied command):** the
+  1-approving-review requirement + GitHub's self-approval ban would have made ANY merge
+  impossible on a single-maintainer repo. Ran
+  `gh api -X PATCH .../branches/main/protection/required_pull_request_reviews -F required_approving_review_count=0`
+  (first attempt with `-f` failed 422 — the endpoint requires a typed integer, `-F`).
+  Verified final state: 7 contexts strict, enforce_admins true, review_count 0 (PR still
+  required), force_push/deletions false.
+- **CI baseline on main is RED across all five scan/build jobs** (operator-enumerated):
+  build-and-test 5 seed-script integration failures (M4P-9), sast Semgrep ERROR findings,
+  deps osv-scanner exit 127 (M4P-14), containers-iac Trivy 6 HIGH + Checkov 12 CRITICAL
+  (all AWS-0104 unrestricted egress), secrets 2 gitleaks fixture FPs with no ignore file
+  (M4P-12). **The gate is now load-bearing:** the M4″ PR cannot merge until the run turns
+  these green — exactly the brief's intent. Run-plan updated with this baseline
+  (docs/m4-double-prime-run-plan.md "CI baseline at gate-arming").
+- **codeql placeholder** (`<CODEQL_LANGUAGE>`) still unfilled — not a required context, so
+  not blocking; fill (`python`, `build-mode: none`) or delete at convenience, outside the run.
+- Classification note for the audit: everything in this entry is pre-kickoff operator
+  setup / host provisioning (gate arming), journaled per rule 0 — not a mid-run touchpoint.
+  Step 2 (reset + feature staging) deliberately NOT started; it waits for the post-restart
+  fresh session.

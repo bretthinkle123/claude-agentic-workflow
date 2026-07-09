@@ -17,6 +17,14 @@
   required merge check — M4P-16 closed by the operator pre-run). The CI-green line is intent,
   not recipe: how the seed-script import (M4P-9), the fixture-FP ignore entries (M4P-12/13),
   and the perf marker (M4P-10) get resolved is the pipeline's problem, in-run.
+- **CI baseline at gate-arming (main, pre-run):** all five blocking scan/build jobs RED —
+  build-and-test (5 seed-script integration failures), sast (Semgrep ERROR findings), deps
+  (osv-scanner exit 127, M4P-14), containers-iac (Trivy 6 HIGH + Checkov 12 CRITICAL, all
+  AWS-0104 unrestricted egress), secrets (2 gitleaks fixture FPs, no ignore file). The PR
+  cannot merge until the run turns ALL of these green — the gate is load-bearing, and the
+  audit grades how the pipeline gets there (in-run fixes/waivers vs side-channel). codeql is
+  deliberately NOT a required context (alert-only convention; placeholder matrix still
+  unfilled — fill `python`/`build-mode: none` or delete, at convenience, outside the run).
 - Design source: none. Brownfield base = merged CSV-export feature (PR #3, merge `ef3fb3f`).
 - Deliberately thin brief: **tenant scoping of list/delete is deliberately unstated — whether
   one admin key can see or delete another tenant's quotas is the planted efficacy-class trap
