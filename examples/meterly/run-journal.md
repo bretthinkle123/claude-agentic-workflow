@@ -593,3 +593,21 @@ Audit session recovered the missing evidence itself from the session store
 - Only uncommitted change riding the change-set: PROJECT.md (M). Pipeline NOT started.
 - **Next (operator): restart the IDE** (engine `73485d1` doesn't hot-reload), then Step 3
   elicitation + Step 4 bare kickoff in fresh sessions.
+
+## M4′ Entry 2 — 2026-07-09T18:00Z — operator waived the IDE restart; run proceeds in the standing session (decision journaled)
+
+- Operator instruction (verbatim): "can you set pipeline to auto then start?" — i.e. skip the
+  Entry-0/1 restart step and drive Steps 3–4 from the standing orchestrator session.
+- `defaultMode: "auto"` already present in the throwaway's .claude/settings.json (merged in
+  PR #2) — nothing to set.
+- **Basis for proceeding:** direct in-session evidence that engine assets load from disk at
+  use time, not session start — M4 itself ran entirely on the engine published mid-session
+  (`bba9475`): frontmatter hooks fired, new project skills were announced mid-session, and
+  agent caps/models matched the just-published definitions. Residual risk for the audit: any
+  harness-level caching of agent definitions would mean a stage ran on pre-`73485d1`
+  semantics; the audit should verify watchlist behaviors (0-cap budgets, ast-grep stamp,
+  repomix receipt, doc-identifiers.json) actually appear — their presence is itself proof the
+  new engine was live.
+- Orchestrator-side gap closed: the pipeline-orchestration skill text cached in this session is
+  the pre-fix version — it will be RE-INVOKED fresh at the Step-4 kickoff so the new 4c/8
+  (re-stamp-on-snapshot, preserve-transcripts) steps govern.
