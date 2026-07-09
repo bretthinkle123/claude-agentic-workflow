@@ -484,3 +484,26 @@ PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack �
   pr-description.md). pr-description.md + review-manifest.json snapshotted to run-evidence/m4/.
 - **STOPPED at the M5 hard human diff-review checkpoint** — operator to review and run
   `bash ~/.claude/hooks/approve-diff.sh` (TTY-only) to write diff-approved.
+
+## M4 Entry 13 — 2026-07-09 — from-disk audit complete (fresh session): VERDICT = RESET
+
+Full audit at `run-evidence/m4/AUDIT-REPORT.md`; §8 entry "M4 run (Meterly quotas)" +
+13 ledger rows written. Deployment still pending, so criteria 4–6 are provisional.
+
+- **Proof-gate: RESET.** Criterion 1 MISS at **6/16 = 37.5%** (recomputed from run-log.jsonl —
+  the 35.7% in Entries 11–12 came from the STALE run-summary.json, generated 03:34:32Z before
+  documentation's 2 lines landed). Criterion 5 MISS as evidence stands: **14 of 34 preserved
+  transcripts are 0 bytes** (planning, plan-audit, U-03 debug, both cycle-3 re-runs included) —
+  re-export from the session JSONL before it ages out. Criteria 2 (0 improvised; AC20 escalation
+  adjudicated sanctioned), 3 (FORCE-RLS efficacy catch + /code-review 0 new CONFIRMED) PASS.
+- **Open questions:** (a) repomix consumption UNRESOLVED (empty planning transcript);
+  (b) ast-grep NOT invoked (no scan-log line, no command in any transcript); (c) cand-4
+  downgraded to inherited-and-unverified — run-3 dashboard `__pycache__` bytecode survived the
+  Entry-3 conversion (still on disk), implementation coined the phrase, testing repeated it,
+  and Entry 9's own "zero matches" verification missed bytecode. The `-k` filter deselected 0
+  dashboard tests (the 3 deselected were perf_k6).
+- Per-stage scorecard avg **3.75** (elicitation 5 … U-03 pilot 2); hand-break-3-tests SKIPPED
+  deliberately (tree sits at the un-deployed diff checkpoint; mutating it would invalidate
+  reviewed_change_hash). Decisions: U-03 subsume into A-2; U-06 cap persists on sonnet@25
+  (protocol → haiku@35; audit recommends sonnet@35 as M5's variable); U-13 don't promote —
+  instrument the tally first; gate RESET → fix list (AUDIT-REPORT §7) then M4′.
