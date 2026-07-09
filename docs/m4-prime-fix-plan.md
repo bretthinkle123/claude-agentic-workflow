@@ -1,5 +1,12 @@
 # M4′ fix plan — clearing the M4 audit findings before proof-gate run 1 retry
 
+> **STATUS (2026-07-09): IMPLEMENTED** — Tracks 1–4 landed in commits `b2eff68` (Track 1)
+> and `53dd128` (Tracks 2–4); `tests/run-eval.sh` ALL SUITES PASSED. Applied defaults:
+> criterion-1 metric kept as-is; documentation sonnet@40; U-03 subsumed. Item 2.3
+> (sanctioned-escalation definition) is run-plan text — write it into the M4′ run plan.
+> Remaining before M4′: `install-global.sh` + IDE restart (operator), diff approval →
+> deployment → M4 audit addendum, then draft the M4′ run plan.
+
 > Inputs: `examples/meterly/run-evidence/m4/AUDIT-REPORT.md` (incl. §7b re-audit deltas),
 > §8 "M4 run (Meterly quotas)" in `pipeline-june-analysis.md`, the 13 M4 ledger rows.
 > Goal: every fix lands with a deterministic check or eval so M4′ can go six-for-six on the
