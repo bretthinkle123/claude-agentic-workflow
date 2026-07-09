@@ -846,3 +846,33 @@ M4P-9…16 written. First fully adjudicable run (all six criteria final).
   source); proof gate RESET → M4″ after the fix list (AUDIT-REPORT §7).
 - Per-stage avg **4.22** (elicitation 5, planning 4, plan-audit 5, implementation 3,
   security 4, testing 4, debugging 5, documentation 3, deployment 5).
+
+# ── M4″ (brownfield run #6 — proof-gate attempt, post-M4′-reset) ──
+
+## M4″ Entry 0 — 2026-07-09 — prerequisites: eval green, fixed engine published, evidence dir created
+
+- **Eval:** `bash tests/run-eval.sh` on main → **ALL SUITES PASSED** (incl. the new/updated
+  suites covering the M4″ fix list).
+- **Engine SHA under test: `7149e86`** ("fix(m4\"): implement the M4' fix list —
+  decomposition default + CI gate rescue"). `bash scripts/install-global.sh` published
+  agents/hooks/skills/templates to ~/.claude with **no collision-guard aborts**. Two
+  docs-only files left uncommitted by the fix session (system_architecture.md stage-diagram
+  refresh, DOC-consolidation-plan revision) were committed immediately after — they are not
+  published artifacts, so the ~/.claude content corresponds to `7149e86` exactly.
+- **Run plan drafted:** `docs/m4-double-prime-run-plan.md` — same six criteria, criterion-1
+  metric unchanged; sanctioned-touchpoint definitions cited from the orchestration SKILL's
+  "Operator touchpoints" section (not restated); watchlist = tasks.md MUST trigger (≥8-file
+  feature, per-task segments, 0 caps incl. implementation), 5a doc-contract re-check,
+  security-committed ignore-file entries, perf-marked timing tests excluded in CI,
+  run-started-filtered transcript preservation, ast-grep skip-stamp, U-13 tally
+  post-parser-fix. Proof-gate run 1 of 2–3, count at zero.
+- **Evidence dir created:** `examples/meterly/run-evidence/m4-double-prime/`.
+- **IDE restart is MANDATORY before the run this time** (the M4′ waiver was a logged risk;
+  the fixes under test include SKILL-level steps — pre-flight, 5a, step-8 filter — that a
+  standing session may hold stale; skipping the restart invalidates the watchlist).
+- **Operator-owned pre-run step (closes ledger M4P-16):** apply branch protection on
+  meterly-pipeline-test main requiring the pipeline-ci status checks — the M4″ brief makes
+  CI-green part of done and depends on the check being real.
+- Feature staged next (fresh post-restart session): quota administration (list + delete),
+  branch `feature/quota-admin`, planted efficacy trap = tenant scoping of admin list/delete
+  (IDOR/DB-privilege class), thin brief per docs/m4-double-prime-run-plan.md.
