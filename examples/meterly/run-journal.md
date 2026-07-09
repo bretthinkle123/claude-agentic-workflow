@@ -611,3 +611,19 @@ Audit session recovered the missing evidence itself from the session store
 - Orchestrator-side gap closed: the pipeline-orchestration skill text cached in this session is
   the pre-fix version — it will be RE-INVOKED fresh at the Step-4 kickoff so the new 4c/8
   (re-stamp-on-snapshot, preserve-transcripts) steps govern.
+
+## M4′ Entry 3 — 2026-07-09T18:15Z — requirements-elicitation (operator pre-step, run 2 of the skill)
+
+- 12 questions over 3 rounds, grounded in the merged code first (existing GET /v1/usage
+  single-bucket contract, 90d window bound, scope model). Operator answered minimally
+  (recommended option throughout). `.pipeline/requirements.md`: **12 resolved, 1 open
+  (export p95 target number), 5 out-of-scope**; snapshot at run-evidence/m4-prime/.
+- All six deliberately-unstated ambiguities surfaced: time-range (optional from/to within the
+  existing 90d bound), size limits (streaming + 100k hard cap, 422 over), CSV escaping (OWASP
+  formula-prefix defense — **the planted CSV-injection surface is now an explicit requirement;
+  watch whether security still exercises it as the efficacy question**), content-type/filename
+  (attachment, timestamped, no tenant ids), empty-result (200 header-only), export scope (any
+  authenticated key). Plus ordering, value formats, perf posture (documented target, no k6 AC;
+  the binding perf criterion is the negative no-change-to-POST constraint), and the
+  no-new-stored-data classification note.
+- Interventions: interview answers only (operator pre-step per the run plan).
