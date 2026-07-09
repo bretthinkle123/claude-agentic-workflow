@@ -22,7 +22,8 @@ the series. This plan is engine/process work only — zero app code.
 | 1.3 | F-M4-9 / M4-tel5 — U-13 warn-only tally unreconstructable (stderr only) | `check-doc-identifiers.sh` also writes `.pipeline/doc-identifiers.json` (`{checked, unresolved[], ran_at}`); documentation's report quotes it; M4′ retro decides promotion on a real tally | Existing `doc-identifiers` eval suite gains an artifact-exists assertion |
 | 1.4 | F-M4-7 / M4-tel4 — 14/34 transcripts empty at teardown (recovered post-hoc 2026-07-09; root cause: preservation grepped the parent session JSONL instead of copying the per-agent store) | New `scripts/preserve-transcripts.sh`: copy from `<session>/subagents/agent-<id>.jsonl` (named agents) + `<session>/tool-results/<id>.txt` (task results), **assert non-empty bytes**, flag byte-identical pairs (the `b79on0wti`≡`bl2q7axu7` case was identical at source — flag, don't fail), write a sha256 manifest into INDEX.md, exit non-zero on empty/missing. Orchestration SKILL's teardown step calls it (rule 0) | The script IS the check; add a static-suite smoke test with a fixture dir |
 | 1.5 | F-M4-1 — unchecked cwd precondition at kickoff | Orchestration SKILL pre-flight (before the repomix pre-step): assert `git rev-parse --show-toplevel` is the repo whose `.pipeline/state.json` feature matches PROJECT.md's feature slug; print all three and STOP on mismatch | Eval: gate suite case with a mismatched state.json |
-| 1.6 | F-M4-4 root cause / M4-tel3 — run-3 `__pycache__` bytecode survived conversion and seeded a false claim | `bootstrap-project.sh` (and a new "repo conversion checklist" section in the orchestration SKILL) purge `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.hypothesis/` at setup; `.gitignore` template already covers them | Bootstrap-integration suite case: seeded stale .pyc ⇒ gone after bootstrap |
+| 1.6 | F-M4-4 root cause / M4-tel3 — run-3 `__pycache__` bytecode survived conversion and seeded a false claim | **(moved to the pre-flight, not bootstrap — plan-audit 2026-07-09):** bootstrap's contract is explicitly non-destructive, so the purge lives in the orchestration pre-flight beside 1.5: delete `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.hypothesis/` before kickoff (junk by definition — all regenerable) | Pre-flight suite case: seeded stale .pyc ⇒ gone before planning |
+| 1.7 | **M4-1 (ledger row had no plan item — plan-audit catch)** — CI coverage floor unenforced: `<COVERAGE_FLOOR>` never filled, no `--cov-fail-under`, coverage job green vacuously | Two-part: (a) `pipeline-ci.yml` template gains a first step in every enabled job that fails on unfilled `<PLACEHOLDER>` tokens (vacuous-green becomes red); (b) the testing agent fills `COVERAGE_FLOOR` from CLAUDE.md's done-bar when it first writes test-results | `ci-scan-base`/static suite case: template with a live placeholder in an enabled job ⇒ fail |
 
 ## Track 2 — PR: cap policy (fixes criterion 1 — the reset driver) — **needs one human decision first**
 
@@ -42,6 +43,10 @@ Mined demand vs current budgets (AUDIT-REPORT §7b.5):
   clean Stop under budget → run-log records n `pass` lines, 0 caps. A cap then *means failure*
   again, instead of "feature bigger than one context window". This is the structurally honest fix:
   no realistic single budget fits ~130 turns, and tasks.md already exists exactly for this.
+  *Design note (plan-audit 2026-07-09): smoke-check fires at every segment Stop, so each task
+  boundary must leave the app bootable and the suite green — which is exactly the A-2 test-first
+  contract already in force (M4's T1–T5 each ended green). State it explicitly in the segment
+  prompt so a mid-task stop is never a "clean" stop.*
 - 2.2 **The metric decision (operator, before M4′ — do not decide silently):**
   - *(recommended)* keep `capped_lines / log_lines < 10%` as-is; with Track-2 budgets + per-task
     implementation, projected M4′ caps ≈ 0–1 on ~20 lines — passable without redefinition; or
@@ -57,7 +62,7 @@ Mined demand vs current budgets (AUDIT-REPORT §7b.5):
 
 | # | Finding | Change |
 |---|---|---|
-| 3.1 | F-M4-5 / re-audit 3 — ast-grep "optional adjunct" never fired | `security.md`: replace "optional" with a **trigger condition** — *when the diff touches SQL/queries, RLS/migrations, or async entrypoints, run the `ast-grep-rules` pack and stamp a scan-log line via a new thin wrapper* (advisory: still excluded from status counts, per the existing boundary). Wrapper gives it the U-09 stamp it lacks. Eval: security suite case asserts the scan-log line when a fixture diff touches a migration |
+| 3.1 | F-M4-5 / re-audit 3 — ast-grep "optional adjunct" never fired | `security.md`: replace "optional" with a **trigger condition** — *when the diff touches SQL/queries, RLS/migrations, or async entrypoints, run the `ast-grep-rules` pack and stamp a scan-log line via a new `ast-grep-scan.sh` wrapper* (same pattern as `semgrep-scan.sh`/`osv-scan.sh`; advisory: still excluded from status counts). *Plan-audit note: verify `reconcile-scans.sh` tolerates an unknown/advisory tool line in scan-log.jsonl before shipping — the U-09 count reconciliation must not break on the new tool name.* Eval: security suite case asserts the scan-log line when a fixture diff touches a migration |
 | 3.2 | Decision 1 — U-03 subsume into A-2 | Remove the pilot block from `pipeline-orchestration/SKILL.md:280`; fold its checklist (data-path reads feeding state changes, window boundaries, lock/snapshot semantics, production-shaped fixtures) into the A-2 test-first charter in `implementation.md` **and** testing's adversarial charter — the checklist survives, the ~54k-token stage does not |
 | 3.3 | F-M4-4 / M4-tel3 — unverified environment claims propagated report-to-report | One rule added to `code-standards` + testing/implementation defs: *a report claim about the tree/environment must cite the command that verified it this session; claims inherited from another report must be re-verified or attributed* ("per implementation's progress file, unverified") |
 | 3.4 | F-M4-6 — **CONFIRMED not consumed (recovery pass): planning tried `Read(repomix-pack.xml)`, got "too large to read whole", and fell back to 30 direct file reads.** The pre-step produced a 149k-token pack its only consumer cannot ingest | Two-part fix: **(a) size the pack to fit** — orchestrator pre-step runs `repomix --compress` (or `--include` scoping to the feature's likely surface) with a hard budget ≈ 40k tokens, falling back to a directory-tree + public-API summary if still over; **(b) evidence by construction** — planning records the pack's sha256 + file/token counts in `plan.md` frontmatter; plan-audit verifies the sha matches disk |
@@ -108,3 +113,31 @@ Mined demand vs current budgets (AUDIT-REPORT §7b.5):
 | 6. Ledger | unchanged process; M4 rows already carry actions that this plan implements (M4-tel1..5, M4-3/4) |
 
 If M4′ then goes six-for-six, it counts as proof-gate run 1 of 2–3 and M5 is "run it again."
+
+---
+
+## Implementation readiness (plan-audit pass, 2026-07-09 — verified against engine source)
+
+Feasibility confirmed per item; exact touch points:
+
+| Fix | Files to change | Verified |
+|---|---|---|
+| 1.1 | `global-hooks/log-run.sh` (~line 112: the implementation case whose comment *asserts* the false sequential-hook assumption — "writes this fresh on every run") | race applies only to implementation (security/testing statuses are agent-written pre-Stop, not sibling-hook-written) |
+| 1.2 | `scripts/run-summary.sh` (+`log_lines_at_generation`); orchestration SKILL snapshot steps (the 4c/4d block ~line 182 already documents the miss-late-stages hazard — wire the re-stamp there) | ✓ |
+| 1.3 | `global-hooks/check-doc-identifiers.sh`; `tests/suites/` doc-identifiers suite exists (9 cases) | ✓ |
+| 1.4 | new `scripts/preserve-transcripts.sh`; teardown step in orchestration SKILL | copy sources confirmed real: `<session>/subagents/agent-<id>.jsonl`, `<session>/tool-results/<id>.txt` |
+| 1.5+1.6 | orchestration SKILL pre-flight: cwd/state.json/PROJECT.md identity assert + cache purge | ✓ |
+| 1.7 | `templates/ci/pipeline-ci.yml` placeholder-guard step; `global-agents/testing.md` fills `COVERAGE_FLOOR` | ✓ |
+| 2 budgets | one-line `maxTurns` frontmatter edits: security 45, testing 75, documentation 40, debugging 40 | ✓ |
+| 2.1 | orchestration SKILL implementation-stage block + `global-agents/implementation.md` (segment contract: green suite at every boundary) | ✓ |
+| 2.3 | M4′ run-plan template text (sanctioned-escalation definition) | ✓ |
+| 3.1 | `global-agents/security.md:53`; new `global-hooks/ast-grep-scan.sh` (pattern: `semgrep-scan.sh`); **pre-check `reconcile-scans.sh` tolerance for the new tool line** | wrapper pattern exists ✓ |
+| 3.2 | orchestration SKILL ~line 280 (remove pilot); `implementation.md` + `testing.md` (fold checklist) | ✓ |
+| 3.3 | `global-skills/code-standards/SKILL.md` + testing/implementation defs (one rule) | ✓ |
+| 3.4 | orchestration SKILL repomix pre-step (`--compress` flag confirmed available in repomix 1.16) + `planning.md` frontmatter contract + `plan-audit.md` sha verify | ✓ |
+| 3.5 | `global-agents/planning.md:336` (drop/raise the AC leg) | ✓ |
+| 4.x | `tests/agent-evals/` corpus (existing layout: one dir per planted defect — add `impl-dead-knob/`, `impl-k6-fork/`); 1.1's race fixture in `tests/suites/telemetry` | corpus layout confirmed ✓ |
+
+Order of work: Track 1 → Track 3 → Track 2 (budgets + 2.1) → Track 4 → `bash tests/run-eval.sh`
+green → `install-global.sh` → restart → M4′. Defaults applied unless overridden: criterion-1
+metric kept as-is (2.2 recommended option); documentation sonnet@40; U-03 subsumed.
