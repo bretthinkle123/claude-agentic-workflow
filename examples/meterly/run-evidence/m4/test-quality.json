@@ -1,0 +1,54 @@
+{
+  "quality_ok": false,
+  "quality_waiver": null,
+  "ran_at": "2026-07-09T03:17:03Z",
+  "mutation": {
+    "tool": "none",
+    "configured_scope": ["src/repositories/quotas_repo.py", "src/services/quota_service.py", "src/services/events_service.py", "src/api/schemas/quotas.py", "src/api/routes/quotas.py"],
+    "scope": [],
+    "score": null,
+    "killed": 0,
+    "survived": 0,
+    "threshold": null,
+    "note": "mutmut 3.6.0 is installed but explicitly refuses to run on native Windows ('please use the WSL', per its own --help output) and this environment has no WSL available -- confirmed by direct invocation. No other Python mutation tool was available. Mutation testing could not be executed this session; set quality_ok:false honestly rather than fabricate a score. The adversarial review below substitutes a manual 'what does this test not catch' pass over the same changed core modules."
+  },
+  "adversarial_review": {
+    "gaps": [
+      {
+        "area": "src/repositories/quotas_repo.py::read_tenant_quota_state_locked (AC13)",
+        "gap": "The two-round-trip lock-then-read design is only proven correct at a single concurrency point (20 concurrent requests, cap=10, one customer bucket). Nothing in the suite sweeps a range of concurrency levels or a cap of 1 (the tightest possible boundary, where a lock-ordering bug is most likely to surface as an off-by-one). A mutation that flipped the FOR UPDATE join back to a single combined statement would very likely still pass test_concurrent_posts_never_exceed_limit on a fast/idle CI box where lock contention rarely occurs (the T5 implementation note describes exactly this: the bug was invisible to the sequential tests and only surfaced under real concurrency) -- the test is timing-sensitive, not deterministic, so a regression could reappear and pass intermittently.",
+        "severity": "medium"
+      },
+      {
+        "area": "src/services/events_service.py -- quota check interacting with idempotency (AC9 vs AC11)",
+        "gap": "No test drives two concurrent requests with the SAME idempotency_key where one would be accepted and the other should replay -- only sequential replay (AC11) and only distinct-key concurrency (AC13) are tested. A race between the idempotency-key insert and the quota check on a duplicate concurrent submission is unexercised.",
+        "severity": "medium"
+      },
+      {
+        "area": "src/api/schemas/quotas.py -- LimitPerWindow upper bound (AC5)",
+        "gap": "The BIGINT-safe upper bound (1e15) is unit-tested at the schema layer, but no test drives a PUT at exactly that bound through the actual HTTP endpoint into Postgres to confirm the BIGINT column itself accepts it without a silent truncation/overflow at the DB layer -- the schema and DB constraints are tested independently, never a boundary value through both together.",
+        "severity": "low"
+      },
+      {
+        "area": "AC15 (rate limiting) -- Retry-After correctness",
+        "gap": "test_put_rate_limited_per_principal asserts 'Retry-After' is present but never asserts its value is sane (e.g. > 0 and bounded by the configured window), unlike the quota-rejection Retry-After test (test_over_limit_429_and_no_partial_write) which does assert >= 1. A regression that emitted Retry-After: 0 or a negative value on the rate-limit path specifically would not be caught.",
+        "severity": "low"
+      },
+      {
+        "area": "AC6 / RLS backstop (tests/integration/test_quotas_rls_backstop.py, added this session)",
+        "gap": "The new backstop test proves RLS blocks an unfiltered SELECT and UPDATE for a NOBYPASSRLS role. It does not additionally prove RLS blocks an unfiltered INSERT (a WITH CHECK failure) or DELETE across tenants, and it does not test the FORCE ROW LEVEL SECURITY clause specifically (i.e. what happens if a future migration accidentally used ENABLE without FORCE and the connecting role were the table owner rather than a granted NOBYPASSRLS role) -- the owner-bypass scenario the migration's own comment calls out as the reason FORCE is required is not directly exercised.",
+        "severity": "low"
+      },
+      {
+        "area": "AC20 (perf) -- criterion completeness of the test's own assertion [CLOSED this session]",
+        "gap": "RESOLVED: test_events_ingest_with_quotas_p95_under_50ms previously only asserted sample_count > 0 and never gated its stated budget, so a real regression (measured p95 3362ms against the then-50ms budget) still showed as a green PASSED test. Root-caused by debugging as a harness artifact (2-worker quota fixture vs 5-worker baseline -- see .pipeline/debug-notes.md), and AC20 itself was human-revised to a relative bound. Renamed to test_events_ingest_with_quotas_p95_within_1_5x_baseline and rewritten to measure BOTH the no-quota baseline and the quota-active run in the same session at equal worker budget and directly assert quota_p95 <= 1.5*baseline_p95 -- the test now fails on a real regression rather than only printing one. Measured this run: baseline p95=124.10ms, quota p95=123.45ms (ratio 0.995x, well inside budget).",
+        "severity": "low"
+      },
+      {
+        "area": "AC20 (perf) -- residual gap after the fix",
+        "gap": "The relative 1.5x bound is generous at this host's latency scale (a ~62ms absolute slack at a ~124ms baseline) and was not stress-tested against a synthetic regression (e.g. temporarily reintroducing the 2-worker starvation to confirm the new assertion actually fails red before the fix -- this was done manually during debugging per debug-notes.md but is not itself a standing regression test in the suite, unlike test_ac20_quota_perf_fixture_matches_baseline_worker_budget which does guard the worker-parity precondition). A future regression that added, say, 50ms of genuine per-request quota overhead at this baseline would still pass the 1.5x bound; the absolute 50ms CI/staging load-campaign budget (noted in acceptance.md) is the backstop for that case, owned by a workflow outside this stage.",
+        "severity": "low"
+      }
+    ]
+  }
+}

@@ -424,3 +424,32 @@ PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack �
   an unmeetable AC. **Journal per run discipline: this is a third human touchpoint beyond the
   two checkpoints — a flagged debugging escalation, not an improvised prompt; criterion-2
   adjudication happens at the audit.** debug_retry_count.remediation now 2/3.
+
+## M4 Entry 11 — 2026-07-09T03:40Z — GREEN at cycle 3/5; DAST L1 within budget; cap-out tax 35.7% (criterion-1 miss candidate)
+
+- **Human decision (option selection):** AC20 re-scoped to relative-to-baseline — quota-active
+  p95 ≤ 1.5× same-session no-quota baseline at equal worker budget; 50 ms absolute recorded as
+  the CI/staging load-campaign budget. Orchestrator transcribed the revision into acceptance.md
+  verbatim, marked human-revised; criteria_total unchanged at 22.
+- **Cycle 3: security re-scan CLEAN** (single attempt, 23 tools/452 s): remediation delta added
+  no criticals; 4 new Semgrep ERRORs in the RLS-backstop test = false positives (uuid role-name
+  DDL, no bind params for identifiers); isolation pin assessed risk-reducing; 12 findings total
+  (0 critical / 11 warnings + 1 fixed carried). **Testing re-run PASS** (36 tools/1405 s):
+  AC20 test rewritten to actually gate the revised bound (same-session baseline + quota runs,
+  equal-budget asserted) — **baseline p95 124.10 ms vs quota-active 123.45 ms = 0.995×, well
+  inside 1.5×**; suite 128/128; coverage 89.9% lines / 58.3% branches; criteria 21/22 covered +
+  AC22 delegated. Both GREEN predicates PASS via jq from disk → **loop exit GREEN, cycle 3 of
+  5** (compute 1200/1800 s at last tick, wall ~5300/7200 s). `loop-guard done` stamped
+  status=completed.
+- **run-summary.json (B7):** stages=6, log_lines=14, **capped=5 → cap-out tax 35.7%, ABOVE the
+  <10% proof-gate threshold — criterion 1 MISS candidate** (impl×2, security×1, testing×1,
+  debugging×1; all warm-resumed productively, but the tax is the tax). suspected_underlog=1 —
+  identify at audit. first_pass_clean=false.
+- **DAST L1 (opt-in, advisory): within budget.** target_reached TRUE via the /docs seed
+  (U-14 satisfied); 0 high / 3 medium (≤5) / 4 low (≤20) / 5 info (≤100); 6 WARN-NEW all
+  docs-page hygiene (CSP directive fallback, SRI missing, COEP, cross-domain JS from the
+  swagger CDN, cacheable content). Spider noted root 404 (expected — API root is not a page).
+- Post-GREEN evidence snapshot (15 artifacts incl. revised acceptance.md, run-summary,
+  loop-state, dast-review, scan-log, debug-notes) → `run-evidence/m4/`.
+- Next: documentation (U-06 experiment condition: sonnet@25) → /code-review pre-step → human
+  diff checkpoint.

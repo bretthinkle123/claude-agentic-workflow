@@ -1,0 +1,213 @@
+{
+  "status": "pass",
+  "ran_at": "2026-07-09T03:33:33Z",
+  "scope": "diff",
+  "since_commit": "faabe9d6e59533dd144ce7895881dbe54fd7ddd2",
+  "tested_change_hash": "6e75fa4cb648df02e305452993397b1bf99e3f6a29554a3b1199e966dc35cb9d",
+  "test_strategy": "pyramid",
+  "total": 128,
+  "passed": 128,
+  "failed": 0,
+  "skipped": {
+    "count": 0,
+    "tests": []
+  },
+  "failures": [],
+  "tests_by_type": {
+    "unit": 80,
+    "integration": 48,
+    "e2e": 0
+  },
+  "criteria_covered": {
+    "total": 22,
+    "covered": 21,
+    "by_id": [
+      {
+        "id": "AC1",
+        "covered": true,
+        "test": "tests/integration/test_quotas_endpoint.py::test_put_creates_quota_returns_201_and_echoes",
+        "reason": "Asserts 201, exact echoed body, and exactly one persisted quotas row queried directly from Postgres."
+      },
+      {
+        "id": "AC2",
+        "covered": true,
+        "test": "tests/integration/test_quotas_endpoint.py::test_put_replace_returns_200_single_row",
+        "reason": "Asserts 200 on replace, updated limit, and still exactly one row (verified via direct SQL read, not just the app's own echo)."
+      },
+      {
+        "id": "AC3",
+        "covered": true,
+        "test": "tests/integration/test_quotas_endpoint.py::test_ingest_key_forbidden",
+        "reason": "Ingest-scoped key gets 403 code=forbidden."
+      },
+      {
+        "id": "AC4",
+        "covered": true,
+        "test": "tests/integration/test_quotas_endpoint.py::test_put_requires_auth",
+        "reason": "Both missing and malformed Bearer tokens get 401."
+      },
+      {
+        "id": "AC5",
+        "covered": true,
+        "test": "tests/test_schemas_quotas.py (parametrized) + tests/integration/test_quotas_endpoint.py::test_validation_rejections",
+        "reason": "0/-1/-1000/non-integer limit, unknown field, and bad customer_id all assert 422 validation_failed at both the unit-schema and endpoint layers."
+      },
+      {
+        "id": "AC6",
+        "covered": true,
+        "test": "tests/integration/test_quotas_endpoint.py::test_quota_is_tenant_isolated + tests/integration/test_quotas_rls_backstop.py (both tests)",
+        "reason": "The endpoint test proves the app-level api_key_id scoping keeps two tenants' rows independent. Independently added this session: test_quotas_rls_backstop.py proves the DB-level RLS BACKSTOP itself (not just the app filter) -- it connects as a provisioned NOBYPASSRLS role (mirroring the production meterly_app role, not the testcontainers superuser, which always bypasses RLS) and issues queries with the api_key_id predicate REMOVED ENTIRELY (the primary control disabled), asserting the RLS policy alone still confines reads/updates to the caller's own tenant, and that an unset tenant setting fails closed (zero rows) rather than defaulting open. This satisfies the adversarial-test-shapes requirement that a backstop control must be proven with the primary control off, not merely declared."
+      },
+      {
+        "id": "AC7",
+        "covered": true,
+        "test": "tests/integration/test_events_quota_enforcement.py::test_no_quota_is_unlimited",
+        "reason": "No quota row -> 201 for a very large quantity, no regression."
+      },
+      {
+        "id": "AC8",
+        "covered": true,
+        "test": "tests/integration/test_events_quota_enforcement.py::test_under_limit_accepted",
+        "reason": "R+Q<=L -> 201, rollup total verified via direct SQL read."
+      },
+      {
+        "id": "AC9",
+        "covered": true,
+        "test": "tests/integration/test_events_quota_enforcement.py::test_over_limit_429_and_no_partial_write",
+        "reason": "429 quota_exceeded + Retry-After >= 1s; direct SQL proves the rejected event left no row and the rollup only reflects the accepted event (transaction rolled back)."
+      },
+      {
+        "id": "AC10",
+        "covered": true,
+        "test": "tests/integration/test_events_quota_enforcement.py::test_empty_window_q_gt_l_rejected",
+        "reason": "First event in an empty window with Q>L -> 429; direct SQL proves zero rollup rows created."
+      },
+      {
+        "id": "AC11",
+        "covered": true,
+        "test": "tests/integration/test_events_quota_enforcement.py::test_replay_over_quota_returns_200_no_usage",
+        "reason": "A replay after the quota is lowered below the accumulated total still returns 200 with idempotent_replay=true and event_count stays 1 (quota never consulted on replay)."
+      },
+      {
+        "id": "AC12",
+        "covered": true,
+        "test": "tests/integration/test_events_quota_enforcement.py::test_midwindow_change_takes_effect",
+        "reason": "Lowering L below the already-accumulated R blocks the very next POST (429) -- fresh-read-per-request proven."
+      },
+      {
+        "id": "AC13",
+        "covered": true,
+        "test": "tests/integration/test_quota_concurrency.py::test_concurrent_posts_never_exceed_limit",
+        "reason": "20 concurrent distinct-idempotency-key posts against L=10 land exactly 10 winners/10 rejections (429 quota_exceeded), and the final rollup total via direct SQL never exceeds L -- asserts the loser's outcome, not merely a single-winner count."
+      },
+      {
+        "id": "AC14",
+        "covered": true,
+        "test": "tests/integration/test_events_quota_enforcement.py::test_throttle_precedes_quota_distinct_codes",
+        "reason": "Tier-2 throttle fires first (code=rate_limited) via the full request lifecycle (not a unit test of the key generator); a genuinely quota-exceeded call on a separate untouched-throttle key returns the distinct quota_exceeded code."
+      },
+      {
+        "id": "AC15",
+        "covered": true,
+        "test": "tests/integration/test_quotas_endpoint.py::test_put_rate_limited_per_principal",
+        "reason": "Two admin principals sharing one client IP (10.0.0.9) get independent Tier-2 buckets -- the discriminating two-principals-one-IP shape, not a same-owner-different-IP weak form."
+      },
+      {
+        "id": "AC16",
+        "covered": true,
+        "test": "tests/integration/test_quota_migration.py::test_0003_roundtrip_schema_and_constraints",
+        "reason": "Seeds 2 api_keys rows + a quotas row, runs up->down(0002)->up, asserts: quotas table (create-migration) is fully absent after down (schema-only reversibility, no row-survival claim); the 2 pre-existing api_keys rows survive with scope resetting to the 'ingest' default (expand/contract add-column contract); and after re-up, every constraint (PK duplicate, FK to nonexistent api_key, CHECK limit>=1 for 0 and -5, and api_keys.scope CHECK) is independently re-driven and rejected -- not merely asserted present in a schema dump."
+      },
+      {
+        "id": "AC17",
+        "covered": true,
+        "test": "tests/integration/test_seed_api_key_script.py::test_admin_flag_sets_scope",
+        "reason": "--admin sets scope='admin'; omitting it defaults to 'ingest'."
+      },
+      {
+        "id": "AC18",
+        "covered": true,
+        "test": "tests/integration/test_quotas_endpoint.py::test_injection_rejected_at_boundary + tests/test_schemas_quotas.py::test_rejects_injection_and_oversized_customer_id/test_rejects_invalid_metric (+ Hypothesis property test)",
+        "reason": "SQLi/path-traversal/CRLF/oversized payloads in customer_id and metric are rejected at the Pydantic boundary (422) before reaching quotas_repo's parameterized text() sinks; the Hypothesis property test additionally proves any customer_id that DOES parse matches the anchored allowlist over generated inputs, not fixed examples."
+      },
+      {
+        "id": "AC19",
+        "covered": true,
+        "test": "tests/integration/test_events_quota_enforcement.py::test_rejection_is_logged_without_totals + tests/integration/test_quotas_endpoint.py::test_upsert_and_forbidden_logged",
+        "reason": "quota.rejected (WARNING, no current_total/limit fields), quota.upsert, and quota.forbidden are each asserted present in structlog JSON stdout."
+      },
+      {
+        "id": "AC20",
+        "covered": true,
+        "test": "tests/integration/test_perf_k6_load.py::test_events_ingest_with_quotas_p95_within_1_5x_baseline",
+        "reason": "Human-revised AC20 (2026-07-09 debugging escalation, see .pipeline/debug-notes.md and the AC20 row in acceptance.md): now a RELATIVE budget (quota-active p95 <= 1.5x the same-session no-quota baseline p95, equal uvicorn worker budget) rather than the unachievable-on-this-host absolute 50ms figure. Renamed from test_events_ingest_with_quotas_p95_under_50ms, which previously only asserted sample_count>0 (a test-quality gap flagged in test-quality.json) -- the rewritten test now drives BOTH the no-quota baseline and the quota-active load in the same test/session at equal worker budget (5 workers each, asserted equal via _quota_perf_workers()==_baseline_perf_workers()) and directly asserts quota_p95<=1.5*baseline_p95. Measured this run: baseline p95=124.10ms (7467 samples, 497.98 rps), quota-active p95=123.45ms (7441 samples, 496.95 rps) -- quota path is essentially AT PARITY with baseline (ratio 0.995x), comfortably inside the 1.5x bound. This also resolves the earlier finding: the prior 3362ms measurement was a harness artifact (2-worker quota fixture vs 5-worker baseline), root-caused and fixed by debugging; with equal workers the quota FOR UPDATE read-and-decide path adds no material latency."
+      },
+      {
+        "id": "AC21",
+        "covered": true,
+        "test": "tests/test_dast_context_documented.py::test_bearer_split_token_auth_context_is_documented + tests/integration/test_quotas_endpoint.py::test_openapi_exposes_put_quotas",
+        "reason": "The served /openapi.json includes PUT /v1/quotas, and the DAST auth-context doc test confirms the Bearer mtr_live_<key_id>_<secret> scheme is documented; docs/system_architecture.md documents the admin test-key requirement (seed_api_key.py --admin)."
+      },
+      {
+        "id": "AC22",
+        "covered": false,
+        "test": null,
+        "reason": "ASVS reconciliation is the security stage's deliverable, not a test-suite assertion.",
+        "delegated": "security"
+      }
+    ]
+  },
+  "resilience": {
+    "migration_roundtrip": "pass",
+    "property_tests": 1,
+    "concurrency": "pass"
+  },
+  "perf": {
+    "budget": {
+      "p95_ms": null,
+      "throughput_rps": null,
+      "relative_p95_multiplier": 1.5,
+      "note": "AC20 human-revised at the 2026-07-09 debugging escalation to a RELATIVE bound (quota-active p95 <= 1.5x same-session no-quota baseline p95, equal worker budget); the absolute 50ms figure moved to the post-merge CI/staging load-campaign budget, out of this stage's scope."
+    },
+    "measured": {
+      "p95_ms": 123.45,
+      "throughput_rps": 496.95,
+      "baseline_p95_ms": 124.1,
+      "baseline_throughput_rps": 497.98,
+      "ratio_quota_to_baseline_p95": 0.995
+    },
+    "scenario": {
+      "harness": "grafana/k6 via Docker, out-of-process uvicorn reached via host.docker.internal, constant-arrival-rate scenario",
+      "target_rps": 500,
+      "achieved_rps": 496.95,
+      "baseline_achieved_rps": 497.98,
+      "duration": "5s warmup + 15s measurement, run for both the no-quota baseline and the quota-active load in the same test/session",
+      "workload": "POST /v1/events against 50 pre-seeded customer_id buckets; quota-active run has a high-but-finite quota per bucket (limit never exceeded) so the FOR UPDATE quota read-and-decide runs on every request without ever rejecting; baseline run has no quota rows at all",
+      "contention": "quota row lock (FOR UPDATE) taken per request across 50 distinct (api_key_id, customer_id, metric) rows, not a single hot lock",
+      "worker_budget": "5 uvicorn workers for both the baseline and quota-active runs (equal, asserted by the test itself before measuring)",
+      "sample_count": 7441,
+      "baseline_sample_count": 7467,
+      "status_counts": {
+        "201": 7441
+      },
+      "optional_egress": "none",
+      "note": "Root-caused via debugging (.pipeline/debug-notes.md): the prior 3362ms/40x-gap measurement was a harness artifact -- the quota perf fixture ran only 2 uvicorn workers vs the baseline's 5, so excess arrivals queued under the 500rps constant-arrival scenario. Fixed to equal worker budget (5/5); quota-active p95 is now essentially at parity with baseline (ratio 0.995x), well inside the human-revised 1.5x bound."
+    },
+    "status": "pass"
+  },
+  "coverage": {
+    "combined": {
+      "lines": 89.9,
+      "branches": 58.3,
+      "functions": null
+    },
+    "unit": {
+      "lines": null,
+      "branches": null
+    },
+    "integration": {
+      "lines": null,
+      "branches": null
+    }
+  }
+}
