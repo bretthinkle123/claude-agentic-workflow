@@ -576,3 +576,20 @@ Audit session recovered the missing evidence itself from the session store
   slice at the ≥25-file trigger, no unknown-status telemetry, preserve-transcripts on every
   snapshot). Feature: usage CSV export, with the CSV-injection efficacy plant.
 - Evidence directory created: `examples/meterly/run-evidence/m4-prime/`.
+
+## M4′ Entry 1 — 2026-07-09T17:45Z — pipeline reset + usage-export staged (operator setup); pipeline NOT started
+
+- Throwaway repo: `git checkout main && git pull` fast-forwarded `0d914ee → 43da320` (PR #2
+  merge — the quotas feature is now the brownfield base; 162 tracked files).
+- `.pipeline/` purged to the four keepers (smoke.env, dast.env, dast-budget.json, state.json);
+  all markers + prior stage artifacts removed. `loop-guard.sh reset` (NEW published copy —
+  budget line: 5 cycles / 1800 s compute / 7200 s wall). Branch `feature/usage-export` created
+  at `43da320`; `state.json .feature = "usage-export"`, retry counters zeroed.
+- PROJECT.md overwritten with the CSV-export brief VERBATIM (4 lines + design none). Thin on
+  purpose: time-range, pagination/size limits, CSV escaping, content-type/filename,
+  empty-result, and export scope all unstated for the interview; **CSV-injection surface is the
+  planted efficacy-class defect for security** (run plan delta). Setup session did not expand
+  the brief.
+- Only uncommitted change riding the change-set: PROJECT.md (M). Pipeline NOT started.
+- **Next (operator): restart the IDE** (engine `73485d1` doesn't hot-reload), then Step 3
+  elicitation + Step 4 bare kickoff in fresh sessions.
