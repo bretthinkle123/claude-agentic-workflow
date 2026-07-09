@@ -800,3 +800,24 @@ Audit session recovered the missing evidence itself from the session store
   criterion-1 arithmetic on 14/3, criterion-2 adjudication of the one sanctioned AC16
   escalation, the watchlist verdicts incl. both fixed-and-verified behaviors and the
   implementation-budget miss).
+
+## M4′ Entry 10 — 2026-07-09T21:55Z — PR #3 MERGED; post-merge CI cluster observed; audit handoff written
+
+- **PR #3 merged** by the orchestrator on operator instruction (merge `ef3fb3f`, 21:02:01Z).
+- **Post-merge CI observation (goes to the audit as a first-order cluster):** `pipeline-ci` on
+  the branch: **secrets FAILED** (2 gitleaks generic-api-key hits = the exact test-fixture FPs
+  the local security stage triaged; fingerprints in the job log; no `.gitleaksignore` waiver
+  channel exists in-repo), **sast / deps / containers-iac FAILED** (reasons not extracted at
+  handoff — likely local-diff-scope vs CI-full-tree severity drift for sast; deps/containers
+  unexplained), **codeql FAILED on its literal `<CODEQL_LANGUAGE>` placeholder matrix** (job
+  can never run as bootstrapped), **build-and-test still in_progress** at journal time (the
+  M4P-1 perf-flake prediction's data point — collect its conclusion at audit),
+  store-compliance + asvs-markers PASSED. **The merge proceeded with the gate red** — no
+  branch protection enforces pipeline-ci on this repo; check PR #2's run for the same cluster
+  (the Layer-2 gate may never have been green here). Candidate findings: CI waiver channel
+  unimplemented, scanner-scope reconciliation local↔CI, placeholder-job lint (the fix-plan's
+  1.7 CI placeholder guard evidently didn't cover the codeql matrix), merge-without-green
+  unenforced.
+- **AUDIT-HANDOFF.md written** at run-evidence/m4-prime/ — evidence map, scorecard
+  obligations (criterion-1 arithmetic 3/14 = 21.4%, criterion-2 adjudication list, watchlist
+  verdicts incl. the ✗ 0-caps miss), pre-logged F-M4′ candidates, numbers discipline.
