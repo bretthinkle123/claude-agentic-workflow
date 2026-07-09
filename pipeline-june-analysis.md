@@ -392,6 +392,63 @@ genuine bug to fix before the next run; the `maxTurns` bump (F4) is a one-line q
 
 ---
 
+### M4′ run (Meterly usage CSV export) — proof-gate retry, audited from disk 2026-07-09
+
+> Brownfield slice on the merged quotas base (`43da320`), engine `73485d1` (the M4′ fix
+> tracks), complete end-to-end through PR #3 merge (`ef3fb3f`) — the first fully adjudicable
+> run. Full audit: `examples/meterly/run-evidence/m4-prime/AUDIT-REPORT.md`.
+> **Verdict: RESET on criterion 1 alone — 3/14 = 21.4% cap tax vs <10%** (implementation ×2
+> single-shot + debugging ×1; every other stage 0-cap, including documentation, M4's chronic
+> capper — U-06 flipped). **5 of 6 criteria hold**; per-stage average 4.22 (vs 3.89);
+> /code-review 0 CONFIRMED core-logic bugs for the second consecutive run; the deepest-bug
+> catcher this run was **debugging**, whose empirical root cause (4×BaseHTTPMiddleware
+> re-pumping 100k chunk-per-row yields) overturned implementation's own disclosure.
+> Watchlist: repomix receipt ✓ (sha-verified), telemetry ✓ (0 unknown), preservation ✓
+> (40/40 + manifest), ast-grep ✓ (ran + stamped post-install), tasks.md ✓-per-contract,
+> **0-cap expectation ✗**. Decisions: U-13 NOT promoted (24 warnings, FP-dominated —
+> checker parser first); decomposition becomes the default at ≥8 est. files (the 10–24-file
+> band is the last cap source); gate RESET → fix list → M4″.
+
+- **F-M4′-1 — the single-shot band gap (the reset driver).** ~14-estimated-file slice →
+  below the ≥25 tasks.md trigger → single-shot at 60 turns → 2 caps (~210 tool uses across
+  3 attempts). Per-task segments produced 0-cap behavior everywhere they applied; the
+  trigger just never fires in the common band. Fix: decompose at ≥8 est. files.
+- **F-M4′-2 — A-2 progress file absent at cap 1** (written only after the resume demanded
+  it) — the trail contract binds on paper, not under cap pressure; add to the eval corpus.
+- **F-M4′-3 — debugging budget still under demand for optimize-class sessions** (capped
+  mid-fix both runs; 40 → 50).
+- **F-M4′-4 — ast-grep wrapper can't prove a skip:** the exit-2 (binary missing) path exits
+  *before* stamping, so Entry 6's disclosed skip has no scan-log line. Stamp the skip.
+- **F-M4′-5 — sanctioned-escalation definition boundary:** the mid-run `npm install -g
+  @ast-grep/cli` was adjudicated host provisioning, not an intervention — but the codified
+  2.3 letter ("anything operator-initiated mid-run counts") doesn't make the distinction.
+  Add the provisioning clause.
+- **F-M4′-6 — U-13 checker parser FPs** (`async def` → `asyncdef…`; `docs/decisions/`
+  copies swept; frontmatter keys flagged): 24 unresolved, ~0 true positives — while the
+  documentation agent separately fixed 5 REAL stale identifiers itself. The check has the
+  right target and the wrong parser.
+- **F-M4′-7 — transcript provenance mixing:** the standing-session waiver (Entry 2) makes
+  the session store cumulative, and preserve-transcripts has no run filter — 23 of the 40
+  preserved files are M4-era. Nothing lost (superset), but the set is mislabeled; also the
+  script silently no-ops from the wrong CWD.
+- **F-M4′-8 — the post-merge CI cluster (first-order): the Layer-2 merge gate has NEVER
+  been green — 5/5 pipeline-ci runs failed since run 1, and both PRs merged red (no branch
+  protection).** Decomposed from the job logs: (a) seed-script `src` import fails on the CI
+  runner — a real environment-portability escape past every local layer; (b) AC16's hard
+  3,000 ms assert measured 5,612 ms on the 2-vCPU runner — **M4P-1's prediction confirmed
+  by data**; (c) documentation's post-gate edit dropped "Bearer" from system_architecture.md
+  and broke a doc-contract test AFTER testing's last green run — nothing re-validates tests
+  after the documentation stage; (d) gitleaks/semgrep/trivy re-find locally-triaged FPs
+  because the designed waiver channel (committed tool-native ignore files) was never
+  populated by the security stage; (e) the deps job pulls an UNPINNED `osv-scanner:latest`
+  and broke on an upstream flag removal — the template's own pin-digests instruction never
+  executed; (f) codeql ships ENABLED with literal `<CODEQL_*>` placeholders (no `if: false`
+  gate; the 1.7 guard's tokens don't cover it). Ledger rows M4P-9…15; fix list in
+  AUDIT-REPORT §7. The authoring half of the pipeline is converging; the delivery half is
+  an unplugged smoke detector.
+
+---
+
 ## 9. Sequencing note — front-end and production-debugger workstreams
 
 Both are already scoped as deferred workstreams (front-end: design-spec/design-system/visual-regression/

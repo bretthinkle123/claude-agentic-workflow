@@ -821,3 +821,28 @@ Audit session recovered the missing evidence itself from the session store
 - **AUDIT-HANDOFF.md written** at run-evidence/m4-prime/ — evidence map, scorecard
   obligations (criterion-1 arithmetic 3/14 = 21.4%, criterion-2 adjudication list, watchlist
   verdicts incl. the ✗ 0-caps miss), pre-logged F-M4′ candidates, numbers discipline.
+
+## M4′ Entry 11 — 2026-07-09 — from-disk audit complete (fresh session): VERDICT = RESET (criterion 1 only; 5/6 hold)
+
+Full audit at `run-evidence/m4-prime/AUDIT-REPORT.md`; §8 entry "M4′ run" + ledger rows
+M4P-9…16 written. First fully adjudicable run (all six criteria final).
+
+- **Criterion 1 MISS: 3/14 = 21.4%** (impl ×2 single-shot + debugging ×1) — vs M4's 35.3%;
+  every other stage 0-cap incl. documentation (U-06 flipped). Criteria 2–6 PASS: the AC16
+  escalation adjudicated mechanically under the codified 2.3 definition; the mid-run
+  ast-grep install ruled host provisioning (2.3 boundary gap logged as F-M4′-5); repomix
+  receipt sha-verified; 40/40 transcripts non-empty (23 are M4 carryover — provenance
+  finding F-M4′-7, no loss).
+- **The post-merge CI cluster is the audit's first-order finding (F-M4′-8 / M4P-9…16):**
+  pipeline-ci has NEVER been green (5/5 runs failed since run 1); both PRs merged red.
+  build-and-test decomposed: seed-script `src` portability escape (3 tests), AC16 timing
+  flake at 5,612 ms on the 2-vCPU runner (**M4P-1's prediction confirmed**), and
+  documentation's post-gate edit breaking the Bearer doc-contract test (stage-order gap —
+  nothing re-runs tests after documentation). Plus: waiver channel never populated
+  (no .gitleaksignore/.semgrepignore/.trivyignore), deps job broke on unpinned
+  osv-scanner:latest, codeql ships enabled with literal placeholders, no branch protection.
+- **Decisions:** U-13 NOT promoted (24 warnings FP-dominated — fix the checker parser);
+  decomposition becomes the default at ≥8 estimated files + debugging 40→50 (the last cap
+  source); proof gate RESET → M4″ after the fix list (AUDIT-REPORT §7).
+- Per-stage avg **4.22** (elicitation 5, planning 4, plan-audit 5, implementation 3,
+  security 4, testing 4, debugging 5, documentation 3, deployment 5).
