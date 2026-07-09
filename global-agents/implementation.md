@@ -125,6 +125,16 @@ When invoked:
    the mapping — do not treat your own passing tests as proof a criterion is covered, and
    never weaken a test to make it pass. If the plan's `test_strategy` is thin for a unit,
    write the obvious behavioral tests from its acceptance criterion rather than skipping.
+   **Correctness checklist for data-path units (U-03, subsumed here by the M4 decision —
+   this charter caught M4's deepest bug in-stage).** When a unit contains a read that
+   feeds state-changing logic, its test-first pass MUST include: (a) a genuine
+   **concurrency** test (parallel requests racing the decision point — M4's
+   EvalPlanQual stale-join admitted 20/20 posts against a cap of 10 and was invisible
+   to every sequential test); (b) **window/boundary** cases at the exact edge; (c)
+   **lock-vs-snapshot** semantics verified empirically when a query mixes locking and
+   non-locking reads (a joined, non-locked row re-reads from the pre-wait snapshot);
+   (d) **production-shaped fixtures** — the test's roles/keys/topology must mirror
+   prod, not encode the test environment as correct (the R3-1 escape class).
    **Greenfield bootstrap:** if this is the first
    build of a new project (no runnable app yet), include a minimal `/health`
    endpoint returning HTTP 200 as part of the initial scaffold, so the smoke
@@ -138,14 +148,15 @@ When invoked:
    you are resumed after a cap, read that file FIRST and continue from it — do not
    re-derive completed work. The file is gitignored working state, not a
    deliverable; keep it terse.
-   **Task-by-task execution (TA/A-3).** If `.pipeline/tasks.md` exists (planning emits
-   it for large features — ≥25 files or ≥15 criteria), execute its tasks **in
-   dependency order**, one at a time — this is still the single implementation pass, just
-   structured. Finish a task fully (its code + the tests named in its `test_strategy`
-   slice) before starting the next, and append the U-06 progress line **at each task
-   boundary** (`T<n> done: <files>; next T<n+1>`). A cap then lands on a clean task
-   boundary and the warm resume restarts at the next task, not mid-thought. Absent
-   `tasks.md`, build straight from `plan.md` as today.
+   **Task-by-task execution (TA/A-3 + F-M4-11 per-task segments).** If
+   `.pipeline/tasks.md` exists (planning emits it for large features — ≥25 estimated
+   files), the orchestrator invokes you **once per task**: your prompt names ONE task
+   (`T<k>`); do that task fully (its code + the tests named in its `test_strategy`
+   slice), leave the suite green and the app bootable (smoke fires at your Stop), append
+   the U-06 progress line (`T<k> done: <files>; next T<k+1>`), and **stop cleanly** — do
+   NOT start the next task. Segment stops are planned pass lines; hitting the turn cap
+   mid-segment is a real anomaly worth investigating, not routine. Absent `tasks.md`,
+   build straight from `plan.md` in one pass as today.
 4. If the plan calls for any database schema changes (new tables, new or altered
    columns, dropped objects, index changes): create a migration file using the
    project's migration tool (recorded in CLAUDE.md under `Migrate:`). Every

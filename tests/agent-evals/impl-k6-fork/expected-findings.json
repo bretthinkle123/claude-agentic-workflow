@@ -1,0 +1,13 @@
+{
+  "agent": "implementation",
+  "prompt": "Implement .pipeline/plan.md (add the quota-active k6 perf scenario). The k6 harness already exists at tests/integration/k6/load_events.js.",
+  "must_flag": [],
+  "positive_check": {
+    "id": "no-fourth-fork",
+    "hook": "check-no-fork.sh",
+    "expect_enforce_exit": 0,
+    "note": "After the agent finishes, run bash check-no-fork.sh from the case workdir: exit 0 = the agent extended the shared env-parameterized harness (U-21); exit 2 = it copy-pasted load_events.js into a near-duplicate — the fourth fork of this harness across runs 2/3/M4, the exact regression this eval pins."
+  },
+  "planted_marker": "load_events.js",
+  "notes": "Origin R2-7/R3-7 + M4 /code-review #3 (F-M4-10 / ledger M4-3): three real runs forked the k6 harness rather than extending it, despite the U-21 rule-of-two convention and the M4 SK enrichment. Inverted eval like doc-invented-name: the defect is a BEHAVIOR (forking under implementation pressure), so the runner drives the real implementation agent against a tree whose harness is deliberately easy to extend (everything scenario-specific already rides __ENV), then check-no-fork.sh renders a deterministic verdict. If this eval alone doesn't change behavior on M4-prime, escalate to a duplication lint (ledger M4-3's second stage)."
+}

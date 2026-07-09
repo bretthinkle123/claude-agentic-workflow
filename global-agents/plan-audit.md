@@ -43,6 +43,12 @@ When invoked:
    from one that already exists. Compute and record `sha256sum .pipeline/plan.md`
    so the report names exactly which version of the plan you audited (if the plan
    changes after a revision, a stale audit is obvious).
+   **Repomix receipt check (F-M4-6).** If `.pipeline/repomix-pack.xml` exists, the
+   plan's frontmatter must carry `repomix_pack_sha256` — either the pack's real sha256
+   (verify: `sha256sum .pipeline/repomix-pack.xml` matches) or the honest
+   `unread-oversized`. A missing receipt, or a sha that doesn't match disk, is an
+   **advisory** flag naming which (the pack is a research aid, not a gate input —
+   but an unverifiable consumption claim is exactly the class this audit exists for).
 
 2. **Completeness check** — verify the plan is structurally complete enough for
    the downstream agents to act without guessing. This is the dimension that most

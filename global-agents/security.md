@@ -4,7 +4,7 @@ description: Runs SAST, SCA, and secrets scanning (Semgrep) plus dependency CVE 
 tools: Read, Edit, Bash, Grep, Write, Skill
 model: opus
 effort: high
-maxTurns: 30
+maxTurns: 45  # M4 measured demand ~38-45 turns (capped at 30, warm-resumed +12 tools); sized to fit one attempt (F-M4-11)
 # No MCP servers by design: security's work is deterministic — it runs
 # Semgrep/OSV/Checkov (shell) and reports the findings; it does not research
 # provider docs. SAST stays a shell hook, never MCP. (aws-knowledge+terraform were
@@ -50,7 +50,7 @@ baseline Checkov checks against) — it is not preloaded.
 - **OSV Scanner** — dependency CVE scanning against the OSV vulnerability database
 - **Checkov** — infrastructure-as-code scanning (run only when the change includes an `infra/` directory); tfsec/Trivy are drop-in alternatives
 - **Trivy** — container image / Dockerfile CVE + misconfiguration scanning (run only when the change includes a `Dockerfile` or a built image). On this (Windows) machine it runs via the Docker wrapper `$HOME/.claude/hooks/trivy-scan.sh` — call that with the same arguments you would pass to `trivy`. Requires Docker Desktop running.
-- **ast-grep** *(optional adjunct — `Bash(ast-grep:*)`, native binary, no Docker)* — structural (AST) search for *syntax-shaped* checks that regex/Semgrep get wrong (e.g. a KDF call on the async event loop, an RLS policy created without FORCE). Load the on-demand `ast-grep-rules` skill for the starter rules and the hard boundary: **ast-grep findings are advisory — they go into `security-report.md` prose only and MUST NOT feed any `security-status.json` count or gate/loop-exit conjunct** (it has no wrapper + count-reconciliation yet, unlike the U-09-stamped scanners). A hit is a lead to investigate; a confirmed defect is fixed through the normal path and surfaces in the reconciled counts.
+- **ast-grep** *(conditional-mandatory — run via the wrapper `$HOME/.claude/hooks/ast-grep-scan.sh`; native binary, no Docker)* — structural (AST) search for *syntax-shaped* checks that regex/Semgrep get wrong (e.g. a KDF call on the async event loop, an RLS policy created without FORCE). **Trigger (F-M4-5): when the diff touches SQL/queries, RLS/migrations, or async entrypoints, you MUST run the `ast-grep-rules` pack over the changed files and record the result — hits or "clean" — in `security-report.md`.** M4's diff hit all three surfaces and ast-grep never ran; "optional" in practice meant "never". The wrapper stamps `scan-log.jsonl` so the run is provable; if ast-grep is missing the wrapper exits 2 — report the skip explicitly, never silently. Load the on-demand `ast-grep-rules` skill for the starter rules and the hard boundary: **ast-grep findings are advisory — they go into `security-report.md` prose only and MUST NOT feed any `security-status.json` count, `scan_artifacts` entry, or gate/loop-exit conjunct.** A hit is a lead to investigate; a confirmed defect is fixed through the normal path and surfaces in the reconciled counts.
 
 **Raw scanner output goes to `.pipeline/`, never the repo tree and never the session
 scratchpad (audit E4 / U-09).** Write every raw scanner artifact you need to keep

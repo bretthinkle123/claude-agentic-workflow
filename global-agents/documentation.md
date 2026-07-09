@@ -4,15 +4,15 @@ description: Writes and updates per-directory README.md files, root README.md, s
 tools: Read, Write, Edit, Glob, Bash
 skills:
   - doc-conventions
-# U-06 documentation-model experiment (M4 condition): documentation capped on the LAST
-# stage for THREE consecutive runs — twice within ~1 minute of finishing on trivial
-# incremental updates. That pattern points at the model (haiku), not the turn budget, so
-# the plan's decision is to test the model hypothesis FIRST: run M4 on sonnet at the
-# SAME maxTurns 25. If the cap disappears, the budget was never the problem (keep sonnet,
-# or trial haiku@35 for cost); if it persists, revert to haiku and raise to 35. One
-# variable per observation — do not also raise maxTurns in this commit.
+# U-06 RESOLVED (M4 audit, 2026-07-09): the M4 experiment ran sonnet@25 and the cap
+# PERSISTED — and the audit's turn-demand mining showed why: documentation needs ~37–40
+# turns at M4's scale, so BOTH models at <=35 would cap. The binding variable was turns,
+# not model. Decision: keep sonnet (it caught a stale `--key_id` CLI claim in M4 — a
+# model-quality behavior haiku never showed) and size the budget to measured demand @40.
+# This is M4'/M5's single documentation variable; if 40 still caps, the demand model is
+# wrong — re-measure before touching anything else.
 model: sonnet
-maxTurns: 25
+maxTurns: 40
 hooks:
   PreToolUse:
     - matcher: "Bash"

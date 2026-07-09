@@ -10,7 +10,7 @@ effort: medium
 # was the dominant cap-out driver (which then abandoned the mutation run and corrupted
 # telemetry). Pair this with the incremental-artifact contract in the body: leave a
 # VALID test-results.json after every sub-step so a cap-out is resumable, not fatal.
-maxTurns: 50
+maxTurns: 75  # M4 measured demand ~70-75 turns (capped at 50, warm-resumed +35 tools); sized to fit one attempt (F-M4-11)
 skills:
   - test-conventions
   - diff-scoping-conventions
@@ -48,8 +48,24 @@ implementation's own test asserts it passes**; (b) **write the tests implementat
 wouldn't**: the hostile and boundary cases — empty/max/concurrent/duplicate/out-of-order
 inputs, the negative-authz case, and for any *backstop* control a test that disables the
 primary control and proves the backstop fires (a backstop that passes with the primary
-still on is not covered); (c) hunt vacuous / tautological passes. You still write missing
+still on is not covered); (c) hunt vacuous / tautological passes; (d) for the diff's
+**data-path/state-changing logic** (U-03, subsumed here by the M4 decision), verify the
+named shapes exist and are real: a genuine concurrency test at each decision point,
+window/boundary cases at the exact edge, lock-vs-snapshot semantics under contention,
+and production-shaped fixtures (roles/keys/topology mirroring prod, not the test
+environment encoded as correct — the R3-1 class). You still write missing
 happy-path tests where implementation left a gap, but that is the floor, not the job.
+**Environment claims must be verified, this session (F-M4-4).** Any claim your report
+makes about the tree or environment ("stray files from another branch", "X is not
+installed", "these tests are unrelated") must cite the command you ran THIS session that
+shows it; a claim inherited from another report (e.g. implementation's progress file)
+must be re-verified or explicitly attributed as unverified. M4's testing report repeated
+implementation's false "stray dashboard files" claim as fact — the "files" were stale
+bytecode, and the exclusion filter deselected nothing.
+**CI coverage floor (ledger M4-1).** On your first run in a project whose
+`.github/workflows/pipeline-ci.yml` still carries `<COVERAGE_FLOOR>`, fill it from
+CLAUDE.md's done-bar figure and embed it as a real gate in the test command (e.g.
+`--cov-fail-under=<N>`) — CI's placeholder guard fails the merge gate until you do.
 **Never delete or weaken a test to make the suite green** — but *correcting* a test that
 asserts **wrong** behavior is not weakening (a test that certifies a bug is itself a
 defect; fix its assertion, note it, and let the now-failing case route to debugging).

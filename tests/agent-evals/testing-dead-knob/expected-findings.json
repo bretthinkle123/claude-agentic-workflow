@@ -1,0 +1,13 @@
+{
+  "agent": "testing",
+  "prompt": "Run your adversarial verification over src/perf_workers.py and tests/test_perf_workers.py (the changed modules). The acceptance criterion is: quota-active and baseline perf runs use an equal worker budget. Write .pipeline/test-quality.json with your adversarial_review gaps.",
+  "must_flag": [
+    {
+      "id": "dead-knob",
+      "grep": "PERF_QUOTA_UVICORN_WORKERS|dead[ -]?(knob|flexib)|flexibilit|knob|never (set|exercised|varied)|asserted? (to |away|equal)|tautolog|vacuous",
+      "where": "test-quality.json"
+    }
+  ],
+  "planted_marker": "PERF_QUOTA_UVICORN_WORKERS",
+  "notes": "Origin R2-9/R2-10 + M4 /code-review #4 (F-M4-10): quota_perf_workers() advertises an env knob, but the only test asserts it equals the constant 5 and nothing in the tree ever sets the env var — the flexibility is dead, and the test would pass even if the knob were removed. The adversarial review must name the dead knob / vacuous-flexibility gap in test-quality.json. This class shipped in M4 DESPITE the code-standards YAGNI section — the eval graduates the convention into a measured behavior."
+}

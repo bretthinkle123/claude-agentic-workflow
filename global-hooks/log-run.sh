@@ -122,7 +122,9 @@ if [ "$STATUS" = "auto" ]; then
       # before trusting it; if it never freshens, log "pending-smoke" — an explicit
       # couldn't-know-yet, never a stale result and never a false "unknown".
       SMOKE_FRESH=""
-      for _i in $(seq 1 20); do
+      # LOG_RUN_SMOKE_WAIT_S: bound of the freshness wait (default 20 s; the eval suite
+      # sets it low so the stale-smoke case doesn't stall the harness).
+      for _i in $(seq 1 "${LOG_RUN_SMOKE_WAIT_S:-20}"); do
         if [ -f .pipeline/smoke-status.json ]; then
           SMOKE_MTIME=$(stat -c %Y .pipeline/smoke-status.json 2>/dev/null || echo 0)
           if [ "$SMOKE_MTIME" -ge $((HOOK_START - 2)) ]; then SMOKE_FRESH=1; break; fi

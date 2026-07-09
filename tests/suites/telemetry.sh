@@ -54,4 +54,24 @@ w="$(mk_log_proj feat)"
   bash "$LOG" deployment >/dev/null 2>&1 )
 assert_eq 2 "$(last "$w" '.files_changed')" "U-16c: deployment line counts the committed files, not the clean-tree 0"
 
+# F-M4-3: concurrent Stop hooks — log-run must never trust a STALE smoke-status.
+# Stale file (older than the hook start) + bounded wait exhausted ⇒ explicit
+# "pending-smoke", never the stale pass and never "unknown".
+w="$(mk_log_proj feat)"
+jq -nc '{status:"pass",ran_at:"2026-01-01T00:00:00Z"}' > "$w/.pipeline/smoke-status.json"
+touch -d '1 hour ago' "$w/.pipeline/smoke-status.json" 2>/dev/null || touch -t 202601010000 "$w/.pipeline/smoke-status.json"
+( cd "$w" && LOG_RUN_SMOKE_WAIT_S=2 bash "$LOG" implementation >/dev/null 2>&1 )
+assert_eq "pending-smoke" "$(last "$w" '.status')" "F-M4-3: stale smoke-status ⇒ pending-smoke, not the stale pass"
+# Fresh file (written just now, as when smoke-check finished first) ⇒ trusted as usual.
+w="$(mk_log_proj feat)"
+jq -nc '{status:"pass"}' > "$w/.pipeline/smoke-status.json"
+( cd "$w" && LOG_RUN_SMOKE_WAIT_S=2 bash "$LOG" implementation >/dev/null 2>&1 )
+assert_eq "pass" "$(last "$w" '.status')" "F-M4-3: fresh smoke-status trusted immediately"
+# run-summary counts pending-smoke as suspected_underlog (it hides an outcome).
+( cd "$w" \
+  && jq -c '.status="pending-smoke"' < <(tail -1 .pipeline/run-log.jsonl) > .pipeline/run-log.jsonl.tmp \
+  && mv .pipeline/run-log.jsonl.tmp .pipeline/run-log.jsonl \
+  && bash "$REPO_ROOT/scripts/run-summary.sh" >/dev/null 2>&1 )
+assert_eq 1 "$(jq -r '.totals.suspected_underlog' "$w/.pipeline/run-summary.json")" "F-M4-3: pending-smoke counted as suspected_underlog"
+
 finish telemetry

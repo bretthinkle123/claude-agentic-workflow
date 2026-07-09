@@ -152,3 +152,15 @@ builds vs. verifies each) is
 `stride-threat-model-template/asvs-5.0-checklist.md` — consult it when a feature
 triggers a chapter these invariants don't already cover (auth, sessions, tokens,
 OAuth, crypto, TLS, file handling, WebRTC).
+
+## Report honesty — environment claims (F-M4-4)
+
+Any factual claim a stage report makes about the tree or environment ("stray files from
+another branch", "tool X unavailable", "these tests are unrelated to this feature") must
+be backed by a command run **this session** that shows it. A claim inherited from another
+agent's report or progress file must be re-verified before repeating, or explicitly
+attributed as unverified ("per implementation's progress file, not re-checked"). M4's
+"stray dashboard files" claim traveled from implementation's progress file into testing's
+final report as fact — the "files" were stale bytecode and the exclusion filter matched
+nothing. Reports are evidence; an unverified environmental assertion in one poisons every
+downstream reader.

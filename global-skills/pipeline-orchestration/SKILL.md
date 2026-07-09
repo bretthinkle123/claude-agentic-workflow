@@ -354,7 +354,7 @@ Grep directly.
 | `plan.md` | planning | plan-audit, human, implementation, testing, documentation |
 | `plan-audit.md` | plan-audit | orchestrator (`revision_recommended`), planning (revision pass), human (advisory, non-gating) |
 | `acceptance.md` | planning | implementation (definition-of-done), testing (`criteria_covered`), plan-audit (untraced-criterion flag) |
-| `tasks.md` | planning (**only for large features** — ≥25 files or ≥15 criteria; TA/A-3) | implementation (executes tasks in dependency order within the single pass), plan-audit (AC↔task coverage + orphan/dangling-dep flags). Absent on small features — no decomposition |
+| `tasks.md` | planning (**only for large features** — ≥25 estimated files, the single trigger since F-M4-2; TA/A-3) | implementation (executes per-task segments in dependency order — see step 2), plan-audit (AC↔task coverage + orphan/dangling-dep flags). Absent on small features — no decomposition |
 | `requirements.md` | human (via `requirements-elicitation`, optional pre-planning; TA/A-1) | planning (authoritative brief when present; Open items → stated default or checkpoint question). **Operator's own words — input, never a gate** |
 | `plan-approved` | human | implementation (refuses to start without it) |
 | `surface-delta.md` | implementation | security (6f STRIDE-delta reconciliation — non-authoritative hint; the diff is source of truth) |

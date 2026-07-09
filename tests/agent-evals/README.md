@@ -30,6 +30,8 @@ execution.
 | `plan-audit-proof-claim/` | plan-audit | a plan asserting a filter is "provably implied" by an invariant enforced nowhere (R2-1) | proof-claim material flag |
 | `plan-audit-crossfeature/` | plan-audit | a dashboard plan reading per-key rollups with a reader key that owns no rows (R3-1) | cross-feature data-flow material flag |
 | `doc-invented-name/` | documentation | a README naming a nonexistent function + a wrong signature on a real one (R2-5/R3-5) | doc-identifier resolution |
+| `testing-dead-knob/` | testing | an env knob whose only test pins it to the constant default; nothing ever sets it (R2-9/R2-10, M4 #4) | dead-flexibility gap in test-quality.json |
+| `impl-k6-fork/` | implementation | an env-parameterized k6 harness + a plan asking for a new scenario — will the agent extend or fork? (R2-7/R3-7, M4 #3) | inverted: `check-no-fork.sh` exit 0 (U-21) |
 
 ## Contract: `expected-findings.json`
 
