@@ -10,6 +10,7 @@ and the [Anthropic Claude Code docs](https://code.claude.com/docs/en/overview).
 
 - [The mental model in one paragraph](#the-mental-model-in-one-paragraph)
 - [Installation layers](#installation-layers)
+- [Permission & autonomy model](#permission--autonomy-model)
 - [Pipeline flow](#pipeline-flow)
 - [Directory layout and file responsibilities](#directory-layout-and-file-responsibilities)
 - [Agents](#agents)
@@ -70,6 +71,88 @@ lives globally so new projects get the pipeline instantly.
 **Editing the pipeline:** change files under `global-agents/`, `global-hooks/`, or `global-skills/`,
 then run `./scripts/install-global.sh` and restart Claude Code. The repo is the source of truth;
 `~/.claude/` is the published runtime copy.
+
+---
+
+## Permission & autonomy model
+
+Between its human checkpoints the pipeline runs unattended. That autonomy comes from Claude Code's
+permission system configured with one deliberate asymmetry: **`defaultMode: "auto"` eases
+prompting, never enforcement.** The `deny` and `ask` tiers and every hook fire identically in all
+permission modes, so switching autonomy off costs prompts (not protection), and switching it on
+disables nothing.
+
+### The toggle
+
+Autonomy is a single setting — `"permissions": { "defaultMode": "auto" }` — written into each
+project's `.claude/settings.json` by `bootstrap-project.sh` (from `templates/project-settings.json`).
+Three override levels, narrowest wins:
+
+| Scope | Mechanism | Typical use |
+|---|---|---|
+| Session | `Shift+Tab` mode cycling, or `claude --permission-mode default` | Supervise one run interactively |
+| Machine | `defaultMode` in `.claude/settings.local.json` (never committed) | Opt this machine in/out |
+| Repo | `defaultMode` in `.claude/settings.json` (committed) | The project's default posture |
+
+### Three enforcement layers
+
+**Layer 1 — permission rules (the only layer autonomy eases).** The `allow` list is scoped
+per-command (`Bash(git diff:*)`, `Bash(pytest:*)`, …) and per-path (`Read(./**)`, `Write(./**)`),
+not blanket. The `ask` tier still prompts in every mode for the actions that would let a run widen
+its own blast radius: `git push --force` and edits to the settings files themselves — an agent
+cannot loosen its own leash. The `deny` tier is mode-independent and trumps everything: credential
+material (`**/.env`, `~/.ssh`, `~/.aws`, tfstate/tfvars, `~/.claude/.credentials.json`) and the
+human approval markers are unreadable/unwritable no matter what mode is active. For anything not
+matched by a rule, `auto` mode consults the `autoMode` policy block instead of prompting: file
+access stays inside the repo, shell egress is limited to the git remote + package registries
+(anything else must go through `WebFetch`/MCP where it is visible and auditable), and producing an
+approval marker **"by ANY means"** — shell redirection, scripts, git tricks — is hard-denied.
+
+**Layer 2 — hooks (deterministic; the model has no vote).** Gate scripts are wired into agent
+frontmatter as `PreToolUse` hooks, which run *before* the tool call executes, outside the model; a
+blocking exit stops the call. A prompt-injected agent cannot argue with a shell script — this is
+the containment layer that makes eased prompting safe:
+
+| Hook | What it blocks/records under autonomy |
+|---|---|
+| `guard-approval-markers.sh` | Any tool call that would create or modify `plan-approved` / `diff-approved` / `design-approved` / `waivers.json`, including indirect routes (`echo >`, scripts) a permission glob would miss |
+| `deployment-gate.sh` | The final commit, unless it *recomputes* from `.pipeline/*` files that security is clean, tests pass, criteria are covered, `diff-approved` exists, and the tree matches the approved hash — it never trusts agent claims |
+| `egress-check.sh` (+ `egress-allowlist.txt`) | Shell network access outside the git remote / package registries |
+| `loop-guard.sh` | Runaway retry loops — cap hit means stop and escalate to the human |
+| `log-run.sh` (Stop hook, all agents) | Nothing — it writes the `.pipeline/run-log.jsonl` audit trail so an unattended run is reviewable after the fact |
+
+**Layer 3 — the orchestrator (sequencing + least privilege).** The `pipeline-orchestration` skill
+never invokes a stage before its interlock file exists (deployment requires `diff-approved`),
+re-verifies currency hashes so approvals can't be reused against regenerated content, and each
+subagent runs with a minimal toolset (deployment: Bash only; testing: no web; triage: no Bash, no
+Edit). The agents exposed to untrusted content — web pages, dependency docs, design bundles,
+telemetry — are never the agents that can push.
+
+### Human checkpoints under autonomy
+
+The checkpoints survive because they are **files only a human can produce**: `plan-approved` and
+`diff-approved` are human-typed (`approve-diff.sh` refuses to run without a TTY);
+`design-approved` is orchestrator-transcribed from an explicit human approval because it embeds a
+content hash. Agents are barred from minting them three independent ways — the permission `deny`
+rule, the `autoMode` "by ANY means" hard-deny, and the `guard-approval-markers.sh` hook. The worst
+case for a fully prompt-injected run is therefore wasted work inside the repo that stops at a gate
+it cannot forge: it can't approve itself, can't ship, can't exfiltrate through the shell, and can't
+read credentials.
+
+### Limits
+
+This is **policy-level** enforcement — the harness blocks the calls — not an OS sandbox. On Windows
+that is the settled trade-off; for kernel-level containment of fully unattended runs, use WSL2 or a
+devcontainer with a network firewall. `--dangerously-skip-permissions` is never part of this model:
+the `allow`/`autoMode` layering is the substitute for it, not a stepping stone toward it.
+
+### Where it lives
+
+- `templates/project-settings.json` — the canonical model; becomes each project's
+  `.claude/settings.json` at bootstrap, so bootstrapped projects are autonomous by default.
+- This repo's own `.claude/settings.json` — the same model adapted for framework development
+  (writes to `~/.claude/` are additionally expected here, because `install-global.sh` publishes to
+  it and session memory lives under it).
 
 ---
 
@@ -637,8 +720,7 @@ the `deployment-checklist-and-rollback` skill — pipeline interlock files, secr
 build/dependency junk, scratch blobs, and conflict/debug markers — and stops for a human on any hit.
 Only once clean does it run `git add -A && git commit` as a single atomic command. Before that
 command executes, `deployment-gate.sh` fires and blocks unless all five conditions hold. After a
-clean commit, runs `git push` (requires human approval — intentionally not in the allow-list) and
-`gh pr create`. Stops at the PR.
+clean commit, runs `git push` and `gh pr create`. Stops at the PR.
 
 **Why sonnet?** Deployment is no longer purely mechanical — it now performs a **read-only pre-commit
 content inspection** (scan the change set for secrets, junk, interlock files, and conflict markers;
@@ -648,9 +730,11 @@ U-06 when the inspection + gate-retry cycles capped). It fires once per
 feature and only makes git calls after the gate passes, so absolute cost stays small. *(This
 supersedes the earlier "deployment = haiku" allocation — the inspection capability is worth the bump.)*
 
-**Hard gate:** `git push` and `gh pr create` are deliberately excluded from `settings.json`'s
-allow-list so they each require explicit human approval even after the gate passes. The human
-approves the actual push.
+**Hard gate:** the human approval sits *before* the commit, not at the push: `deployment-gate.sh`
+blocks the commit unless `.pipeline/diff-approved` exists and the tree matches the exact hash the
+human approved, so the allow-listed `git push` / `gh pr create` (see
+[Permission & autonomy model](#permission--autonomy-model)) can only ever ship a diff a human
+already reviewed. `git push --force` stays in the `ask` tier and always prompts.
 
 ---
 

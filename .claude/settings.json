@@ -1,14 +1,24 @@
 {
   "permissions": {
+    "defaultMode": "auto",
     "allow": [
       "Agent",
-      "Read",
+      "Read(./**)",
+      "Read(~/.claude/**)",
       "Grep",
       "Glob",
-      "Write",
-      "Edit",
+      "Write(./**)",
+      "Edit(./**)",
+      "Write(~/.claude/projects/**)",
+      "Edit(~/.claude/projects/**)",
+      "WebFetch",
+      "WebSearch",
+      "Skill",
+      "TodoWrite",
       "Bash($HOME/.claude/hooks/*.sh)",
       "Bash(~/.claude/hooks/*.sh)",
+      "Bash(bash scripts/*)",
+      "Bash(bash tests/*)",
       "Bash(git diff:*)",
       "Bash(git rev-parse:*)",
       "Bash(git symbolic-ref:*)",
@@ -18,9 +28,11 @@
       "Bash(git ls-files:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
       "Bash(jq:*)",
       "Bash(sha256sum:*)",
-      "Bash(curl:*)",
       "Bash(date:*)",
       "Bash(semgrep:*)",
       "Bash(docker info:*)",
@@ -35,14 +47,47 @@
       "Bash(pytest:*)",
       "Bash(go test:*)"
     ],
+    "ask": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Write(.claude/settings.json)",
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.local.json)",
+      "Edit(.claude/settings.local.json)",
+      "Write(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.json)"
+    ],
     "deny": [
       "Read(**/.env)",
       "Read(**/*.tfstate)",
       "Read(**/*.tfvars)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.claude/.credentials.json)",
       "Write(**/.pipeline/diff-approved)",
       "Write(**/.pipeline/plan-approved)",
+      "Write(**/.pipeline/design-approved)",
+      "Write(**/.pipeline/waivers.json)",
       "Edit(**/.pipeline/diff-approved)",
-      "Edit(**/.pipeline/plan-approved)"
+      "Edit(**/.pipeline/plan-approved)",
+      "Edit(**/.pipeline/design-approved)",
+      "Edit(**/.pipeline/waivers.json)"
+    ]
+  },
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "This is the pipeline framework repo — the source of truth for the agents, hooks, skills, and templates published to ~/.claude by scripts/install-global.sh. File writes must stay inside this repository, ~/.claude (the publish target and session-memory location), or the session scratchpad. Shell network access is limited to: localhost, this repo's GitHub remote (git/gh), and package-registry installs (npm/pip/go). Any other external network access must go through the WebFetch tool."
+    ],
+    "soft_deny": [
+      "$defaults",
+      "Deleting, moving, or rewriting files outside this repository, ~/.claude, or the session scratchpad"
+    ],
+    "hard_deny": [
+      "$defaults",
+      "Creating, modifying, or deleting the .pipeline approval markers (plan-approved, diff-approved, design-approved) or waivers.json by ANY means, including shell redirection, scripts, or git operations — these files exist solely so a human can approve pipeline checkpoints",
+      "Shell commands that send data to external network destinations other than this repo's git remote or package registries (use WebFetch instead)",
+      "Reading credential material (~/.ssh, ~/.aws, .env files, cloud or API tokens, ~/.claude/.credentials.json)"
     ]
   }
 }
