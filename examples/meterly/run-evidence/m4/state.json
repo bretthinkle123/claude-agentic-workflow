@@ -1,0 +1,8 @@
+{
+  "debug_retry_count": {
+    "sanity": 0,
+    "remediation": 0
+  },
+  "max_retries": 3,
+  "feature": "metric-quotas"
+}

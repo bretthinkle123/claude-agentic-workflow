@@ -527,3 +527,27 @@ Audit session recovered the missing evidence itself from the session store
   deterministic for M4′ by fix 1.4 (now with the correct copy sources).
 - Operator action 1 (perishable codeburn export) is DONE; remaining operator items: diff
   approval → deployment → addendum, and the three retrospective sign-offs.
+
+## M4 Entry 15 — 2026-07-09T17:15Z — DEPLOYMENT COMPLETE: PR #2 open; run closed on the old engine
+
+- **Human diff-approved** landed 17:02:13Z via approve-diff.sh (TTY): `approved_change_hash
+  63cc7107…` — matches review-manifest exactly (currency anchor intact; tree unchanged between
+  documentation and approval).
+- **deployment (sonnet, 1 attempt, 8 tools/116 s): PASS.** Gate verified all conjuncts before
+  acting (tests 128/128, criteria 21/22+1 delegated, security clean, pr-description,
+  diff-approved + hash). Single commit `bdcb326` (47 files), pushed, **PR #2 opened:**
+  https://github.com/bretthinkle123/meterly-pipeline-test/pull/2. Pre-commit inspection clean
+  (no .pipeline files, no secrets — the password hits are the RLS-backstop test's throwaway
+  role + a k6 env ref). No production deploy (CI post-merge owns that).
+- **6b re-stamp:** run-summary.json now covers the whole run — stages=8, log_lines=17,
+  **capped=6 → final cap-out tax 35.3%** (documentation's cap + deployment's clean line added
+  vs the loop-GREEN snapshot; criterion-1 RESET figure stands), suspected_underlog=1,
+  first_pass_clean=false, deployment last_status=pass.
+- **Final evidence snapshot:** all 24 .pipeline artifacts (incl. re-stamped run-summary,
+  run-log, smoke-status, diff-approved) → run-evidence/m4/; transcripts re-preserved via
+  scripts/preserve-transcripts.sh (23 files + MANIFEST.sha256; known dual-ID byte-identical
+  pairs flagged at source — same class Entry 14 documented).
+- Engine was NOT republished before this deployment — M4 closed end-to-end on the SHA it
+  started on (`bba9475`); the implemented M4′ fix tracks publish next (Step 1).
+- **Remaining for M4:** operator merges PR #2 → audit addendum finalizes criteria 4–6 + the
+  deployment-gate per-stage row → §7 ledger deltas for the deferred /code-review findings.
