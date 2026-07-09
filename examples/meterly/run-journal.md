@@ -311,3 +311,41 @@ PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack �
   for the U-03 keep/drop/subsume decision: the test-first charter (A-2) surfaced it, not the
   U-03 review step (which hasn't run yet).
 - Warm resume 2 issued: T6 only (k6 quota scenario, DAST context, docs). Running in background.
+
+## M4 Entry 7 — 2026-07-09T01:35Z — implementation COMPLETE (smoke pass); U-03 pilot run; loop about to arm
+
+- **Implementation finalized on attempt 3** (warm resume 2): T6 done (k6 quota-active scenario
+  `load_events_quota.js` + fixture, doc updates). All AC1–AC21 test-covered, AC22 delegated;
+  full suite green twice (124 passed). One test-infra-only env fix (testcontainer
+  `max_connections=300` after a third multi-worker uvicorn perf fixture — not a prod change).
+  `surface-delta.md` + final progress file written. **Smoke: PASS**
+  (`smoke-status.json {"status":"pass","ran_at":"2026-07-09T01:02:27Z"}`).
+- **Telemetry quirk (candidate F-M4-cand-3):** the attempt-3 run-log line logged
+  `status:"unknown"` at ts 01:02:22 — five seconds BEFORE smoke-status.json's stamp
+  (01:02:27). log-run.sh derives implementation status from smoke-status.json but appears to
+  have read it before smoke-check.sh finished writing, despite frontmatter hook order
+  (smoke-check → … → log-run). Hook-order/stale-read race; cap-tax arithmetic unaffected
+  (attempts 1–2 correctly `capped`), but the "unknown" hides a pass. Log as F-M4 finding.
+- **Implementation totals:** 3 attempts (2 caps + 1 clean), ~778k subagent tokens, 248 tool
+  uses, ~7.9 h wall (incl. container-heavy test runs). Warm resumes demonstrably avoided
+  re-derivation both times (T1–T2 then T3–T5 preserved).
+- **U-03 pilot (correctness review, post-smoke pre-loop, scoped to data-path/state-changing
+  logic).** 3 parallel finder agents (line-by-line / removed-behavior / cross-file), inline
+  verification against plan + engine config, 1 debugging routing:
+  - 0 CONFIRMED defects in the current diff (angle A explicitly validated boundary semantics,
+    rollback-on-reject, replay path, Retry-After math, lock ordering).
+  - 1 PLAUSIBLE latent fragility ROUTED to debugging and FIXED: engine pinned no isolation
+    level while the lock-then-read enforcement silently requires READ COMMITTED →
+    `isolation_level="READ COMMITTED"` pinned in src/db/session.py + fails-before/passes-after
+    regression test (`test_db_session_isolation.py`); 19 quota tests re-green.
+    debug_retry_count.remediation 0→1.
+  - 1 REFUTED-as-designed: cross-key quota bypass (separate ingest key sees no quota row) — this
+    IS plan Open Q3, human-approved at the checkpoint; documentation should surface it in the PR
+    as the known single-key-per-tenant constraint.
+  - 1 dropped below precision bar (falsy `app_code` fallback — no current trigger).
+  - **Catch-vs-cost note for the keep/drop/subsume decision:** the run's deepest bug of exactly
+    the U-03 class (EvalPlanQual stale join) was caught EARLIER by A-2 test-first inside
+    implementation, not by this pilot; the pilot's net new value was one latent-hardening pin
+    (+1 debugging cycle, ~54k tokens) on top of 3 finder agents. Early signal: **subsume into
+    A-2**, pending the retrospective.
+- Next: arm loop-guard, enter security⇄debugging⇄testing.
