@@ -551,3 +551,28 @@ Audit session recovered the missing evidence itself from the session store
   started on (`bba9475`); the implemented M4′ fix tracks publish next (Step 1).
 - **Remaining for M4:** operator merges PR #2 → audit addendum finalizes criteria 4–6 + the
   deployment-gate per-stage row → §7 ledger deltas for the deferred /code-review findings.
+
+---
+
+# M4′ run journal — Meterly (proof run 1 of 2–3, `docs/m4-prime-run-plan.md`)
+
+## M4′ Entry 0 — 2026-07-09T17:30Z — fixed engine published (operator setup, not pipeline friction)
+
+- **M4 closed first, on the old engine:** PR #2 merged (merge `43da3203feb…` @ 17:08:24Z);
+  audit addendum §9 finalized criteria 4–6 (RESET stands on criterion 1 @ 35.3% final; C5
+  cured; deployment gate graded 5; per-stage avg 3.89). Publish deliberately sequenced AFTER
+  deployment so M4's close-out was uncontaminated.
+- **Eval green on main:** `bash tests/run-eval.sh` — ALL SUITES PASSED (incl. the fix-track
+  additions; telemetry suite now 12).
+- **Engine published** to `~/.claude` via `install-global.sh` at SHA
+  `73485d12d6c1066b92a7bb12421ccfa8c2a11e79` (main; includes fix tracks `b2eff68` Track 1
+  telemetry/evidence determinism + `53dd128` Tracks 2–4 cap policy/agent semantics/planted
+  evals, plan-audited at `7b486a5`, stamped `64bd3eb`). No collision-guard abort.
+  **IDE restart required before the run sessions — agents/hooks don't hot-reload.**
+- `docs/m4-prime-run-plan.md` drafted (deltas: criterion-1 metric KEPT AS-IS per decision 2.2;
+  sanctioned-escalation definition codified per 2.3; U-13 warn-only with tally from
+  `.pipeline/doc-identifiers.json`; behavioral-fix watchlist: ast-grep stamp when SQL/RLS/async
+  touched, repomix receipt in plan.md frontmatter, 0-cap expectation, no tasks.md on the thin
+  slice at the ≥25-file trigger, no unknown-status telemetry, preserve-transcripts on every
+  snapshot). Feature: usage CSV export, with the CSV-injection efficacy plant.
+- Evidence directory created: `examples/meterly/run-evidence/m4-prime/`.
