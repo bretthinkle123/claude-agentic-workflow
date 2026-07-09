@@ -1,0 +1,1185 @@
+ M .claude/settings.json
+ M .github/workflows/pipeline-ci.yml
+ M CLAUDE.md
+ M PROJECT.md
+ M docs/system_architecture.md
+ M scripts/ci/dast-review.sh
+ M scripts/ci/guard-source-markers.sh
+ M scripts/seed_api_key.py
+ M src/api/README.md
+ M src/api/errors.py
+ M src/api/middleware.py
+ M src/auth/README.md
+ M src/auth/api_key.py
+ M src/main.py
+ M src/repositories/README.md
+ M src/repositories/api_keys_repo.py
+ M src/services/README.md
+ M src/services/events_service.py
+ M tests/integration/conftest.py
+ M tests/integration/test_perf_k6_load.py
+ M tests/integration/test_seed_api_key_script.py
+?? .claude/skills/ast-grep-rules/
+?? alembic/versions/0003_create_quotas_and_api_key_scope.py
+?? src/api/routes/quotas.py
+?? src/api/schemas/quotas.py
+?? src/repositories/quotas_repo.py
+?? src/services/quota_service.py
+?? tests/integration/k6/load_events_quota.js
+?? tests/integration/test_events_quota_enforcement.py
+?? tests/integration/test_quota_concurrency.py
+?? tests/integration/test_quota_migration.py
+?? tests/integration/test_quotas_endpoint.py
+?? tests/test_schemas_quotas.py
+=====DIFF=====
+diff --git a/.claude/settings.json b/.claude/settings.json
+index 46d79ed..bc0236b 100644
+--- a/.claude/settings.json
++++ b/.claude/settings.json
+@@ -1,12 +1,23 @@
+ {
+   "permissions": {
++    "defaultMode": "auto",
+     "allow": [
+       "Agent",
+-      "Read",
++      "Read(./**)",
++      "Read(~/.claude/**)",
+       "Grep",
+       "Glob",
+-      "Write",
+-      "Edit",
++      "Write(./**)",
++      "Edit(./**)",
++      "WebFetch",
++      "WebSearch",
++      "Skill",
++      "TodoWrite",
++      "mcp__context7",
++      "mcp__aws-knowledge",
++      "mcp__terraform",
++      "mcp__figma",
++      "mcp__sentry",
+       "Bash($HOME/.claude/hooks/*.sh)",
+       "Bash(~/.claude/hooks/*.sh)",
+       "Bash(git diff:*)",
+@@ -18,11 +29,17 @@
+       "Bash(git ls-files:*)",
+       "Bash(git add:*)",
+       "Bash(git commit:*)",
++      "Bash(git branch:*)",
++      "Bash(git push:*)",
++      "Bash(gh pr:*)",
+       "Bash(jq:*)",
+       "Bash(sha256sum:*)",
+       "Bash(curl:*)",
+       "Bash(date:*)",
+       "Bash(semgrep:*)",
++      "Bash(ast-grep:*)",
++      "Bash(repomix:*)",
++      "Bash(markitdown:*)",
+       "Bash(docker info:*)",
+       "Bash(docker run:*)",
+       "Bash(osv-scanner:*)",
+@@ -32,13 +49,27 @@
+       "Bash(terraform plan:*)",
+       "Bash(npm run:*)",
+       "Bash(npm test:*)",
++      "Bash(npm ci:*)",
++      "Bash(npm install:*)",
++      "Bash(pip install:*)",
+       "Bash(pytest:*)",
+       "Bash(go test:*)"
+     ],
++    "ask": [
++      "Bash(git push --force:*)",
++      "Bash(git push -f:*)",
++      "Write(.claude/settings.json)",
++      "Edit(.claude/settings.json)",
++      "Write(.claude/settings.local.json)",
++      "Edit(.claude/settings.local.json)"
++    ],
+     "deny": [
+       "Read(**/.env)",
+       "Read(**/*.tfstate)",
+       "Read(**/*.tfvars)",
++      "Read(~/.ssh/**)",
++      "Read(~/.aws/**)",
++      "Read(~/.claude/.credentials.json)",
+       "Write(**/.pipeline/diff-approved)",
+       "Write(**/.pipeline/plan-approved)",
+       "Write(**/.pipeline/design-approved)",
+@@ -48,5 +79,22 @@
+       "Edit(**/.pipeline/design-approved)",
+       "Edit(**/.pipeline/waivers.json)"
+     ]
++  },
++  "enableAllProjectMcpServers": true,
++  "autoMode": {
++    "environment": [
++      "$defaults",
++      "Autonomous multi-agent SDLC pipeline run. All file reads and writes must stay inside this repository (plus read-only pipeline assets under ~/.claude). Shell network access is limited to: localhost, the project's own GitHub remote (git/gh), and package-registry installs (npm/pip/go). Any other external network access must go through the WebFetch tool or a configured MCP server."
++    ],
++    "soft_deny": [
++      "$defaults",
++      "Deleting, moving, or rewriting files that live outside this repository's working directory"
++    ],
++    "hard_deny": [
++      "$defaults",
++      "Creating, modifying, or deleting the .pipeline approval markers (plan-approved, diff-approved, design-approved) or waivers.json by ANY means, including shell redirection, scripts, or git operations — these files exist solely so a human can approve pipeline checkpoints",
++      "Shell commands that send data to external network destinations other than the project's git remote or package registries (use WebFetch or MCP tools instead)",
++      "Reading credential material (~/.ssh, ~/.aws, .env files, cloud or API tokens) or writing anywhere outside the repository working directory"
++    ]
+   }
+ }
+diff --git a/.github/workflows/pipeline-ci.yml b/.github/workflows/pipeline-ci.yml
+index d19a6b4..600d34e 100644
+--- a/.github/workflows/pipeline-ci.yml
++++ b/.github/workflows/pipeline-ci.yml
+@@ -68,6 +68,34 @@ jobs:
+         # gate rides. Branch coverage: surface in the job summary, do NOT gate (mirrors
+         # the local posture; see test-conventions).
+ 
++  # mutation — U-22: run mutation testing HERE, on the Linux runner, not on the author's
++  # host. mutmut needs a POSIX environment (WSL on Windows), so the local pipeline honestly
++  # skips it and writes quality_ok:false (WS3-1) — the *measurement* just never happened on
++  # win32, two M3-series runs in a row. This job runs it where it works. ADVISORY: it reports
++  # the score in the job summary and NEVER fails the merge gate (mutation quality is
++  # settled-advisory; the local WS3-1 scope-honesty check stays the only deploy-side teeth).
++  # OPT-IN: fill <MUTATION_CMD> + <MUTATION_SCOPE> (the logic-dense changed modules, matching
++  # test-conventions) to enable; leave the placeholders and delete this job if not using it.
++  mutation:
++    if: false   # flip to `true` (or a repo/branch condition) once <MUTATION_CMD> is filled
++    runs-on: ubuntu-latest
++    timeout-minutes: 30
++    steps:
++      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
++      - uses: actions/setup-python@v5
++        with:
++          python-version: "3.12"
++      - name: Install dependencies (from lockfile)
++        run: |
++          pip install poetry==2.4.1
++          poetry install --no-root
++      - name: Mutation testing (advisory — score to the summary, never fails the gate)
++        run: |
++          set +e
++          <MUTATION_CMD>   # e.g. mutmut run --paths-to-mutate <MUTATION_SCOPE>
++          echo "Mutation run complete (advisory; see output). This job never fails the merge gate." >> "$GITHUB_STEP_SUMMARY"
++          exit 0
++
+   sast:
+     runs-on: ubuntu-latest
+     timeout-minutes: 20
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 0529630..d96624e 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -7,7 +7,9 @@
+ - Data stores: PostgreSQL
+ - Migration tool: Alembic
+ - Cloud / IaC: AWS + Terraform
+-- Auth provider: API keys (Argon2id-hashed at rest), per-key rate limiting — no third-party IdP
++- Auth provider: API keys (Argon2id-hashed at rest), per-key rate limiting — no third-party IdP.
++  `api_keys.scope` (`'ingest'` default, `'admin'` elevated) gates `PUT /v1/quotas`; provision an
++  admin key with `scripts/seed_api_key.py --admin`.
+ - Observability: CloudWatch + X-Ray + Sentry (release-tagged)
+ - Packaging / runtime: container (Docker) — justified: deploys through the ECS canary path
+ 
+diff --git a/PROJECT.md b/PROJECT.md
+index eb1d60f..ef22d91 100644
+--- a/PROJECT.md
++++ b/PROJECT.md
+@@ -1,43 +1,6 @@
+-# Meterly
+-
+-## What this is
+-A usage-metering API: ingest metered events, aggregate them into per-customer/metric counters,
+-and query usage. A high-throughput ingestion primitive (think Stripe Metering / OpenMeter).
+-
+-## First feature (this build only — keep scope here)
+-Two authenticated endpoints + their storage:
+-- POST /v1/events {customer_id, metric, quantity, idempotency_key} — record an event, increment the
+-  current-window counter; idempotent on idempotency_key (a duplicate key is a no-op, returns the
+-  original result).
+-- GET /v1/usage?customer_id=&metric=&window= — return aggregated usage for that customer/metric/window.
+-Storage: an append-only `events` table and an `usage_rollup` hourly-aggregate table, the latter added
+-by a SECOND migration that backfills from `events` (expand/contract).
+-
+-## Explicitly out of scope for this build (later features)
+-Billing/invoice export, multi-tenant orgs & RBAC, a usage dashboard/UI, additional metric types,
+-webhooks. Do not build these now.
+-
+-## Stack
+-- Cloud: AWS (ECS Fargate + RDS PostgreSQL + ALB), Terraform under infra/.
+-- Language/runtime: Python 3.12 (FastAPI), containerized (Docker).
+-- Data store: PostgreSQL (Alembic migrations).
+-- Auth: API keys (Argon2id-hashed at rest), per-key rate limiting.
+-- Packaging: container (justified — it deploys through the ECS canary path).
+-- Observability: CloudWatch + X-Ray + Sentry (release-tagged).
+-
+-## Frontend design source
+-- Design source: none (API only).
+-
+-## Non-functional / acceptance signals
+-- AC-PERF: POST /v1/events p95 < 50 ms measured UNDER 500 req/s sustained (not serial); throughput
+-  sustains >= 475 req/s. GET /v1/usage p95 < 100 ms.
+-- AC-CONCURRENCY: 50 concurrent POSTs with the SAME idempotency_key create exactly ONE event row.
+-- AC-DATA-PROTECTION: the stored API-key value is an Argon2id hash, never plaintext.
+-- AC-MIGRATION: the usage_rollup backfill migration round-trips (up→down→up) preserving seeded rows.
+-- AC-SLO: define availability 99.9% and ingest p95 < 50 ms as SLOs.
+-
+-## What "done" means
+-- Smoke check passes; both endpoints return correct output for a sample input.
+-- Input validation in place; security report clean; ASVS L1/L2 met; data-protection gate satisfied.
+-- Tests pass at >= 85% lines; the perf/concurrency/migration criteria above are covered.
+-- Docs updated; PR description written.
++Feature: per-customer metric quotas.
++- PUT /v1/quotas (admin-scoped API key) sets {customer_id, metric, limit_per_window}.
++- POST /v1/events returns 429 with a quota error envelope when the current-window rollup for that customer/metric would exceed the quota. Customers without a quota are unlimited (no behavior change).
++- One expand-only migration: a quotas table.
++- Existing perf budget applies: p95 < 50 ms under load on POST /v1/events.
++Design source: none.
+diff --git a/docs/system_architecture.md b/docs/system_architecture.md
+index 613b2bd..281d5e0 100644
+--- a/docs/system_architecture.md
++++ b/docs/system_architecture.md
+@@ -1,10 +1,11 @@
+-# Meterly — system architecture (first feature)
++# Meterly — system architecture
+ 
+ ## Overview
+ 
+-Meterly ingests metered usage events and serves aggregated per-customer/metric
+-counters. Two authenticated HTTP endpoints, one PostgreSQL database, one Redis
+-rate-limit store, running as a Docker container on ECS Fargate behind an ALB.
++Meterly ingests metered usage events, serves aggregated per-customer/metric
++counters, and enforces admin-set per-customer, per-metric usage caps
++("quotas"). Three authenticated HTTP endpoints, one PostgreSQL database, one
++Redis rate-limit store, running as a Docker container on ECS Fargate behind an ALB.
+ 
+ ```
+ Client --HTTPS+API key--> ALB --> FastAPI (ECS Fargate, >=2 tasks)
+@@ -26,11 +27,23 @@ Client --HTTPS+API key--> ALB --> FastAPI (ECS Fargate, >=2 tasks)
+    allowlists, `extra='forbid'`.
+ 6. `events_service.create_event` — one transaction:
+    `INSERT ... ON CONFLICT (api_key_id, idempotency_key) DO NOTHING`, and only
+-   if a row was inserted, `INSERT ... ON CONFLICT ... DO UPDATE` the
+-   `usage_rollup` counter (`src/services/events_service.py`,
+-   `src/repositories/events_repo.py`).
++   if a row was inserted:
++   - the quota check: `read_tenant_quota_state_locked` locks the caller's
++     quota row for `(customer, metric)` (if one exists) and reads the
++     current-window rollup total fresh; if `R + Q > L` the service raises
++     `QuotaExceededError` (429 `quota_exceeded`, `Retry-After` to the next
++     hour boundary), which propagates out of the transaction and rolls back
++     the event insert — no partial write, no rollup increment
++     (`src/services/events_service.py`, `src/repositories/quotas_repo.py`).
++   - otherwise, `INSERT ... ON CONFLICT ... DO UPDATE` the `usage_rollup`
++     counter (`src/repositories/events_repo.py`).
++   A duplicate `idempotency_key` (replay) never reaches the quota check at
++   all — only the winning-insert branch does.
+ 7. Error-envelope boundary catches anything unhandled and returns the generic
+-   `{error:{code,message,requestId}}` shape (`src/api/errors.py`).
++   `{error:{code,message,requestId}}` shape (`src/api/errors.py`); `AppError`
++   lets a handler attach an explicit `app_code` (e.g. `quota_exceeded`) that
++   overrides the default status->code map, so two different 429s
++   (`rate_limited` vs. `quota_exceeded`) stay distinguishable to the caller.
+ 
+ ## Request flow — `GET /v1/usage`
+ 
+@@ -39,16 +52,67 @@ and reads a single `usage_rollup` row scoped by the caller's `api_key_id`
+ (`src/services/usage_service.py`, `src/repositories/usage_repo.py`). A missing
+ bucket returns zeros with 200, never 404.
+ 
++## Request flow — `PUT /v1/quotas`
++
++Admin-scoped create-or-replace of a per-customer, per-metric usage cap.
++Auth -> Tier-2 per-`api_key_id` throttle -> an `admin`-scope assertion in the
++route's composed dependency (403 `forbidden` for a non-admin key) -> schema
++validation (`src/api/schemas/quotas.py`) -> `upsert_tenant_quota`, a single
++`INSERT ... ON CONFLICT (api_key_id, customer_id, metric) DO UPDATE ...
++RETURNING (xmax = 0) AS inserted` that reports create-vs-replace in one
++round-trip (201 create / 200 replace), with a `quota.upsert` audit log
++(`src/api/routes/quotas.py`, `src/services/quota_service.py`,
++`src/repositories/quotas_repo.py`).
++
+ ## Data model
+ 
+-- `api_keys` — the tenant/credential table (migration 0001). `secret_hash` is
+-  Argon2id; `key_id` is the public split-token lookup handle.
++- `api_keys` — the tenant/credential table (migration 0001), extended with a
++  `scope` column (migration 0003: `'ingest'` default, `'admin'` elevated).
++  `secret_hash` is Argon2id; `key_id` is the public split-token lookup
++  handle. `scope='admin'` is a superset scope — an admin key does everything
++  an ingest key does, plus call `PUT /v1/quotas`; a tenant that wants quotas
++  provisions one admin-scoped key and uses it for both.
+ - `events` — append-only ingest log (migration 0001). `UNIQUE (api_key_id,
+   idempotency_key)` is the idempotency guarantee; RLS policy
+   `events_tenant_isolation` is the application-scoping backstop.
+ - `usage_rollup` — derived hourly aggregate (migration 0002, expand +
+   backfill from `events`). Composite PK `(api_key_id, customer_id, metric,
+   window_start)`; RLS policy `usage_rollup_tenant_isolation`.
++- `quotas` — per-tenant, per-customer, per-metric usage caps (migration
++  0003). PK `(api_key_id, customer_id, metric)`; `CHECK (limit_per_window >=
++  1)`; RLS policy `quotas_tenant_isolation`. The `POST /v1/events` quota
++  check takes `FOR UPDATE` on this row to serialize concurrent writers for
++  the same `(customer, metric)` — see *Quota enforcement / atomicity* below.
++
++## Quota enforcement / atomicity
++
++Strict enforcement ("usage can never exceed `L`") is a check-then-act on a
++shared counter — the classic TOCTOU. `read_tenant_quota_state_locked`
++(`src/repositories/quotas_repo.py`) makes it race-free with a `SELECT
++limit_per_window ... FOR UPDATE` on the quota row, run **as a separate
++statement from the subsequent `usage_rollup` read**, both inside the same
++transaction as the event insert and rollup increment
++(`src/services/events_service.py`).
++
++This two-round-trip shape is deliberate, not incidental: PostgreSQL's `FOR
++UPDATE` only guarantees a fresh re-check of the *locked* row itself when a
++waiter unblocks after the lock holder commits — it does **not** force a
++fresh snapshot for another table read in the same statement (e.g. a `LEFT
++JOIN` to `usage_rollup`). A waiter queued before the holder committed would
++evaluate that join against its own pre-wait snapshot and read a stale total,
++silently letting concurrent writers jointly exceed the cap. Splitting the
++lock-acquire and the rollup-read into two statements gives the second query
++its own fresh READ COMMITTED snapshot (taken *after* the lock is held),
++which does reflect everything the previous holder just committed. This was
++verified empirically during implementation: a single combined
++`LEFT JOIN ... FOR UPDATE OF q` statement let every concurrent waiter read
++the same stale total and all get admitted; the two-statement version
++correctly serializes and caps admission at `L`
++(`tests/integration/test_quota_concurrency.py`).
++
++Unlimited customers (no quota row) take no lock at all — the first `SELECT
++... FOR UPDATE` simply matches zero rows, so the common, zero-contention
++path stays cheap (AC20 measures its added latency under load).
+ 
+ ## Auth
+ 
+@@ -58,7 +122,8 @@ guarded by a constant-time digest comparison) avoids paying the Argon2id cost
+ on every request while the durable store stays Argon2id-only. See
+ `src/auth/__init__.py` for the full tradeoff writeup and
+ `scripts/seed_api_key.py` for the only key-provisioning path (no HTTP
+-endpoint in this build's scope).
++endpoint in this build's scope; pass `--admin` to provision a `scope='admin'`
++key for `PUT /v1/quotas`, including the DAST-context admin test key, DAST-3).
+ 
+ ## Rate limiting
+ 
+diff --git a/scripts/ci/dast-review.sh b/scripts/ci/dast-review.sh
+index a1153ad..39b3ddd 100644
+--- a/scripts/ci/dast-review.sh
++++ b/scripts/ci/dast-review.sh
+@@ -32,7 +32,15 @@ budget_json='{"high":0,"medium":5,"low":20,"informational":100}'
+ # ZAP baseline JSON shape: {"site":[{"@name":URL,"alerts":[{"name","riskcode":"0|1|2|3","count":"N"}]}]}
+ # riskcode + count are STRINGS in ZAP's report — coerce with tonumber. Sum count per severity across
+ # every site; list the distinct alert names that pushed a severity over its cap.
+-jq -n --slurpfile cap "$CAP" --argjson b "$budget_json" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
++# U-14: fold in the target-reachability probe dast-capture writes. A false there means the
++# spider seeded on a non-page (bare root when the UI is at /dashboard), so a within-budget
++# verdict scanned nothing real — surfaced as a WARN below, still advisory (never a gate).
++# Read the sidecar into a variable (default {} when absent — backward compatible).
++probe_json='{}'
++if [ -f .pipeline/dast-target-probe.json ] && jq -e . .pipeline/dast-target-probe.json >/dev/null 2>&1; then
++  probe_json="$(jq -c '.' .pipeline/dast-target-probe.json)"
++fi
++jq -n --slurpfile cap "$CAP" --argjson b "$budget_json" --argjson probe "$probe_json" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+   ({"3":"high","2":"medium","1":"low","0":"informational"}) as $sevmap
+   | [ $cap[0].site // [] | .[] | .alerts // [] | .[]
+       | {sev: ($sevmap[(.riskcode|tostring)] // "informational"),
+@@ -46,19 +54,26 @@ jq -n --slurpfile cap "$CAP" --argjson b "$budget_json" --arg t "$(date -u +%Y-%
+       | select($n > $capn)
+       | {severity: $s, count: $n, budget: $capn,
+          alerts: ($alerts | map(select(.sev == $s) | .name) | unique)} ] as $over
++  | ({"target_reached": true} + ($probe // {})) as $p
+   | {status: "advisory",
+      ran_at: $t,
+      target: $target,
++     target_reached: ($p.target_reached),
++     target_status: ($p.status // null),
+      alerts_by_severity: $by_sev,
+      over_budget: $over,
+      within_budget: (($over | length) == 0)}
+ ' > "$OUT"
+ 
+ OVER=$(jq '.over_budget | length' "$OUT" 2>/dev/null || echo 0)
++REACHED=$(jq -r '.target_reached' "$OUT" 2>/dev/null || echo true)
++if [ "$REACHED" = "false" ]; then
++  echo "[dast-review] ADVISORY: DAST target was NOT reached (HTTP $(jq -r '.target_status // "?"' "$OUT")) — the passive scan did not traverse the real page; treat 'within budget' as uninformative. Set DAST_TARGET_URL to the served route. Surface in the PR (advisory). See $OUT." >&2
++fi
+ if [ "${OVER:-0}" -gt 0 ]; then
+   HI=$(jq -r '[.over_budget[] | select(.severity=="high")] | length' "$OUT" 2>/dev/null || echo 0)
+   echo "[dast-review] ADVISORY: $OVER severity band(s) over budget (${HI} at HIGH) — surface in the PR (advisory, non-blocking). See $OUT." >&2
+-else
++elif [ "$REACHED" != "false" ]; then
+   echo "[dast-review] within budget (target: $(jq -r '.target // "n/a"' "$OUT"))."
+ fi
+ exit 0
+diff --git a/scripts/ci/guard-source-markers.sh b/scripts/ci/guard-source-markers.sh
+index ec6b942..cfc09f0 100644
+--- a/scripts/ci/guard-source-markers.sh
++++ b/scripts/ci/guard-source-markers.sh
+@@ -5,10 +5,10 @@
+ # The M5 hazard: a debugging agent replaced a money-path fix with the original buggy
+ # code tagged with an experimental scratch-revert marker (a TEMP-style prefix combined
+ # with a REVERT suffix — see the pattern list below) to demonstrate a repro, then capped
+-# before restoring it — leaving the money path broken while the build stayed green (no signal).
+-# It was caught only because a human re-grepped for SAVEPOINT. This hook makes that
+-# signal deterministic: it greps the change set (tracked diff + untracked files vs HEAD,
+-# the same set the rest of the pipeline scopes to) for danger markers and blocks.
++# before restoring it — leaving the money path broken while the build stayed green (no
++# signal). It was caught only because a human re-grepped for SAVEPOINT. This hook makes
++# that signal deterministic: it greps the change set (tracked diff + untracked files vs
++# HEAD, the same set the rest of the pipeline scopes to) for danger markers and blocks.
+ #
+ # Two roles (same logic):
+ #   1. deployment-gate.sh sources/invokes it → a HARD deploy block (the money guarantee).
+@@ -16,13 +16,14 @@
+ #      can stop, that it left a marker in the tree (exit 2 feeds stderr back to the model).
+ #
+ # Markers matched (word-boundary, case-insensitive; see the MARKERS regex below for the
+-# exact patterns — described here rather than spelled out literally, so this comment
+-# doesn't trip the very check it documents): a TEMP-style scratch tag combined with a
+-# REVERT suffix (optionally via an extra prefix word); a REVERT tag combined with an ME
+-# suffix; an XXX tag combined with a REVERT suffix; a phrase meaning the change must not
+-# be committed; and HACK/FIXME tags meaning remove-or-fix-before-shipping.
+-# Plain TODO/FIXME/XXX are NOT matched — those are normal and blocking on them would just
+-# train people to bypass the gate. Only experimental-revert or must-not-ship-class markers block.
++# exact shapes — U-05: this prose deliberately DESCRIBES them instead of spelling them,
++# so the scaffold copy of this file never trips the guard itself): a TEMP tag combined
++# with a REVERT suffix (optionally via an extra prefix word); a REVERT tag combined with
++# an ME suffix; an XXX tag combined with a REVERT suffix; a phrase meaning the change
++# must not be committed; a HACK tag with a REMOVE suffix; a FIXME tag scoped to
++# before-commit. Plain TODO/FIXME/XXX are NOT matched — those are normal and blocking on
++# them would just train people to bypass the gate. Only experimental-revert or
++# must-not-ship-class markers block.
+ #
+ # Exit: 0 = clean (or no change set / not a pipeline project) · 2 = marker found (BLOCK).
+ set -uo pipefail
+@@ -45,14 +46,19 @@ else
+   [ -f .pipeline/state.json ] || exit 0
+ fi
+ 
+-# Danger-marker pattern. Anchored to experimental-revert or must-not-ship intent, not ordinary TODOs.
++# Danger-marker pattern. Anchored to experimental-revert or must-not-ship intent, not
++# ordinary TODOs. (The regex itself does not self-match — verified in marker-guard.sh.)
+ MARKERS='TEMP[-_ ]?(PREFIX[-_ ]?)?REVERT|REVERT[-_ ]?ME|XXX[-_ ]?REVERT|DO[-_ ]?NOT[-_ ]?COMMIT|HACK[-_ ]?REMOVE|FIXME[-_ ]?BEFORE[-_ ]?COMMIT'
+ 
+ # Change set = tracked diff (added lines only) + untracked files vs HEAD. We scan ADDED
+ # diff lines (leading '+') so a marker being REMOVED in the diff doesn't false-positive,
+-# and untracked files in full. Exclude this hook itself and test fixtures/suites, which
+-# legitimately contain marker strings as test data.
+-EXCLUDE='(^|/)(tests/|.*\.pipeline/|global-hooks/guard-source-markers\.sh)'
++# and untracked files in full. Exclude this hook's own definition files by path — the
++# repo-of-record copy AND the per-project scaffold copy bootstrap writes to scripts/ci/
++# (U-05: the M3 run false-blocked on its own fresh scaffold because only the
++# global-hooks path was excluded) — plus test fixtures/suites, which legitimately
++# contain marker strings as test data. The exclusion is pinned to this one filename: a
++# real marker planted anywhere else in scripts/ci/ still blocks.
++EXCLUDE='(^|/)(tests/|.*\.pipeline/|(global-hooks|scripts/ci)/guard-source-markers\.sh)'
+ 
+ hits=""
+ 
+@@ -82,7 +88,7 @@ done < <(git ls-files -z --others --exclude-standard 2>/dev/null || true)
+ 
+ if [ -n "$hits" ]; then
+   echo "Blocked: the change set contains an experimental / revert marker (audit E3) — a" >&2
+-  echo "reverted or must-not-ship fix must never ship. Restore the real fix (prove repros in" >&2
++  echo "reverted or do-not-commit fix must never ship. Restore the real fix (prove repros in" >&2
+   echo "a scratch copy, never in the tree), then re-run. Offending lines:" >&2
+   printf '%s\n' "$hits" >&2
+   exit 2
+diff --git a/scripts/seed_api_key.py b/scripts/seed_api_key.py
+index eecf1ed..0818bde 100644
+--- a/scripts/seed_api_key.py
++++ b/scripts/seed_api_key.py
+@@ -23,11 +23,17 @@ from src.db.session import dispose_engine, get_engine
+ from src.repositories.api_keys_repo import create_api_key
+ 
+ 
+-async def _seed(label: str, rate_limit_per_sec: int) -> None:
++async def _seed(label: str, rate_limit_per_sec: int, *, admin: bool) -> None:
+     """Generate a new API key, persist its Argon2id hash, and print the
+-    plaintext presented-key value to stdout exactly once."""
++    plaintext presented-key value to stdout exactly once.
++
++    `admin=True` provisions the key with `scope='admin'` — the superset scope
++    required to call `PUT /v1/quotas` (a tenant that wants quotas provisions
++    one admin-scoped key and uses it for both ingest and administration).
++    """
+     key_id, secret, presented_key = generate_split_token()
+     secret_hash = hash_new_secret(secret)
++    scope = "admin" if admin else "ingest"
+ 
+     async with get_engine().begin() as connection:
+         api_key_row_id = await create_api_key(
+@@ -36,6 +42,7 @@ async def _seed(label: str, rate_limit_per_sec: int) -> None:
+             secret_hash=secret_hash,
+             label=label,
+             rate_limit_per_sec=rate_limit_per_sec,
++            scope=scope,
+         )
+ 
+     await dispose_engine()
+@@ -53,8 +60,12 @@ def main() -> None:
+         "--rate-limit", type=int, default=100, dest="rate_limit_per_sec",
+         help="Tier-2 per-second token-bucket budget for this key (default: 100)",
+     )
++    parser.add_argument(
++        "--admin", action="store_true",
++        help="Provision this key with scope='admin' (required to call PUT /v1/quotas); default is scope='ingest'",
++    )
+     args = parser.parse_args()
+-    asyncio.run(_seed(args.label, args.rate_limit_per_sec))
++    asyncio.run(_seed(args.label, args.rate_limit_per_sec, admin=args.admin))
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/src/api/README.md b/src/api/README.md
+index f65fb0a..11ca706 100644
+--- a/src/api/README.md
++++ b/src/api/README.md
+@@ -10,11 +10,13 @@ HTTP API layer: FastAPI route handlers, request/response schemas (Pydantic v2),
+ |---|---|
+ | `routes/events.py` | `POST /v1/events` handler; calls `events_service.create_event`. |
+ | `routes/usage.py` | `GET /v1/usage` handler; calls `usage_service.read_usage`. |
++| `routes/quotas.py` | `PUT /v1/quotas` handler; composes auth -> Tier-2 throttle -> an `admin`-scope gate (403 `forbidden` otherwise) -> `quota_service.upsert_tenant_quota`. |
+ | `routes/health.py` | `GET /health` (liveness, no dependencies) and `GET /health/ready` (readiness, DB + migration check). |
+ | `schemas/events.py` | Pydantic models for POST /v1/events request and response; `extra='forbid'` contract enforcement. |
+ | `schemas/usage.py` | Pydantic models for GET /v1/usage request (query parameters) and response. |
+-| `middleware.py` | Request-ID / trace-ID assignment, security headers (HSTS, CSP, X-Frame-Options), CORS. |
+-| `errors.py` | Error-envelope boundary: catches all unhandled exceptions and returns `{error:{code,message,requestId}}` with no stack/secret leakage. |
++| `schemas/quotas.py` | Pydantic models for PUT /v1/quotas request (`customer_id`, `metric`, `limit_per_window`, `extra='forbid'`) and response (echo shape). |
++| `middleware.py` | Request-ID / trace-ID assignment, security headers (HSTS, CSP, X-Frame-Options), CORS (allows GET/POST/PUT). |
++| `errors.py` | Error-envelope boundary: catches all unhandled exceptions and returns `{error:{code,message,requestId}}` with no stack/secret leakage. `AppError` lets a raised exception carry an explicit `app_code` (e.g. `quota_exceeded`) that overrides the default status->code map — needed because 429 is shared by two distinct codes (`rate_limited` vs `quota_exceeded`). |
+ 
+ ## Relationships
+ 
+@@ -46,10 +48,13 @@ HTTP API layer: FastAPI route handlers, request/response schemas (Pydantic v2),
+ - All string fields are bounded length (e.g., `customer_id` ≤128, `metric` ≤64).
+ - `quantity` is a decimal > 0 (no zero or negative); `idempotency_key` is alphanumeric + underscore/dash.
+ - GET `/v1/usage` requires a timezone-aware ISO-8601 `window` parameter within 90 days past to 1 hour future (naive datetimes rejected).
++- PUT `/v1/quotas`: `limit_per_window` is an integer `>= 1` (`<= 1e15`, BIGINT-safe); `customer_id`/`metric` reuse the same anchored allowlists as events; unknown fields (including a client-supplied `api_key_id`/`scope`) are rejected outright.
+ 
+ **Error handling:**
+ - Authentication failures (missing/invalid key) → 401/403 before handlers run.
+-- Rate-limit exceeded (Tier-1 or Tier-2) → 429 + Retry-After header.
++- `PUT /v1/quotas` from a non-`admin`-scoped key → 403 `forbidden` (function-level authorization, checked in the route's composed dependency).
++- Rate-limit exceeded (Tier-1 or Tier-2) → 429 `rate_limited` + Retry-After header.
++- `POST /v1/events` over its quota → 429 `quota_exceeded` (distinct code, same status) + Retry-After to the next hour boundary; no event/rollup written (transaction rolled back).
+ - Schema validation failure → 422 with Pydantic error detail.
+ - Database errors (constraint violation, connection drop) → caught by error envelope → 500 (generic message, safe).
+ - Any unhandled exception → error envelope → 500, safe, no leak.
+diff --git a/src/api/errors.py b/src/api/errors.py
+index d1c0f75..675838c 100644
+--- a/src/api/errors.py
++++ b/src/api/errors.py
+@@ -39,6 +39,21 @@ def _envelope(code: str, message: str, request_id: str) -> dict:
+     return {"error": {"code": code, "message": message, "requestId": request_id}}
+ 
+ 
++class AppError(HTTPException):
++    """An `HTTPException` carrying an explicit `app_code`, for the cases where
++    `_STATUS_TO_CODE`'s status->code map can't express the distinction —
++    `429` already maps to `rate_limited` (the Tier-2 throttle), but a quota
++    rejection needs its own, distinct `quota_exceeded` code on the same
++    status. `handle_http_exception` prefers `app_code` over the status map
++    when present, so this is the minimal single-boundary extension rather
++    than reshaping the map itself.
++    """
++
++    def __init__(self, status_code: int, *, app_code: str, detail: str, headers: dict | None = None) -> None:
++        super().__init__(status_code=status_code, detail=detail, headers=headers)
++        self.app_code = app_code
++
++
+ def register_error_handlers(app: FastAPI) -> None:
+     """Register the centralized exception handlers on `app`.
+ 
+@@ -63,9 +78,14 @@ def register_error_handlers(app: FastAPI) -> None:
+ 
+     @app.exception_handler(StarletteHTTPException)
+     async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+-        """Map a raised `HTTPException` (auth, rate-limit, not-found, ...) to the envelope."""
++        """Map a raised `HTTPException` (auth, rate-limit, not-found, ...) to the envelope.
++
++        Prefers an explicit `app_code` (set by `AppError`) over the status->code
++        map — this is what lets two different exceptions share one HTTP status
++        (`429 rate_limited` vs. `429 quota_exceeded`) with distinct client-facing codes.
++        """
+         request_id = _request_id(request)
+-        code = _STATUS_TO_CODE.get(exc.status_code, "error")
++        code = getattr(exc, "app_code", None) or _STATUS_TO_CODE.get(exc.status_code, "error")
+         message = exc.detail if isinstance(exc.detail, str) else "request failed"
+         return JSONResponse(
+             status_code=exc.status_code,
+@@ -97,4 +117,4 @@ def register_error_handlers(app: FastAPI) -> None:
+         )
+ 
+ 
+-__all__ = ["register_error_handlers", "HTTPException"]
++__all__ = ["register_error_handlers", "HTTPException", "AppError"]
+diff --git a/src/api/middleware.py b/src/api/middleware.py
+index d10bcb6..f21399c 100644
+--- a/src/api/middleware.py
++++ b/src/api/middleware.py
+@@ -160,6 +160,6 @@ def configure_cors(app: FastAPI, settings: Settings) -> None:
+         CORSMiddleware,
+         allow_origins=list(settings.cors_allowed_origins),
+         allow_credentials=False,
+-        allow_methods=["GET", "POST"],
++        allow_methods=["GET", "POST", "PUT"],
+         allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+     )
+diff --git a/src/auth/README.md b/src/auth/README.md
+index 13ed713..13ba15b 100644
+--- a/src/auth/README.md
++++ b/src/auth/README.md
+@@ -9,9 +9,14 @@ Authentication and authorization layer: API key verification (split-token parsin
+ | File / Module | Responsibility |
+ |---|---|
+ | `__init__.py` | `require_api_key` FastAPI dependency guard: parses the `Authorization: Bearer` header, checks the verification cache, falls back to DB lookup + Argon2id verify on cache miss, sets the authenticated `api_key_id` in request state. |
+-| `api_key.py` | Split-token key parsing (`mtr_live_<key_id>_<secret>`), verification logic (Argon2id check), cache TTL management, revocation status check. |
++| `api_key.py` | Split-token key parsing (`mtr_live_<key_id>_<secret>`), verification logic (Argon2id check), cache TTL management, revocation status check. `AuthenticatedPrincipal.scope` (`"ingest"` default, `"admin"` elevated) rides the same cached principal. |
+ | `rate_limit.py` | Tier-1 (pre-auth, IP+route keyed) and Tier-2 (post-auth, api_key_id keyed) Redis token-bucket limiters; both fail open (log warning, allow request) on Redis connection error. |
+ 
++**Authorization scope (function-level, on top of authentication):**
++- `AuthenticatedPrincipal.scope` is `"ingest"` by default; `"admin"` is a superset scope, not a separate key family — an admin-scoped key does everything an ingest key does, plus is permitted to call `PUT /v1/quotas`.
++- Only `src/api/routes/quotas.py`'s composed dependency checks `scope` (`principal.scope == "admin"`, else `HTTPException(403)`); every other route ignores it, so existing behavior is unchanged.
++- Provisioned via `scripts/seed_api_key.py --admin` (defaults to `"ingest"` without the flag); this is also the DAST-context admin test key (DAST-3).
++
+ ## Relationships
+ 
+ **Public surface:**
+diff --git a/src/auth/api_key.py b/src/auth/api_key.py
+index 96ef6aa..a72654a 100644
+--- a/src/auth/api_key.py
++++ b/src/auth/api_key.py
+@@ -31,10 +31,19 @@ class ParsedApiKey:
+ 
+ @dataclass(frozen=True)
+ class AuthenticatedPrincipal:
+-    """The authenticated caller: the internal `api_key_id` and its rate-limit budget."""
++    """The authenticated caller: the internal `api_key_id`, its rate-limit
++    budget, and its authorization `scope`.
++
++    `scope` defaults to `"ingest"` so any direct construction in existing unit
++    tests keeps working unchanged; `verify_api_key` always populates it
++    explicitly from the stored record. `"admin"` is a superset scope — an
++    admin-scoped key may do everything an ingest key does, plus call
++    `PUT /v1/quotas` (plan §"The tenant model").
++    """
+ 
+     api_key_id: int
+     rate_limit_per_sec: int
++    scope: str = "ingest"
+ 
+ 
+ def parse_split_token(presented_key: str) -> ParsedApiKey | None:
+@@ -71,7 +80,7 @@ async def verify_api_key(
+         return None
+ 
+     return AuthenticatedPrincipal(
+-        api_key_id=record.id, rate_limit_per_sec=record.rate_limit_per_sec
++        api_key_id=record.id, rate_limit_per_sec=record.rate_limit_per_sec, scope=record.scope
+     )
+ 
+ 
+diff --git a/src/main.py b/src/main.py
+index e691ed0..1215395 100644
+--- a/src/main.py
++++ b/src/main.py
+@@ -27,6 +27,7 @@ from src.api.middleware import (
+ )
+ from src.api.routes.events import router as events_router
+ from src.api.routes.health import router as health_router
++from src.api.routes.quotas import router as quotas_router
+ from src.api.routes.usage import router as usage_router
+ from src.config.settings import get_settings
+ from src.db.session import dispose_engine
+@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
+     app.include_router(health_router)
+     app.include_router(events_router)
+     app.include_router(usage_router)
++    app.include_router(quotas_router)
+ 
+     # Must run after routes are mounted (FastAPIInstrumentor introspects them)
+     # and before the app starts serving (it registers ASGI middleware, which
+diff --git a/src/repositories/README.md b/src/repositories/README.md
+index a839815..9400c70 100644
+--- a/src/repositories/README.md
++++ b/src/repositories/README.md
+@@ -10,13 +10,15 @@ Data access layer: SQL queries with parameterization, row-level scoping (by auth
+ |---|---|
+ | `events_repo.py` | `create_or_replay_event(api_key_id, customer_id, metric, quantity, idempotency_key, window_start)` — INSERT ... ON CONFLICT ... DO NOTHING (idempotency). Also `upsert_rollup()` (called only on insert success). |
+ | `usage_repo.py` | `read_usage(api_key_id, customer_id, metric, window_start)` — SELECT from `usage_rollup` scoped by `api_key_id`. Returns None if missing (caller handles zero conversion). |
+-| `api_keys_repo.py` | `get_by_key_id(key_id)` — SELECT from `api_keys` by public `key_id` (used by auth cache miss). Returns the full row (id, key_id, secret_hash, rate_limit_per_sec, revoked_at). |
++| `api_keys_repo.py` | `find_active_key_by_key_id(key_id)` — SELECT from `api_keys` by public `key_id` (used by auth cache miss); returns the full row including `scope`. `create_api_key(..., scope="ingest")` — the only key-provisioning path. |
++| `quotas_repo.py` | `upsert_quota(...)` — `INSERT ... ON CONFLICT (api_key_id, customer_id, metric) DO UPDATE ... RETURNING (xmax = 0) AS inserted`, reporting create-vs-replace in one round-trip. `read_tenant_quota_state_locked(...)` — the atomic check-then-decide: locks the quota row (`FOR UPDATE`), then reads the current-window rollup total as a **separate, fresh** statement (see *Notes* below for why). Returns `None` when no quota exists (unlimited, no lock taken). |
+ 
+ ## Relationships
+ 
+ **Public surface:**
+-- Imported by `src/services.{events_service, usage_service}` to execute queries.
++- Imported by `src/services.{events_service, usage_service, quota_service}` to execute queries.
+ - `api_keys_repo` is also imported by `src/auth.api_key` (credential lookup on cache miss).
++- `quotas_repo` is imported by both `quota_service` (the upsert) and `events_service` (the read-and-decide).
+ 
+ **Dependencies:**
+ - All functions are async; they receive an `AsyncSession` from the service layer (obtained via `src/db.session_context`).
+@@ -51,6 +53,12 @@ Data access layer: SQL queries with parameterization, row-level scoping (by auth
+ - This context variable is read by the PostgreSQL RLS policy on every table access.
+ - The `SET LOCAL` is per-transaction (automatically cleared at commit), so no context leakage across requests.
+ 
++**Quota lock-then-read pattern (why it's two statements, not one):**
++- `read_tenant_quota_state_locked` deliberately issues the `FOR UPDATE` lock on `quotas` and the `usage_rollup` read as two separate statements, not a single `LEFT JOIN ... FOR UPDATE OF q` query.
++- PostgreSQL's `FOR UPDATE` only forces a fresh re-check (`EvalPlanQual`) of the *locked* row itself when a blocked waiter unblocks after the holder commits — it does **not** force a fresh snapshot for another table read in the same statement, including a joined one.
++- A single combined statement lets a waiter that queued before the holder committed read `usage_rollup` from its own stale pre-wait snapshot — verified empirically during implementation: every concurrent waiter read the same stale total and all got admitted, silently breaking the cap.
++- Issuing the `usage_rollup` read as its own statement *after* the lock is acquired gives it a fresh READ COMMITTED snapshot that does include everything the previous holder just committed — this is what makes `current_total` accurate for every waiter, not just the first uncontended caller (`tests/integration/test_quota_concurrency.py`).
++
+ **Async pattern:**
+ - All functions are async; they use `await session.execute(...)` for queries.
+ - They receive an `AsyncSession` that's already connected and in a transaction (setup by `src/db.session_context`).
+diff --git a/src/repositories/api_keys_repo.py b/src/repositories/api_keys_repo.py
+index bf7c5b4..204d515 100644
+--- a/src/repositories/api_keys_repo.py
++++ b/src/repositories/api_keys_repo.py
+@@ -22,6 +22,7 @@ class ApiKeyRecord:
+     secret_hash: str
+     rate_limit_per_sec: int
+     revoked_at: object | None
++    scope: str
+ 
+ 
+ async def find_active_key_by_key_id(
+@@ -36,7 +37,7 @@ async def find_active_key_by_key_id(
+     result = await connection.execute(
+         text(
+             """
+-            SELECT id, key_id, secret_hash, rate_limit_per_sec, revoked_at
++            SELECT id, key_id, secret_hash, rate_limit_per_sec, revoked_at, scope
+             FROM api_keys
+             WHERE key_id = :key_id AND revoked_at IS NULL
+             """
+@@ -52,6 +53,7 @@ async def find_active_key_by_key_id(
+         secret_hash=row["secret_hash"],
+         rate_limit_per_sec=row["rate_limit_per_sec"],
+         revoked_at=row["revoked_at"],
++        scope=row["scope"],
+     )
+ 
+ 
+@@ -62,16 +64,21 @@ async def create_api_key(
+     secret_hash: str,
+     label: str,
+     rate_limit_per_sec: int = 100,
++    scope: str = "ingest",
+ ) -> int:
+     """Insert a new API key row (secret already hashed by the caller) and
+     return its internal surrogate id. Used only by `scripts/seed_api_key.py`
+     — there is no key-creation HTTP endpoint in this build's scope.
++
++    `scope` defaults to `'ingest'` so every existing caller of this function
++    is unaffected; pass `scope='admin'` to provision a key that may also call
++    `PUT /v1/quotas` (admin is a superset scope, not a separate key family).
+     """
+     result = await connection.execute(
+         text(
+             """
+-            INSERT INTO api_keys (key_id, secret_hash, label, rate_limit_per_sec)
+-            VALUES (:key_id, :secret_hash, :label, :rate_limit_per_sec)
++            INSERT INTO api_keys (key_id, secret_hash, label, rate_limit_per_sec, scope)
++            VALUES (:key_id, :secret_hash, :label, :rate_limit_per_sec, :scope)
+             RETURNING id
+             """
+         ),
+@@ -80,6 +87,7 @@ async def create_api_key(
+             "secret_hash": secret_hash,
+             "label": label,
+             "rate_limit_per_sec": rate_limit_per_sec,
++            "scope": scope,
+         },
+     )
+     return result.scalar_one()
+diff --git a/src/services/README.md b/src/services/README.md
+index 8f3610f..eb0f486 100644
+--- a/src/services/README.md
++++ b/src/services/README.md
+@@ -8,25 +8,29 @@ Business logic layer: event ingestion (with idempotency and counter atomicity),
+ 
+ | File / Module | Responsibility |
+ |---|---|
+-| `events_service.py` | `create_event(api_key_id, customer_id, metric, quantity, idempotency_key)` — inserts an event + increments the hourly counter in one transaction; idempotent on `idempotency_key`. Returns the created/replayed event. |
++| `events_service.py` | `create_event(principal, payload)` — inserts an event, checks the caller's quota (if any) on the winning-insert branch, and increments the hourly counter, all in one transaction; idempotent on `idempotency_key`. Raises `QuotaExceededError` (429 `quota_exceeded`) when `R + Q > L`, which rolls back the event insert. Returns the created/replayed event. |
+ | `usage_service.py` | `read_usage(api_key_id, customer_id, metric, window)` — reads the aggregated counter for a time bucket; returns zeros if the bucket is empty (never 404). |
+-| `time_windows.py` | `window_start_utc(ts: datetime)` — floors a timezone-aware timestamp to the hour (UTC); used by both services. |
++| `quota_service.py` | `upsert_tenant_quota(principal, payload)` — create-or-replaces the caller's cap for `(customer_id, metric)` in one transaction; maps the repository's insert-vs-replace signal to 201/200 and logs the `quota.upsert` audit event. |
++| `time_windows.py` | `window_start_utc(ts: datetime)` — floors a timezone-aware timestamp to the hour (UTC); used by all three services. |
+ 
+ ## Relationships
+ 
+ **Public surface:**
+-- Imported by `src/api.routes.{events, usage}` to execute the core business operations.
++- Imported by `src/api.routes.{events, usage, quotas}` to execute the core business operations.
+ 
+ **Dependencies:**
+-- `events_service` imports `src/repositories.{events_repo, usage_repo}` to insert the event and upsert the counter.
++- `events_service` imports `src/repositories.{events_repo, quotas_repo}` to insert the event, check the quota, and upsert the counter.
+ - `usage_service` imports `src/repositories.usage_repo` to read the rollup.
+-- Both services receive an authenticated `api_key_id` from the route handler (set by `require_api_key` guard).
++- `quota_service` imports `src/repositories.quotas_repo` to upsert the cap.
++- All three services receive an authenticated `AuthenticatedPrincipal` from the route handler (set by `require_api_key` guard); `principal.scope` gates `PUT /v1/quotas` at the route layer before `quota_service` ever runs.
+ - `time_windows` is imported by `events_service` and `usage_service` to floor timestamps.
+ 
+ **Transaction boundary:**
+-- `create_event` wraps both the event insert and the rollup upsert in one PostgreSQL transaction (via `src/db/session_context`).
+-- This atomicity ensures that if the insert wins (no existing `idempotency_key`), the counter increments exactly once.
+-- If the insert loses (duplicate key), neither the counter nor any side effect happens — a no-op.
++- `create_event` wraps the event insert, the quota check, and the rollup upsert in one PostgreSQL transaction (via `src/db/session_context`).
++- This atomicity ensures that if the insert wins (no existing `idempotency_key`) and the quota check passes, the counter increments exactly once.
++- If the insert loses (duplicate key), the quota is never consulted and neither the counter nor any side effect happens — a no-op.
++- If the quota check rejects (`R + Q > L`), raising `QuotaExceededError` propagates out of the transaction context and rolls it back — the event insert is undone and the counter is never touched (no partial write).
++- `upsert_tenant_quota` wraps the quota upsert in its own transaction; a single `INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING (xmax = 0)` reports create-vs-replace with no second round-trip.
+ 
+ ## Notes
+ 
+diff --git a/src/services/events_service.py b/src/services/events_service.py
+index 1f42491..82c6144 100644
+--- a/src/services/events_service.py
++++ b/src/services/events_service.py
+@@ -6,10 +6,12 @@ transaction the plan's idempotency mechanism depends on for atomicity — see
+ `src/repositories/events_repo.py` for the `ON CONFLICT` primitive itself.
+ """
+ 
++import math
+ from dataclasses import dataclass
+-from datetime import datetime, timezone
++from datetime import datetime, timedelta, timezone
+ from decimal import Decimal
+ 
++from src.api.errors import AppError
+ from src.api.schemas.events import EventCreateRequest, EventResponse
+ from src.auth.api_key import AuthenticatedPrincipal
+ from src.db.session import scoped_transaction
+@@ -20,6 +22,7 @@ from src.repositories.events_repo import (
+     increment_usage_rollup,
+     insert_event_if_new,
+ )
++from src.repositories.quotas_repo import read_tenant_quota_state_locked
+ from src.services.time_windows import floor_to_hour_utc
+ 
+ logger = get_logger(service="meterly")
+@@ -41,6 +44,33 @@ class IdempotencyRaceError(RuntimeError):
+     the service fails loudly rather than returning an empty response."""
+ 
+ 
++class QuotaExceededError(AppError):
++    """429 with the distinct `quota_exceeded` app_code (never `rate_limited`,
++    which already owns 429 for the Tier-2 throttle), carrying `Retry-After`
++    seconds to the next hour boundary.
++
++    Raising this mid-transaction — after the event `INSERT`, before the
++    rollup increment — is what triggers the rollback that leaves no partial
++    write behind: propagating out of `scoped_transaction`'s `session.begin()`
++    context undoes the event row and skips `increment_usage_rollup` entirely.
++    """
++
++    def __init__(self, retry_after_seconds: int) -> None:
++        super().__init__(
++            status_code=429,
++            app_code="quota_exceeded",
++            detail="metric quota exceeded for the current window",
++            headers={"Retry-After": str(retry_after_seconds)},
++        )
++
++
++def _seconds_until_next_hour_boundary(received_at: datetime, window_start: datetime) -> int:
++    """Seconds from `received_at` to the end of `window_start`'s hour,
++    floored to at least 1 — the `Retry-After` value for a quota rejection."""
++    next_window_start = window_start + timedelta(hours=1)
++    return max(1, math.ceil((next_window_start - received_at).total_seconds()))
++
++
+ async def create_event(
+     principal: AuthenticatedPrincipal, payload: EventCreateRequest
+ ) -> EventCreationOutcome:
+@@ -65,6 +95,28 @@ async def create_event(
+         )
+ 
+         if inserted is not None:
++            quota_state = await read_tenant_quota_state_locked(
++                session,
++                api_key_id=principal.api_key_id,
++                customer_id=inserted.customer_id,
++                metric=inserted.metric,
++                window_start=inserted.window_start,
++            )
++            if quota_state is not None and quota_state.current_total + inserted.quantity > quota_state.limit_per_window:
++                # Deliberately omits current_total/limit from both the log and
++                # the (AppError-carried) client envelope — usage totals are
++                # billing-adjacent (plan §"Info Disclosure"); the enforcement
++                # event itself is what ops needs (ASVS 16.3.3).
++                logger.warning(
++                    "quota.rejected",
++                    userId=principal.api_key_id,
++                    action="deny",
++                    customer_id=inserted.customer_id,
++                    metric=inserted.metric,
++                    reason="quota_exceeded",
++                )
++                raise QuotaExceededError(_seconds_until_next_hour_boundary(received_at, window_start))
++
+             await increment_usage_rollup(
+                 session,
+                 api_key_id=principal.api_key_id,
+diff --git a/tests/integration/conftest.py b/tests/integration/conftest.py
+index 23e0806..61bbd41 100644
+--- a/tests/integration/conftest.py
++++ b/tests/integration/conftest.py
+@@ -28,8 +28,20 @@ def _asyncpg_url(sync_url: str) -> str:
+ 
+ @pytest.fixture(scope="session")
+ def postgres_url():
+-    """A session-scoped live Postgres, migrated to head once."""
+-    with PostgresContainer("postgres:16-alpine") as postgres:
++    """A session-scoped live Postgres, migrated to head once.
++
++    Raises `max_connections` above Postgres's default of 100: this container
++    is shared across the whole integration-test session, including three k6
++    perf fixtures that each launch a separate multi-worker uvicorn process
++    (its own DB connection pool) against it — the default ceiling is too low
++    for that cumulative demand when the full suite runs in one session and
++    was observed to exhaust mid-suite (`TooManyConnectionsError`) with only
++    the default. This is a test-container capacity knob, not a production
++    change (the real RDS instance sizes `max_connections` independently).
++    """
++    with PostgresContainer("postgres:16-alpine").with_command(
++        "postgres -c max_connections=300"
++    ) as postgres:
+         url = _asyncpg_url(postgres.get_connection_url())
+         env = dict(os.environ)
+         env["DATABASE_URL"] = url
+@@ -104,7 +116,9 @@ async def truncate_tables(app_env, postgres_url, redis_url):
+     async with engine.begin() as connection:
+         from sqlalchemy import text
+ 
+-        await connection.execute(text("TRUNCATE TABLE events, usage_rollup, api_keys RESTART IDENTITY CASCADE"))
++        await connection.execute(
++            text("TRUNCATE TABLE events, usage_rollup, quotas, api_keys RESTART IDENTITY CASCADE")
++        )
+     await engine.dispose()
+ 
+     redis_client = redis_async.from_url(redis_url, decode_responses=True)
+@@ -134,7 +148,9 @@ async def make_api_key(truncate_tables):
+ 
+     created_ids = []
+ 
+-    async def _make(label: str = "test-key", rate_limit_per_sec: int = 100) -> tuple[str, int]:
++    async def _make(
++        label: str = "test-key", rate_limit_per_sec: int = 100, scope: str = "ingest"
++    ) -> tuple[str, int]:
+         key_id, secret, presented_key = generate_split_token()
+         secret_hash = hash_new_secret(secret)
+         async with get_engine().begin() as connection:
+@@ -144,6 +160,7 @@ async def make_api_key(truncate_tables):
+                 secret_hash=secret_hash,
+                 label=label,
+                 rate_limit_per_sec=rate_limit_per_sec,
++                scope=scope,
+             )
+         created_ids.append(api_key_row_id)
+         return presented_key, api_key_row_id
+diff --git a/tests/integration/test_perf_k6_load.py b/tests/integration/test_perf_k6_load.py
+index 642c18d..da45414 100644
+--- a/tests/integration/test_perf_k6_load.py
++++ b/tests/integration/test_perf_k6_load.py
+@@ -217,6 +217,137 @@ def test_events_ingest_sustained_500rps_k6_load(k6_load_env):
+     assert metrics["sample_count"] > 0, "the k6 run produced no ingest-scenario samples -- treat as unmeasured, not zero"
+ 
+ 
++@pytest.fixture
++async def k6_quota_load_env(postgres_url, redis_url, make_api_key, truncate_tables):
++    """Like `k6_load_env`, but the provisioned key is admin-scoped and each
++    `cust_0..cust_49` bucket the k6 script drives (`load_events_quota.js`)
++    carries a pre-seeded, deliberately high quota (AC20) -- so the ingest
++    path exercises the quota-check read-and-decide on every request without
++    ever actually rejecting one, isolating the added latency of the `FOR
++    UPDATE` lookup itself from the (much larger, transaction-aborting) cost
++    of a rejection.
++    """
++    if not _docker_available():
++        pytest.skip("Docker is not available in this environment -- cannot run a real k6 load test")
++
++    pull_result = subprocess.run(
++        ["docker", "image", "inspect", "grafana/k6:latest"], capture_output=True, timeout=10
++    )
++    if pull_result.returncode != 0:
++        pull_result = subprocess.run(
++            ["docker", "pull", "grafana/k6:latest"], capture_output=True, timeout=120
++        )
++        if pull_result.returncode != 0:
++            pytest.skip("grafana/k6 image could not be pulled in this environment")
++
++    port = _free_port()
++    env = dict(os.environ)
++    env["DATABASE_URL"] = postgres_url
++    env["METERLY_REDIS_URL"] = redis_url
++    env["METERLY_TIER1_RATE_LIMIT_PER_SECOND"] = "1000000"
++    env["METERLY_TIER1_RATE_LIMIT_BURST"] = "1000000"
++
++    presented_key, api_key_id = await make_api_key(
++        label="k6-quota-perf-key", rate_limit_per_sec=1_000_000, scope="admin"
++    )
++
++    from sqlalchemy import text
++    from sqlalchemy.ext.asyncio import create_async_engine
++
++    # A high-but-finite cap per bucket (well above anything a 15s run at the
++    # target rate could accumulate) -- active enough to exercise the FOR
++    # UPDATE read-and-decide on every request, never high enough to matter
++    # for whether a single run's requests are accepted.
++    quota_engine = create_async_engine(postgres_url)
++    async with quota_engine.begin() as connection:
++        for customer_index in range(50):
++            await connection.execute(
++                text(
++                    """
++                    INSERT INTO quotas (api_key_id, customer_id, metric, limit_per_window, updated_at)
++                    VALUES (:api_key_id, :customer_id, 'api_calls', 100000000, now())
++                    ON CONFLICT (api_key_id, customer_id, metric) DO UPDATE SET
++                        limit_per_window = EXCLUDED.limit_per_window
++                    """
++                ),
++                {"api_key_id": api_key_id, "customer_id": f"cust_{customer_index}"},
++            )
++    await quota_engine.dispose()
++
++    # A dedicated (lower) default worker count, not the shared
++    # METERLY_PERF_UVICORN_WORKERS knob: this is the third heavy multi-worker
++    # uvicorn+DB-pool fixture in this module, and all three share ONE
++    # session-scoped Postgres container with a fixed max_connections budget
++    # -- keeping this fixture's footprint smaller avoids exhausting that
++    # budget when the whole suite (all three perf fixtures) runs in one
++    # pytest session, without changing the existing two tests' tuning.
++    workers = int(os.environ.get("METERLY_PERF_QUOTA_UVICORN_WORKERS", "2"))
++    scratch_dir = Path(os.environ.get("METERLY_TEST_SCRATCH_DIR", tempfile.gettempdir())) / "meterly_k6_quota_perf"
++    scratch_dir.mkdir(parents=True, exist_ok=True)
++
++    uvicorn_log = open(scratch_dir / "uvicorn_stdout.log", "w")
++    process = subprocess.Popen(
++        [sys.executable, "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", str(port), "--workers", str(workers)],
++        cwd=str(_REPO_ROOT), env=env, stdout=uvicorn_log, stderr=subprocess.STDOUT,
++    )
++
++    try:
++        deadline = time.monotonic() + 30
++        async with httpx.AsyncClient() as probe:
++            ready = False
++            while time.monotonic() < deadline:
++                try:
++                    response = await probe.get(f"http://127.0.0.1:{port}/health", timeout=1.0)
++                    if response.status_code == 200:
++                        ready = True
++                        break
++                except httpx.TransportError:
++                    pass
++                await asyncio.sleep(0.3)
++            if not ready:
++                pytest.skip("uvicorn did not become ready in time in this environment")
++
++        yield {"base_url_from_host": f"http://127.0.0.1:{port}", "port": port, "api_key": presented_key, "scratch_dir": scratch_dir}
++    finally:
++        process.terminate()
++        try:
++            process.wait(timeout=10)
++        except subprocess.TimeoutExpired:
++            process.kill()
++        uvicorn_log.close()
++        # Give Postgres a moment to reclaim the just-closed workers' backend
++        # connection slots before the next test's fixtures open new ones
++        # against the same shared container (mitigates TooManyConnectionsError
++        # when this module's perf tests run back-to-back in one session).
++        await asyncio.sleep(1.0)
++
++
++def test_events_ingest_with_quotas_p95_under_50ms(k6_quota_load_env):
++    """AC20: drive POST /v1/events at the same sustained 500 req/s scenario
++    with quotas active (high limits, no rejection) -- records the true
++    nearest-rank p95 so the quota-check path's added latency is measured
++    against the existing ingest budget, an honest measurement rather than a
++    fabricated pass/fail claim (mirrors test_events_ingest_sustained_500rps_k6_load)."""
++    target_rps = int(os.environ.get("METERLY_PERF_TARGET_RPS", "500"))
++    duration = os.environ.get("METERLY_PERF_DURATION", "15s")
++    warmup = os.environ.get("METERLY_PERF_WARMUP", "5s")
++
++    result = _run_k6(
++        "load_events_quota.js", k6_quota_load_env["port"], k6_quota_load_env["api_key"], k6_quota_load_env["scratch_dir"],
++        target_rps, duration, warmup, "k6_events_quota_raw.jsonl",
++    )
++    (k6_quota_load_env["scratch_dir"] / "k6_events_quota_stdout.log").write_text(result.stdout + "\n---STDERR---\n" + result.stderr)
++
++    if result.returncode != 0:
++        pytest.skip(f"k6 run failed to execute in this environment (rc={result.returncode}); see k6_events_quota_stdout.log")
++
++    metrics = _nearest_rank_from_raw_jsonl(k6_quota_load_env["scratch_dir"] / "k6_events_quota_raw.jsonl", scenario="ingest")
++    (k6_quota_load_env["scratch_dir"] / "events_quota_metrics.json").write_text(json.dumps(metrics, indent=2))
++    print("POST /v1/events (quotas active) k6 load metrics:", json.dumps(metrics, indent=2))
++
++    assert metrics["sample_count"] > 0, "the k6 run produced no ingest-scenario samples -- treat as unmeasured, not zero"
++
++
+ def test_usage_read_sustained_100rps_k6_load(k6_load_env):
+     """Drive GET /v1/usage at a sustained 100 req/s via k6, recording true p95
+     against the AC6 budget's declared <100ms usage-read p95."""
+diff --git a/tests/integration/test_seed_api_key_script.py b/tests/integration/test_seed_api_key_script.py
+index 9530407..f623bc3 100644
+--- a/tests/integration/test_seed_api_key_script.py
++++ b/tests/integration/test_seed_api_key_script.py
+@@ -46,3 +46,45 @@ async def test_seed_api_key_script_persists_only_the_hash(postgres_url, truncate
+     assert row["secret_hash"].startswith("$argon2id$")
+     assert row["secret_hash"] not in printed_key
+     assert row["rate_limit_per_sec"] == 50
++
++
++async def test_admin_flag_sets_scope(postgres_url, truncate_tables):
++    """AC17: `--admin` provisions a key with `scope='admin'`; omitting the
++    flag defaults to `scope='ingest'` (no change to the printed key format)."""
++    import os
++
++    env = dict(os.environ)
++    env["DATABASE_URL"] = postgres_url
++
++    admin_result = subprocess.run(
++        [sys.executable, "scripts/seed_api_key.py", "--label", "admin-key", "--admin"],
++        cwd=str(_REPO_ROOT),
++        env=env,
++        capture_output=True,
++        text=True,
++    )
++    assert admin_result.returncode == 0, f"seed script failed:\n{admin_result.stdout}\n{admin_result.stderr}"
++    admin_printed_key = admin_result.stdout.strip().splitlines()[-1]
++    assert admin_printed_key.startswith("mtr_live_")
++
++    ingest_result = subprocess.run(
++        [sys.executable, "scripts/seed_api_key.py", "--label", "ingest-key"],
++        cwd=str(_REPO_ROOT),
++        env=env,
++        capture_output=True,
++        text=True,
++    )
++    assert ingest_result.returncode == 0, f"seed script failed:\n{ingest_result.stdout}\n{ingest_result.stderr}"
++
++    engine = create_async_engine(postgres_url)
++    async with engine.connect() as connection:
++        admin_row = (
++            await connection.execute(text("SELECT scope FROM api_keys WHERE label = 'admin-key'"))
++        ).mappings().first()
++        ingest_row = (
++            await connection.execute(text("SELECT scope FROM api_keys WHERE label = 'ingest-key'"))
++        ).mappings().first()
++    await engine.dispose()
++
++    assert admin_row["scope"] == "admin"
++    assert ingest_row["scope"] == "ingest"

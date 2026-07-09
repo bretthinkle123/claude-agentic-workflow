@@ -1,0 +1,30 @@
+  C:\Users\brett\OneDrive\Documents\GitHub\meterly-pipeline-test\src\main.py:21: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from src.api.errors import register_error_handlers
+
+tests/integration/test_events_endpoint.py::test_injection_payload_in_customer_id_is_rejected_at_the_boundary
+  C:\Users\brett\OneDrive\Documents\GitHub\meterly-pipeline-test\.venv\Lib\site-packages\starlette\_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_quota_concurrency.py::test_concurrent_posts_never_exceed_limit
+ERROR tests/integration/test_quotas_endpoint.py::test_put_creates_quota_returns_201_and_echoes
+ERROR tests/integration/test_quotas_endpoint.py::test_put_replace_returns_200_single_row
+ERROR tests/integration/test_quotas_endpoint.py::test_ingest_key_forbidden - ...
+ERROR tests/integration/test_quotas_endpoint.py::test_put_requires_auth - asy...
+ERROR tests/integration/test_quotas_endpoint.py::test_validation_rejections
+ERROR tests/integration/test_quotas_endpoint.py::test_injection_rejected_at_boundary
+ERROR tests/integration/test_quotas_endpoint.py::test_quota_is_tenant_isolated
+ERROR tests/integration/test_quotas_endpoint.py::test_put_rate_limited_per_principal
+ERROR tests/integration/test_quotas_endpoint.py::test_upsert_and_forbidden_logged
+ERROR tests/integration/test_quotas_endpoint.py::test_openapi_exposes_put_quotas
+ERROR tests/integration/test_rate_limit.py::test_two_principals_sharing_one_ip_get_independent_buckets
+ERROR tests/integration/test_rate_limit.py::test_one_principal_across_two_ips_still_shares_one_bucket
+ERROR tests/integration/test_seed_api_key_script.py::test_seed_api_key_script_persists_only_the_hash
+ERROR tests/integration/test_seed_api_key_script.py::test_admin_flag_sets_scope
+ERROR tests/integration/test_usage_endpoint.py::test_usage_returns_correct_aggregate_for_seeded_events
+ERROR tests/integration/test_usage_endpoint.py::test_usage_for_empty_bucket_returns_200_with_zeros
+ERROR tests/integration/test_usage_endpoint.py::test_naive_datetime_window_is_rejected
+ERROR tests/integration/test_usage_endpoint.py::test_cross_owner_cannot_read_anothers_usage
+ERROR tests/integration/test_usage_endpoint.py::test_cross_owner_idempotency_key_is_scoped_per_tenant
+1 failed, 103 passed, 1 skipped, 3 warnings, 19 errors in 164.61s (0:02:44)

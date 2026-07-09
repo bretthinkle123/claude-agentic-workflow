@@ -1,0 +1,60 @@
+    from src.api.errors import register_error_handlers
+
+src\main.py:21
+  C:\Users\brett\OneDrive\Documents\GitHub\meterly-pipeline-test\src\main.py:21: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from src.api.errors import register_error_handlers
+
+tests/integration/test_events_endpoint.py::test_injection_payload_in_customer_id_is_rejected_at_the_boundary
+tests/integration/test_quotas_endpoint.py::test_validation_rejections
+tests/integration/test_quotas_endpoint.py::test_injection_rejected_at_boundary
+tests/integration/test_usage_endpoint.py::test_naive_datetime_window_is_rejected
+  C:\Users\brett\OneDrive\Documents\GitHub\meterly-pipeline-test\.venv\Lib\site-packages\starlette\_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+---------- coverage: platform win32, python 3.12.12-final-0 ----------
+Name                                Stmts   Miss Branch BrPart  Cover   Missing
+-------------------------------------------------------------------------------
+src\__init__.py                         0      0      0      0   100%
+src\api\__init__.py                     0      0      0      0   100%
+src\api\errors.py                      33      0      0      0   100%
+src\api\middleware.py                  54      5     12      2    89%   72-83, 131-138
+src\api\routes\__init__.py              0      0      0      0   100%
+src\api\routes\events.py               15      0      0      0   100%
+src\api\routes\health.py               28      5      4      2    78%   38, 54, 58-59, 62
+src\api\routes\quotas.py               21      0      2      0   100%
+src\api\routes\usage.py                14      0      0      0   100%
+src\api\schemas\__init__.py             0      0      0      0   100%
+src\api\schemas\events.py              20      0      0      0   100%
+src\api\schemas\quotas.py              14      0      0      0   100%
+src\api\schemas\usage.py               27      0      2      0   100%
+src\auth\__init__.py                   67      0     18      0   100%
+src\auth\api_key.py                    40      6      8      1    77%   73, 76-82
+src\auth\rate_limit.py                 50      0     10      0   100%
+src\config\__init__.py                  0      0      0      0   100%
+src\config\secrets.py                  43      2      8      2    92%   65->67, 68, 83
+src\config\settings.py                 22      0      0      0   100%
+src\crypto\__init__.py                 18      0      0      0   100%
+src\db\__init__.py                      0      0      0      0   100%
+src\db\session.py                      36      2      6      0    95%   105-106
+src\logging\__init__.py                22      0      8      0   100%
+src\logging\middleware.py              40      6      8      1    73%   35-41
+src\main.py                            42      4      0      0    90%   53-57
+src\observability\__init__.py           0      0      0      0   100%
+src\observability\otel.py              16      2      2      1    83%   29-30
+src\observability\sentry.py            22     14     16      1    24%   20-32, 43
+src\repositories\__init__.py            0      0      0      0   100%
+src\repositories\api_keys_repo.py      20      4      2      0    73%   47-50
+src\repositories\events_repo.py        28      8      4      0    62%   70-73, 95-98
+src\repositories\quotas_repo.py        28      8      2      0    67%   75-76, 127-129, 147-149
+src\repositories\usage_repo.py         15      4      2      0    65%   55-58
+src\services\__init__.py                0      0      0      0   100%
+src\services\events_service.py         46     10      6      0    69%   97, 105-118, 128-135, 140-152
+src\services\quota_service.py          21      0      0      0   100%
+src\services\time_windows.py            4      0      0      0   100%
+src\services\usage_service.py          16      0      0      0   100%
+-------------------------------------------------------------------------------
+TOTAL                                 822     80    120     10    86%
+
+127 passed, 6 warnings in 183.69s (0:03:03)
