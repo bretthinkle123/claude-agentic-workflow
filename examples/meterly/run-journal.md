@@ -745,3 +745,32 @@ Audit session recovered the missing evidence itself from the session store
   with documentation — check after that stage).
 - Evidence snapshotted (14 artifacts incl. re-stamped run-summary + scan-reconciliation).
   Documentation next.
+
+## M4′ Entry 8 — 2026-07-09T21:20Z — documentation UNCAPPED (U-06 flipped); U-13 tally persisted (FP-dominated); /code-review 8 findings (0 core-logic bugs); STOPPED at diff checkpoint
+
+- **documentation (sonnet, 1 attempt, 0 caps, 646 s): the U-06 cap answer FLIPPED under the
+  Track-2 budgets** — M4's capped stage completed clean. Updated 6 READMEs/architecture doc,
+  corrected FIVE pre-existing invented identifiers with source verification (get_app→create_app,
+  read_usage→get_usage, window_start_utc→floor_to_hour_utc, create_or_replay_event→the 3 real
+  events_repo functions), retained design records, wrote pr-description
+  (21+1 split, DAST advisory, supply chain) + review-manifest
+  (reviewed_change_hash eb52dff6…).
+- **U-13 (F-M4-9 fix live): .pipeline/doc-identifiers.json EXISTS** — warn_only true, 11 files,
+  24 unresolved. Tally quality: dominated by checker parser FPs (`async def` tokenized as
+  `asyncdef…`, directory-listing text swept into documented-args, frontmatter keys flagged as
+  code identifiers). Calibration verdict material: KEEP warn-only; fix the checker's parser
+  before any promote decision (F-M4′ candidate).
+- **/code-review pre-step (medium, 6 finder agents): 8 findings, 0 CONFIRMED correctness bugs
+  in core logic.** Ranked: (1) AC16's hard 3,000 ms assert will run under --cov tracing on a
+  2-vCPU CI runner — env-invalid timing merge gate, flake risk (the actionable one);
+  (2) COUNT→stream TOCTOU silent truncation at the LIMIT (two angles converged; design-inherent,
+  fix = truncation signal or shared transaction); (3) the 4×BaseHTTPMiddleware chunk-repump
+  amplifier only cushioned — pure-ASGI follow-up not durably recorded; (4) perf test's "p95" of
+  10 samples = max + ~20 s/suite cost; (5) window-bound constants copy-pasted between schemas;
+  (6) cap literal drift in OpenAPI example + scattered knobs + dead EXPORT_COLUMNS; (7) two
+  test helpers byte-duplicated; (8) capped-log false-positive at exactly-cap. Conventions angle:
+  clean (and it refuted the M4-6-repeat premise — src/api/README.md covers the subdirs by
+  convention and was updated).
+- Evidence snapshotted (pr-description, review-manifest, doc-identifiers, run-log).
+- **STOPPED at the M5 hard human diff-review checkpoint** — operator to review and run
+  `bash ~/.claude/hooks/approve-diff.sh`.

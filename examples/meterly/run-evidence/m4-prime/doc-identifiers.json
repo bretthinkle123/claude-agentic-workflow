@@ -1,0 +1,31 @@
+{
+  "ran_at": "2026-07-09T20:45:19Z",
+  "files_checked": 11,
+  "warn_only": true,
+  "unresolved": [
+    "docs/decisions/feature/usage-export/plan-audit.md: `repomix_pack_sha256` — documented identifier not found in any source file",
+    "docs/decisions/feature/usage-export/plan.md: `count_usage_rollups(...)` — documented arg(s) ... not in def(count_usage_rollups) params: asyncdefcount_usage_rollups(  ",
+    "docs/decisions/feature/usage-export/plan.md: `scoped_transaction(...)` — documented arg(s) principal.api_key_id not in def(scoped_transaction) params: api_key_id  ",
+    "docs/decisions/feature/usage-export/plan.md: `tasks_file_emitted` — documented identifier not found in any source file",
+    "docs/decisions/feature/usage-export/plan.md: `delegated_criteria` — documented identifier not found in any source file",
+    "docs/decisions/feature/usage-export/security-report.md: `execution_options(...)` — documented arg(s) ... not in def(execution_options) params: defexecution_options(  ",
+    "docs/decisions/feature/usage-export/security-report.md: `scan_artifacts` — documented identifier not found in any source file",
+    "docs/decisions/feature/usage-export/security-report.md: `pull_request_target` — documented identifier not found in any source file",
+    "docs/system_architecture.md: `execution_options(...)` — documented arg(s) yield_per not in def(execution_options) params: defexecution_options(  ",
+    "src/repositories/README.md: `insert_event_if_new(...)` — documented arg(s) session CLAUDE.md Dockerfile PROJECT.md README.md alembic alembic.ini docs infra poetry.lock poetry.toml pyproject.toml renovate.json scripts src tests api_key_id customer_id metric quantity idempotency_key window_start not in def(insert_event_if_new) params: asyncdefinsert_event_if_new(  ",
+    "src/repositories/README.md: `find_event_by_idempotency_key(...)` — documented arg(s) session CLAUDE.md Dockerfile PROJECT.md README.md alembic alembic.ini docs infra poetry.lock poetry.toml pyproject.toml renovate.json scripts src tests api_key_id idempotency_key not in def(find_event_by_idempotency_key) params: asyncdeffind_event_by_idempotency_key(  ",
+    "src/repositories/README.md: `increment_usage_rollup(...)` — documented arg(s) session CLAUDE.md Dockerfile PROJECT.md README.md alembic alembic.ini docs infra poetry.lock poetry.toml pyproject.toml renovate.json scripts src tests api_key_id customer_id metric window_start quantity not in def(increment_usage_rollup) params: asyncdefincrement_usage_rollup(  ",
+    "src/repositories/README.md: `find_usage_rollup(...)` — documented arg(s) api_key_id customer_id metric window_start not in def(find_usage_rollup) params: asyncdeffind_usage_rollup(  ",
+    "src/repositories/README.md: `count_usage_rollups(...)` — documented arg(s) api_key_id customer_id metric window_from window_to not in def(count_usage_rollups) params: asyncdefcount_usage_rollups(  ",
+    "src/repositories/README.md: `stream_usage_rollups(...)` — documented arg(s) api_key_id ... limit not in def(stream_usage_rollups) params: asyncdefstream_usage_rollups(  ",
+    "src/repositories/README.md: `find_active_key_by_key_id(...)` — documented arg(s) key_id not in def(find_active_key_by_key_id) params: asyncdeffind_active_key_by_key_id(  ",
+    "src/repositories/README.md: `create_api_key(...)` — documented arg(s) ... scope not in def(create_api_key) params: asyncdefcreate_api_key(  ",
+    "src/repositories/README.md: `upsert_quota(...)` — documented arg(s) ... not in def(upsert_quota) params: asyncdefupsert_quota(  ",
+    "src/repositories/README.md: `read_tenant_quota_state_locked(...)` — documented arg(s) ... not in def(read_tenant_quota_state_locked) params: asyncdefread_tenant_quota_state_locked(  ",
+    "src/services/README.md: `create_event(...)` — documented arg(s) principal payload not in def(create_event) params: asyncdefcreate_event(  ",
+    "src/services/README.md: `get_usage(...)` — documented arg(s) principal query not in def(get_usage) params: asyncdefget_usage(  ",
+    "src/services/README.md: `stream_export_csv(...)` — documented arg(s) principal params not in def(stream_export_csv) params: asyncdefstream_export_csv(  ",
+    "src/services/README.md: `upsert_tenant_quota(...)` — documented arg(s) principal payload not in def(upsert_tenant_quota) params: asyncdefupsert_tenant_quota(  ",
+    "src/services/README.md: `floor_to_hour_utc(...)` — documented arg(s) timestamp:datetime not in def(floor_to_hour_utc) params: timestamp  "
+  ]
+}
