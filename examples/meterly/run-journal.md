@@ -627,3 +627,36 @@ Audit session recovered the missing evidence itself from the session store
   the binding perf criterion is the negative no-change-to-POST constraint), and the
   no-new-stored-data classification note.
 - Interventions: interview answers only (operator pre-step per the run plan).
+
+## M4′ Entry 4 — 2026-07-09T18:55Z — planning phase complete (1 revision pass); STOPPED at the human plan checkpoint
+
+- **0flight pre-flight (new stage, first live run): PASS** — identity assert (toplevel = meterly
+  repo, slug = usage-export = PROJECT.md = branch), cache purge (0 __pycache__ left; the
+  F-M4-4 class structurally prevented this run).
+- **Repomix (F-M4-6 fix live):** full-tree compressed pack came out 167k tokens → over the
+  ~40k consumer budget → re-ran scoped (src/** + alembic/versions/** + CLAUDE/PROJECT/pyproject)
+  → 54 files / 26,820 tokens, Secretlint clean. **Planning READ the pack (receipt in plan.md
+  frontmatter: sha256 67eadd30…, files 54, tokens 26820)** and drilled into only 6 raw files —
+  17 tool uses vs M4 planning's 37. The watchlist behavior verified.
+- **planning (opus, 1 attempt, 748 s, 0 caps):** plan.md + acceptance.md (initially 21 ACs,
+  AC18 delegated to security). **No tasks.md** at ~14 estimated files (F-M4-2 single-trigger
+  behaving). Load-bearing calls: server-side-cursor streaming inside the tenant-scoped
+  transaction opened in the generator; two-phase pre-flight COUNT → 422-before-first-byte then
+  stream; no new index (bounded ≤100k sort; Open Q2); CSV formula-escape at the sink
+  (ingest allowlist permits leading '-' — the plant treated as a live vector). Unprompted:
+  flagged the pre-existing usage_rollup ENABLE-only RLS gap (M4-2 ledger row's subject) as
+  Open Q3, honored the no-migration brief.
+- **plan-audit (sonnet, 1 attempt, 129 s): 2 material flags, revision_recommended TRUE**
+  (verified from disk frontmatter, plan sha d62171b6…): (1) plan text cited the retired
+  ≥15-criteria trigger leg; (2) missing fail-closed AC for pre-flight COUNT-phase errors.
+- **planning revision (warm continue, 1 pass, 351 s, 0 caps):** trigger wording corrected
+  (single ≥25-file leg; criteria count explicitly a non-trigger); **AC22 added** (pre-flight
+  internal error → generic 500 envelope, rollback, no partial body; 2 traced tests);
+  criteria_total 21→22; R3 rescoped to strictly post-200 mid-stream; STRIDE/DFD/prompt
+  extended; ## Revision notes appended; run_type=revised.
+- Zero caps anywhere so far (planning ×2, plan-audit) — Track-2 budget expectation holding.
+- Artifacts snapshotted to run-evidence/m4-prime/ (plan.md, acceptance.md, plan-audit.md,
+  run-log.jsonl).
+- **STOPPED at the human plan checkpoint.** Operator: review plan.md (esp. Open Q1 p95 target,
+  Open Q2 no-index ordering tradeoff, Open Q3 RLS FORCE deferral) + plan-audit.md, then
+  `touch .pipeline/plan-approved` from your own terminal.

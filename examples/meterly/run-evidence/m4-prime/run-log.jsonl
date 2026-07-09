@@ -1,0 +1,3 @@
+{"ts":"2026-07-09T17:42:44Z","feature":"usage-export","branch":"feature/usage-export","stage":"planning","status":"pass","model":"opus","attempt":1,"retries":0,"files_changed":1,"notes":""}
+{"ts":"2026-07-09T17:45:06Z","feature":"usage-export","branch":"feature/usage-export","stage":"plan-audit","status":"pass","model":"sonnet","attempt":1,"retries":0,"files_changed":1,"notes":""}
+{"ts":"2026-07-09T17:51:26Z","feature":"usage-export","branch":"feature/usage-export","stage":"planning","status":"pass","model":"opus","attempt":2,"retries":0,"files_changed":1,"notes":""}
