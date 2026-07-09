@@ -254,3 +254,46 @@ they do: re-verify criterion 1 arithmetic on the re-stamped summary (deployment 
 deployment caps, the tax worsens), finalize criteria 4–6, grade the deployment-gate row, and
 append the addendum here. The RESET verdict cannot be upgraded by those steps (criterion 1 is
 already final for this run); it could only get worse, which changes nothing procedurally.
+
+---
+
+## 9. Post-deployment addendum (2026-07-09, orchestrating session per operator instruction)
+
+Deployment, the 6b re-stamp, and the final evidence snapshot have now happened; PR #2 merged
+(merge commit `43da3203feb…` @ 17:08:24Z). Finalizations, each re-verified from disk:
+
+**Criterion 1 (final arithmetic):** run-log.jsonl now 17 lines / 6 capped = **35.3%**
+(deployment added one clean line; `wc -l` + `grep -c '"capped"'` on the snapshot copy).
+Deployment did not cap, so the tax improved marginally vs the audit's 37.5% pre-deployment
+count and remains ~3.5× the threshold. **MISS — final; RESET verdict unchanged.**
+
+**Criterion 4 (report-claim reconstructability): PASS — final.** Deployment's claims are
+artifact-backed end to end: commit `bdcb326` exists (47 files, matching its report), PR #2
+exists and merged, `diff-approved.approved_change_hash 63cc7107…` equals
+`review-manifest.reviewed_change_hash` (currency held through the checkpoint), the commit
+contains zero `.pipeline/` paths (`git show --name-only | grep -c '^\.pipeline'` = 0), and the
+run-log deployment line (`status:"pass", attempt:1, files_changed:47`) agrees with the gate
+outcome. The §1 blemish (testing's environment sentence) stays noted; it is outside the
+executed/covered/verified letter and already carries ledger row M4-tel3.
+
+**Criterion 5 (evidence preservation): MISS (cured) — final.** The final snapshot exercised the
+NEW `scripts/preserve-transcripts.sh` end-to-end: 23 transcripts copied from the per-agent
+store + `MANIFEST.sha256`, non-empty asserted, dual-ID byte-identical pairs flagged **at
+source** (same class §2/Entry 14 documented — nothing lost). The re-stamped run-summary.json
+was snapshotted in the same pass (M4-tel2's fix behavior followed). The miss stands for the
+run — the gap existed until the audit hunted the session store — but the evidence set is
+complete and the fix is now demonstrated, not just coded.
+
+**Criterion 6 (ledger): PASS — final.** 13 rows verified present with actions; deployment
+surfaced no new escape, so no new row is owed.
+
+**Deployment-gate row (per-stage scorecard): 5.** One invocation, one attempt, zero caps
+(run-log line 17); the gate's conjuncts were verified against the artifacts before any git
+action (transcript `ae83c90624f8adb58.output`); delegated-criteria arithmetic handled correctly
+(21 covered + AC22 delegated:security against `criteria_total: 22` / `delegated_criteria:
+[AC22]` frontmatter); single hygienic commit — no `.pipeline`, no secrets (the two "password"
+hits are the RLS-backstop test's throwaway role and a k6 env reference), PR body from
+pr-description.md. **Per-stage average becomes 35/9 = 3.89.**
+
+**Bottom line unchanged:** RESET on criterion 1 (35.3% final) with criterion 5's process miss
+cured; criteria 2/3/4/6 PASS; the fix tracks are implemented and eval-green — M4′ proceeds.
