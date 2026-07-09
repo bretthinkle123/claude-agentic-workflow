@@ -209,6 +209,38 @@ frequency, not resume cost; see decision 4 and fix list #1.
    (U-23) for the dead-knob class and consider a duplication lint scoped to `tests/integration/k6/`
    (F-M4-10).
 
+## 7b. Re-audit deltas (deep dive, 2026-07-09, same session as the audit)
+
+A second pass against the engine source and the non-empty transcripts refined five findings:
+
+1. **F-M4-2 downgraded to a calibration *observation*.** Both trigger legs genuinely crossed
+   (22 ACs ≥ 15; ~26 estimated files ≥ 25, per `planning.md:336`) — the trigger obeyed its spec;
+   it was the *run plan's expectation* ("a thin feature should NOT trigger it") that was
+   miscalibrated. And tasks.md proved **load-bearing**: both warm resumes navigated by T1–T6 +
+   the progress file. Keep the file-count leg; recalibrate or drop only the AC leg (it measures
+   planning's own authoring granularity).
+2. **F-M4-3 root cause corrected: parallel Stop-hook execution.** implementation.md lists
+   smoke-check before log-run under `Stop:`, but same-event hooks run **concurrently** —
+   frontmatter order is not sequencing. That's how log-run read `unknown` 5 s before
+   smoke-check's stamp. The fix is a freshness wait (or one sequential wrapper script), not
+   hook re-ordering.
+3. **F-M4-5 root cause corrected: definition defect, not agent negligence.** `security.md:53`
+   labels ast-grep an "*optional adjunct*" with no trigger condition — skipping it was
+   spec-compliant. It also has no U-09 wrapper, so even a run would leave no scan-log stamp.
+4. **F-M4-7 worsened: a transcript was lost even among the non-empty files.**
+   `b79on0wti.output` and `bl2q7axu7.output` are byte-identical (one finder stored under two
+   IDs ⇒ another finder's output is gone), and the directory holds 34 files against the INDEX's
+   claim of 33. Two preservation paths exist — session-JSONL extracts (`a…`, the path that
+   produced all 14 empties) and TaskOutput text captures (`b…`) — neither asserts integrity.
+5. **Turn-demand data mined for the cap fixes** (journal tool-counts anchored to maxTurns at
+   cap): security total demand ≈ 38–45 turns vs cap 30; testing ≈ 70–75 vs 50; documentation
+   ≈ 37–40 vs 25 (so the U-06 protocol's haiku@35 — and even sonnet@35 — would likely *still*
+   cap; the trial should be @40); debugging ≈ 35 vs 30; implementation ≈ 130+ turns / ~250 tool
+   uses vs 60 — no realistic single-attempt budget fits it, which points to per-task invocation
+   against tasks.md rather than a bigger cap.
+
+Fix plan: `docs/m4-prime-fix-plan.md`.
+
 ## 8. What remains provisional
 
 Deployment → PR → 6b run-summary re-stamp → final `.pipeline` snapshot have not happened. After
