@@ -453,3 +453,34 @@ PROJECT.md." — no re-teaching content. Orchestration proceeds: repomix pack �
   loop-state, dast-review, scan-log, debug-notes) → `run-evidence/m4/`.
 - Next: documentation (U-06 experiment condition: sonnet@25) → /code-review pre-step → human
   diff checkpoint.
+
+## M4 Entry 12 — 2026-07-09T04:55Z — documentation done (capped once — U-06 answer: cap PERSISTS on sonnet@25); /code-review pre-step complete; STOPPED at diff checkpoint
+
+- **documentation attempt 1 (sonnet@25): CAPPED** mid-READMEs (47 tools/240 s; breadcrumb
+  left). **U-06 experiment condition answered: the cap persists on sonnet@25** → per the
+  one-variable protocol the revert candidate is haiku@35; decide in the retrospective.
+  Warm resume finished cleanly (22 tools/834 s): per-dir READMEs (3 new under tests/),
+  db/alembic/scripts READMEs updated — including CORRECTING a stale invented `--key_id` CLI
+  claim it found in scripts/README.md (U-13 doc-identifier class, caught by the doc agent
+  itself this run); Mermaid DFD added to system_architecture.md; design records copied to
+  docs/decisions/feature/metric-quotas/; pr-description.md surfaces everything required (AC20
+  revision, FORCE-RLS + follow-up, pytest CVE rec, DAST advisory, single-key constraint);
+  review-manifest.json `reviewed_change_hash=63cc7107…`.
+- **/code-review pre-step (medium, 6 finder agents + finder-level verification): 8 findings,
+  0 new CONFIRMED correctness bugs in the feature logic.** Ranked: (1) CI coverage floor
+  unenforced (<COVERAGE_FLOOR> unfilled, no --cov-fail-under anywhere — contradicts CLAUDE.md's
+  85% done-bar; pre-existing, inherited); (2) events/usage_rollup ENABLE-only RLS inert for
+  owner (already tracked as follow-up); (3) k6 harness forked — fixture ~90-line copy-paste +
+  JS near-duplicate, drift already present (**U-21 rule-of-two breach — graded M4 surface,
+  SK/YAGNI delta NOT clean**); (4) _quota_perf_workers dead-flexibility knob asserted away
+  (R2-9/R2-10 class present despite the code-standards YAGNI enrichment); (5) QuotaUpsertOutcome
+  pattern divergence; (6) routes/+schemas/ READMEs missing; (7) isolation-test teardown singleton
+  mismatch; (8) duplicate baseline k6 run (~25 s). Dropped as deliberate/plan-consistent: absolute-p95
+  assertion removal (human AC20 decision), require_scope + typed app_code altitude suggestions.
+- **Prior-runs pattern check: /code-review was NOT the sole deepest-bug catcher this run** —
+  the deepest bug (EvalPlanQual stale join) died in-stage via A-2 test-first; the pre-checkpoint
+  review's residue is hygiene/YAGNI. First run where the early layers starved the late review.
+- Diff at checkpoint: 25 files, +687/−112 (excludes untracked new files; full set in
+  pr-description.md). pr-description.md + review-manifest.json snapshotted to run-evidence/m4/.
+- **STOPPED at the M5 hard human diff-review checkpoint** — operator to review and run
+  `bash ~/.claude/hooks/approve-diff.sh` (TTY-only) to write diff-approved.
