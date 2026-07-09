@@ -86,3 +86,27 @@ findings are `accepted:app-backlog` (a future feature run, never pipeline work).
 
 Add a section per run. The M4 audit MUST verify every M4 escape became a row here with an
 action — audit-over-audit is how the net is proven to be growing, not just claimed.
+
+### M4 — brownfield proof run 1 (per-customer metric quotas), audited 2026-07-09
+
+Rows written by the M4 from-disk audit (`run-evidence/m4/AUDIT-REPORT.md`). The 8 review rows
+are the /code-review pre-step findings (0 new CONFIRMED correctness bugs — first run where the
+early layers starved the late review; the deepest bug, the EvalPlanQual stale-join, died
+in-stage via A-2 test-first and never escaped, so it gets no row). Deployment was pending at
+audit; re-verify this section post-deployment.
+
+| # | Finding | Class | Escaped because | Action |
+|---|---|---|---|---|
+| M4-1 | `pipeline-ci.yml` coverage floor unenforced — `<COVERAGE_FLOOR>` placeholder never filled, no `--cov-fail-under` anywhere, contradicts CLAUDE.md's 85% done-bar (pre-existing, inherited) | gate-arithmetic | no stage owns filling CI placeholders; the job is green vacuously | deterministic-check (CI-template lint: fail the pipeline-ci job if placeholders remain in enabled jobs; testing stage fills the floor) |
+| M4-2 | `events`/`usage_rollup` RLS is ENABLE-only — inert for the owning role (pre-existing, outside diff; security flagged, PR carries the follow-up) | DB-privilege | outside the diff scope; R1-1's fix in run 1 predated the FORCE lesson | accepted:app-backlog (follow-up migration named in pr-description.md) |
+| M4-3 | k6 harness forked a 4th time — perf fixture ~90-line copy-paste + `load_events_quota.js` near-duplicate, drift already present (/code-review #3) | test-duplication | U-21 rule-of-two is a convention with no teeth; implementation never consulted it under cap pressure | deterministic-check candidate (duplication lint scoped to `tests/integration/k6/`) + eval-defect (U-23 planted harness-fork) — final form decided at the M4 retrospective |
+| M4-4 | `_quota_perf_workers()` dead-flexibility knob asserted away by its own test (/code-review #4) — R2-9/R2-10 class despite the SK YAGNI enrichment | quality | skill guidance alone doesn't bind mid-implementation | eval-defect (U-23 planted dead-knob) |
+| M4-5 | `QuotaUpsertOutcome` pattern divergence from the codebase's existing outcome idiom (/code-review #5) | quality | style-level; no gate models idiom consistency | accepted:app-backlog |
+| M4-6 | `src/api/routes/`+`src/api/schemas/` READMEs missing while sibling dirs got them (/code-review #6) | doc-completeness | doc agent capped mid-READMEs; resume prioritized updates over gaps | accepted:app-backlog (next doc pass) |
+| M4-7 | isolation-test teardown singleton mismatch (/code-review #7) | test-hygiene | no runtime symptom yet | accepted:app-backlog |
+| M4-8 | duplicate baseline k6 run wastes ~25 s per suite run (/code-review #8) | efficiency | harmless-but-wasteful class not gated | accepted:app-backlog |
+| M4-tel1 | run-log line 5: implementation attempt 3 `status:"unknown"` stamped 5 s before smoke-status.json's pass — log-run/smoke-check Stop-hook read race (F-M4-3) | telemetry | log-run trusts whatever smoke-status is on disk at hook time | deterministic-check (log-run freshness check: refuse/retry a smoke-status older than the stage stop) |
+| M4-tel2 | run-summary.json snapshot stale (generated pre-documentation); journal + handoff quoted 35.7% where the log says 6/16 = 37.5% (F-M4-8) | telemetry | summary is stamped once, snapshots copy it uncritically | deterministic-check (snapshot step re-runs run-summary.sh; audit rule already recomputes) |
+| M4-tel3 | "stray dashboard files" environmental claim propagated implementation→testing reports unverified; root cause = Entry-3 conversion missed `__pycache__` purge, leaving run-3 dashboard .pyc on disk (F-M4-4) | report-accuracy | agents repeat prior-report environment claims without disk verification; the journal's own check missed bytecode | convention (environment claims in reports must be disk-verified) + deterministic-check (conversion/bootstrap purges `__pycache__`/build caches) |
+| M4-tel4 | 14 of 34 preserved transcripts are 0-byte files; INDEX claims all 33 preserved; blocked the repomix-consumption question (F-M4-7) | evidence-preservation | preservation copied whatever TaskOutput returned; nothing asserted non-empty | deterministic-check (preservation step asserts non-empty bytes per INDEX row) + operator re-export from session JSONL |
+| M4-tel5 | U-13 doc-identifier warn-only tally unreconstructable — hook writes stderr only, nothing persisted (F-M4-9) | evidence-preservation | warn-only channel has no artifact | deterministic-check (hook also writes `.pipeline/doc-identifiers.json`) |

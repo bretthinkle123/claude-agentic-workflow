@@ -300,6 +300,89 @@ genuine bug to fix before the next run; the `maxTurns` bump (F4) is a one-line q
 
 ---
 
+### M4 run (Meterly quotas) — proof run 1 of 2–3, audited from disk 2026-07-09
+
+> Brownfield increment on `meterly-pipeline-test` @ `faabe9d` (per-customer metric quotas), the
+> first run on the combined #34/#35/#36 engine (SHA `bba9475`). Audited by a fresh session from
+> `run-evidence/m4/` artifacts only; full evidence trail in
+> `examples/meterly/run-evidence/m4/AUDIT-REPORT.md`. **Headline: proof-gate verdict RESET**
+> (cap-out tax 6/16 = **37.5%** vs the <10% threshold — note: the journal's 35.7% came from a
+> stale pre-documentation run-summary; recomputed from run-log.jsonl), **but the quality axes
+> were the best of any run**: security caught the R1-1-class FORCE-RLS owner-bypass in-stage,
+> A-2 test-first killed the run's deepest bug (an EvalPlanQual stale-join that admitted 20/20
+> posts against a cap of 10) inside implementation, and /code-review — 3-for-3 sole deepest-bug
+> catcher on runs 1–3 — found **0 new CONFIRMED correctness bugs**. First run where the early
+> layers starved the late review. Deployment was pending at audit time; criteria 4–6 provisional.
+> Per-stage scorecard (first graded run): elicitation 5, planning 4, plan-audit 4,
+> implementation 4, U-03 pilot 2, security 4, testing 4, documentation 3, deployment n/a —
+> **avg 3.75**. Decisions taken: **U-03 → subsume into A-2**; **U-06 → cap persists on sonnet@25**
+> (protocol says revert haiku@35; audit recommends sonnet@35 as M5's single variable — turns are
+> the binding constraint); **U-13 → don't promote, instrument the tally first**; **proof gate →
+> RESET, fix list then M4′.**
+
+- **F-M4-1 — kickoff has an unchecked cwd precondition.** The bare U-12 kickoff was issued in a
+  session whose cwd was the *wrong clone*; nothing verifies session cwd == the intended run repo
+  (gates/telemetry are cwd-bound). Caught manually pre-start (Entry 3). Fix: pre-step asserts cwd
+  matches `.pipeline/state.json` identity.
+- **F-M4-2 — tasks.md large-feature trigger fired on the thin slice.** Planning's own 22-AC
+  acceptance set crossed the ≥15-criteria threshold, so planning granularity self-triggers
+  decomposition — the trigger measures the author, not the work. Recalibrate (count
+  implementation work units or raise the threshold).
+- **F-M4-3 — log-run/smoke-check Stop-hook race.** Implementation attempt 3 logged
+  `status:"unknown"` at 01:02:22Z, five seconds *before* smoke-status.json's pass stamp
+  (01:02:27Z) — log-run read a stale/absent smoke status despite hook order. Produces
+  `suspected_underlog: 1`; hides a pass. Deterministic fix in log-run (freshness check/retry).
+- **F-M4-4 — the "stray dashboard files" claim: inherited-and-unverified, not fabricated —
+  three defects in one.** (i) Entry-3 conversion missed `__pycache__` purges, leaving run-3
+  dashboard bytecode on disk (`tests/integration/__pycache__/test_dashboard_*.pyc`,
+  `src/api/routes/__pycache__/dashboard.pyc` — still present, verified). (ii) Implementation
+  coined "unrelated dashboard tests" in its progress file; testing read that file and repeated it
+  as fact ("correctly excluded" — the `-k "not dashboard"` clause deselected zero tests; the 3
+  deselected were perf_k6, verified from its transcript's collect output). (iii) Journal Entry 9
+  then "verified" the files don't exist by checking only source files and git status. Report
+  claims about the environment must be disk-verified before inclusion.
+- **F-M4-5 — ast-grep never invoked.** No scan-log line, no command in any transcript. The TA
+  overhaul's one agent-invoked B-tool went unexercised on its first live run; the skill, rules
+  pack, and settings allow were all dead weight. Wire it as a deterministic step, not an agent
+  option.
+- **F-M4-6 — repomix consumption unevidenced.** Pack produced (141 files / ~149k tokens,
+  Secretlint clean) but whether planning read it is **unresolvable from disk** — see F-M4-7.
+  Resolution path: re-export planning's trace from the operator session JSONL.
+- **F-M4-7 — transcript preservation gap: 14 of 34 `.output` files are 0 bytes**, including
+  planning, plan-audit, U-03 debugging, and both cycle-3 re-runs. The handoff's "33 transcripts
+  preserved" claim is overstated; question (a) died on this. Preservation must assert non-empty
+  bytes per INDEX row; re-export the empty ones before the session JSONL ages out.
+- **F-M4-8 — stale run-summary quoted as current.** `run-summary.json` (generated 03:34:32Z,
+  pre-documentation) says 5/14 = 35.7%; the actual log is 16 lines / 6 caps = 37.5%. Journal and
+  handoff both quote the stale figure. Re-stamp on every snapshot; the B7 rule needs the artifact
+  itself re-generated, not just quoted.
+- **F-M4-9 — U-13 warn-only output is unpersistable evidence.** `check-doc-identifiers.sh`
+  writes to stderr only; no artifact captured the tally, so the promote-or-not decision has no
+  data beyond the doc agent's own `--key_id` catch. Persist to `.pipeline/doc-identifiers.json`.
+- **F-M4-10 — U-21 breached + YAGNI delta not clean despite SK enrichment.** Fourth k6 fork
+  happened anyway (fixture ~90-line copy-paste + JS near-duplicate, /code-review #3) and the
+  dead-flexibility knob (#4) is the exact R2-9/R2-10 class the code-standards YAGNI section
+  targeted. Conventions alone don't bind; add U-23 planted-defect evals for both classes.
+- **F-M4-11 — the cap-out tax itself (the reset driver).** 6 caps across impl ×2, security,
+  testing, debugging, documentation; all warm-resumed productively (12–35 tool-use resumes vs
+  M3's cache-cold restarts), so the *cost* per cap collapsed while the *frequency* didn't move
+  (35% → 25% → 33% → 37.5% across runs). Either resize turn budgets to observed demand or bring
+  a metric-redefinition decision to the human — explicitly, not silently.
+
+**Cross-run table** (runs 1–3 from `run-evidence/m3-final-pipeline/`, M4 from
+`run-evidence/m4/`; footnotes in AUDIT-REPORT.md §4):
+
+| Metric | R1 ingest | R2 listing | R3 dashboard | M4 quotas |
+|---|---|---|---|---|
+| Log lines / caps (tax) | 20 / 7 (35%) | 8 / 2 (25%) | 12 / 4 (33%) | 16 / 6 (**37.5%**, pre-deploy) |
+| Wall clock | 4h09m (incl. deploy) | 1h07m (to doc) | 3h36m (to doc) | 10h06m (to doc, incl. operator-away gaps) |
+| Loop cycles / remediations | 3/5 / 2 | 1/5 / 0 | 1/5 / 0 | 3/5 / 2 |
+| Tests / cov lines / branches | 83 / 89.82 / 58.77 | 142 / 90.73 / 61.48 | 161 / 92 / 67 | 128 / 89.9 / 58.3 |
+| Post-gate review findings | 10 | 10 | 13 (1 CONFIRMED prod-breaking) | 8 (**0 new CONFIRMED correctness**) |
+| Deepest-bug catcher | /code-review | /code-review | /code-review | **A-2 in-stage** |
+
+---
+
 ## 9. Sequencing note — front-end and production-debugger workstreams
 
 Both are already scoped as deferred workstreams (front-end: design-spec/design-system/visual-regression/
