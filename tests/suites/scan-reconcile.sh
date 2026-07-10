@@ -140,4 +140,15 @@ grep -v '"gitleaks"' "$w/.pipeline/scan-log.jsonl" > "$w/t" && mv "$w/t" "$w/.pi
 run "$w" >/dev/null
 assert_eq "false" "$(reconciled "$w")" "A9: gitleaks (always required) with no stamp → scan_reconciled=false (the M4″ gitleaks gap)"
 
+# (f) PR #38 review finding 2: a NUMERIC count backed only by a "skipped:" stamp is
+#     still a phantom — the count claims "ran, clean" while the breadcrumb says the
+#     scanner never ran. Blocks; the same skip stamp still satisfies the required-set
+#     check (case d), so disclosure remains sufficient where no count is claimed.
+w="$(mk_scan_proj)"; write_status "$w"
+grep -v '"checkov"' "$w/.pipeline/scan-log.jsonl" > "$w/t" && mv "$w/t" "$w/.pipeline/scan-log.jsonl"
+jq -nc '{tool:"checkov",ran_at:"t",args:"skipped: binary not on PATH",exit_code:2}' >> "$w/.pipeline/scan-log.jsonl"
+jq 'del(.scan_artifacts.checkov) | .checkov_findings = 0' "$w/.pipeline/security-status.json" > "$w/t" && mv "$w/t" "$w/.pipeline/security-status.json"
+run "$w" >/dev/null
+assert_eq "false" "$(reconciled "$w")" "A9(f): checkov_findings=0 with only a skip stamp → block (a skip is not a run)"
+
 finish scan-reconcile

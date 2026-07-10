@@ -124,18 +124,22 @@ done
 #       a never-ran scanner is not "0 findings"; the honest value is null (or run it);
 #   (b) a REQUIRED scanner (semgrep/osv/gitleaks always; checkov iff the change set
 #       touches infra/; trivy iff it touches a Dockerfile) with no stamp of ANY kind.
-# A skip stamp (exit 2, "skipped: ...") counts as accounted-for in both checks — the
-# wrappers stamp disclosed skips (Docker down / binary missing); only SILENT absence
-# blocks. Success is judged by the agent + human, not here.
-has_stamp() { jq -e "select(.tool==\"$1\")" "$SCANLOG" >/dev/null 2>&1; }
+# A skip stamp (the wrappers write args "skipped: ..." on a disclosed skip) counts as
+# accounted-for in check (b) — only SILENT absence blocks a required scanner. But a
+# NUMERIC COUNT needs a RUN stamp in check (a) (PR #38 review finding 2): a count of 0
+# paired with only a "skipped:" stamp is still a claim the scanner ran and found
+# nothing, while its only breadcrumb says it never ran. Success is judged by the
+# agent + human, not here.
+has_stamp()     { jq -e "select(.tool==\"$1\")" "$SCANLOG" >/dev/null 2>&1; }
+has_run_stamp() { jq -e "select(.tool==\"$1\" and (((.args // \"\") | startswith(\"skipped:\")) | not))" "$SCANLOG" >/dev/null 2>&1; }
 
 for tool in semgrep osv trivy checkov; do
   claimed_sha="$(jq -r "(.scan_artifacts.${tool} // empty)" "$SS" 2>/dev/null)"
   [ -n "$claimed_sha" ] && continue    # claimed tools already stamp-checked in the loop above
   cnt="$(recorded_count "$tool")"
-  if [ -n "$cnt" ] && [ "$cnt" != "null" ] && ! has_stamp "$tool"; then
+  if [ -n "$cnt" ] && [ "$cnt" != "null" ] && ! has_run_stamp "$tool"; then
     MISMATCHES="$(printf '%s' "$MISMATCHES" | jq -c --arg t "$tool" \
-      --arg r "${tool}_findings=$cnt recorded but no scan-log execution (or skip) stamp exists — a never-ran scanner is not 0 findings; write null or run the scan (A9)" \
+      --arg r "${tool}_findings=$cnt recorded but no scan-log RUN stamp exists (a skipped: stamp is not a run) — a never-ran scanner is not 0 findings; write null or run the scan (A9)" \
       '. + [{tool:$t, reason:$r}]')"
   fi
 done
