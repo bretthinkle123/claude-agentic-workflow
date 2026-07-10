@@ -24,19 +24,33 @@
 set -uo pipefail
 
 IMAGE="${GITLEAKS_IMAGE:-ghcr.io/gitleaks/gitleaks:latest}"
+STAMP="$(dirname "${BASH_SOURCE[0]}")/stamp-scan.sh"
 
+# M4″-A9: gitleaks was the one scanner wrapper that never stamped scan-log.jsonl (it
+# exec'd the tool, so nothing ran afterwards) — the M4″ run had a fresh 87KB
+# gitleaks.json and NO execution breadcrumb. Run + stamp + exit like every other
+# wrapper; stamp-scan.sh derives the artifact path from --report-path.
 if command -v gitleaks >/dev/null 2>&1; then
-  exec gitleaks "$@"
+  gitleaks "$@"
+  _rc=$?
+  "$STAMP" gitleaks "$_rc" "" "$@" >/dev/null 2>&1 || true
+  exit "$_rc"
 fi
 
 if docker info >/dev/null 2>&1; then
   HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
   # EG side-track: join the restricted egress network when the operator provisions it.
-  exec env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
+  env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
     ${PIPELINE_EGRESS_NETWORK:+--network "$PIPELINE_EGRESS_NETWORK"} \
     -v "${HOST_DIR}:/src" -w /src \
     "$IMAGE" "$@"
+  _rc=$?
+  "$STAMP" gitleaks "$_rc" "" "$@" >/dev/null 2>&1 || true
+  exit "$_rc"
 fi
 
 echo "[gitleaks-scan] neither the native 'gitleaks' binary nor Docker is available — cannot run the dedicated secrets scan. Install gitleaks (single binary) or start Docker Desktop, then re-run. Do NOT report secrets-clean without it." >&2
+# A9: stamp the disclosed skip too (ast-grep-scan.sh pattern) — "never ran" vs
+# "unavailable, disclosed" must be distinct, auditable states.
+"$STAMP" gitleaks 2 "" "skipped: no native binary and Docker not running" >/dev/null 2>&1 || true
 exit 2

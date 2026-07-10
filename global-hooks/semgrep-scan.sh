@@ -13,6 +13,9 @@ IMAGE="${SEMGREP_IMAGE:-semgrep/semgrep}"
 
 if ! docker info >/dev/null 2>&1; then
   echo "[semgrep-scan] Docker is not running. Start Docker Desktop, then re-run." >&2
+  # M4″-A9: stamp the disclosed skip (ast-grep pattern) — silent absence and disclosed
+  # unavailability must be distinct, auditable states in scan-log.jsonl.
+  "$(dirname "${BASH_SOURCE[0]}")/stamp-scan.sh" semgrep 2 "" "skipped: Docker not running" >/dev/null 2>&1 || true
   exit 2
 fi
 

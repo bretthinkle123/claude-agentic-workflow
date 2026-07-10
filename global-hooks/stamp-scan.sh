@@ -25,6 +25,24 @@ TOOL="${1:-unknown}"; EXITC="${2:-0}"; OUTPATH="${3:-}"
 shift 3 2>/dev/null || shift $#
 ARGS="$*"
 
+# M4″-A9: when the wrapper passed no output_path, derive it from the argv — every M4″
+# scan-log row had output_path/output_sha256 empty, which weakens the liveness proof
+# (reconcile can hash a claimed artifact, but the stamp itself couldn't say where the
+# tool wrote). Recognize the common output flags; accept only an existing regular file
+# (checkov's --output-file-path takes a DIRECTORY — skipped by the -f test).
+if [ -z "$OUTPATH" ]; then
+  _prev=""
+  for _a in "$@"; do
+    case "$_prev" in
+      --output|--report-path|-o) [ -f "$_a" ] && OUTPATH="$_a" ;;
+    esac
+    case "$_a" in
+      --output=*|--report-path=*) _v="${_a#*=}"; [ -f "$_v" ] && OUTPATH="$_v" ;;
+    esac
+    _prev="$_a"
+  done
+fi
+
 SHA=""
 if [ -n "$OUTPATH" ] && [ -f "$OUTPATH" ]; then
   if command -v sha256sum >/dev/null 2>&1; then

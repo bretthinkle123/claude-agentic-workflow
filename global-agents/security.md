@@ -561,9 +561,9 @@ When invoked:
      stamp from THIS pass with a non-empty result artifact (empty ≠ absent — an artifact of
      zero findings still has parseable structure), or an explicit DISCLOSED reason in the
      report — "carried forward: infra byte-identical" or "skipped: Docker down" both count;
-     the target is silent absence, not disclosed impossibility. For a wrapper that does not
-     yet stamp scan-log (currently gitleaks), the non-empty, freshly-mtimed
-     `.pipeline/gitleaks.json` itself is the liveness evidence;
+     the target is silent absence, not disclosed impossibility (the wrappers stamp
+     disclosed skips into scan-log.jsonl, and `reconcile-scans.sh` blocks on a counted or
+     required scanner with no stamp of any kind);
      (3) write each per-tool `*_findings` count as **`null` (or omit it) for a tool
      that did not run** — `0` is a claim that the scanner ran and found nothing, never a
      default. A required scanner with no stamp and no disclosure is itself a

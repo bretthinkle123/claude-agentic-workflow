@@ -24,7 +24,8 @@
 #
 # NON-GATING by design: stamp FRESHNESS (a carried-forward artifact is legal), and the
 # exploitable/hygiene triage of findings (LLM judgment — P0-3/U-23 evals are the control).
-# Gitleaks is excluded from count reconciliation (its in-scope filtering is triage).
+# Gitleaks is excluded from count reconciliation (its in-scope filtering is triage) but
+# NOT from liveness — it must leave an execution or skip stamp like every scanner (A9).
 #
 # Backward compatible: no scan-log.jsonl (a pre-U-09 project / no wrappers) ⇒ legacy
 # no-op — writes {reconciled:true, legacy:true}, sets no scan_reconciled=false, exit 0.
@@ -114,6 +115,43 @@ for tool in semgrep osv trivy checkov; do
     fi
   fi
   [ -n "$reason" ] && MISMATCHES="$(printf '%s' "$MISMATCHES" | jq -c --arg t "$tool" --arg r "$reason" '. + [{tool:$t, reason:$r}]')"
+done
+
+# --- A9 scanner liveness (M4″) — silent absence must never read as 0 findings ---------
+# The M4″ run recorded checkov_findings: 0 with NO checkov execution stamp (the tool had
+# never run), and CI's broken OSV step read as "no findings" for two features. Two checks:
+#   (a) a per-tool count that is a NUMBER while the tool has no scan-log stamp AT ALL —
+#       a never-ran scanner is not "0 findings"; the honest value is null (or run it);
+#   (b) a REQUIRED scanner (semgrep/osv/gitleaks always; checkov iff the change set
+#       touches infra/; trivy iff it touches a Dockerfile) with no stamp of ANY kind.
+# A skip stamp (exit 2, "skipped: ...") counts as accounted-for in both checks — the
+# wrappers stamp disclosed skips (Docker down / binary missing); only SILENT absence
+# blocks. Success is judged by the agent + human, not here.
+has_stamp() { jq -e "select(.tool==\"$1\")" "$SCANLOG" >/dev/null 2>&1; }
+
+for tool in semgrep osv trivy checkov; do
+  claimed_sha="$(jq -r "(.scan_artifacts.${tool} // empty)" "$SS" 2>/dev/null)"
+  [ -n "$claimed_sha" ] && continue    # claimed tools already stamp-checked in the loop above
+  cnt="$(recorded_count "$tool")"
+  if [ -n "$cnt" ] && [ "$cnt" != "null" ] && ! has_stamp "$tool"; then
+    MISMATCHES="$(printf '%s' "$MISMATCHES" | jq -c --arg t "$tool" \
+      --arg r "${tool}_findings=$cnt recorded but no scan-log execution (or skip) stamp exists — a never-ran scanner is not 0 findings; write null or run the scan (A9)" \
+      '. + [{tool:$t, reason:$r}]')"
+  fi
+done
+
+REQUIRED="semgrep osv gitleaks"
+DIFF_REF="HEAD"; git rev-parse --verify -q HEAD >/dev/null 2>&1 || DIFF_REF=""
+CHANGED="$( { [ -n "$DIFF_REF" ] && git diff "$DIFF_REF" --name-only 2>/dev/null; \
+              git ls-files --others --exclude-standard 2>/dev/null; } | sort -u )"
+printf '%s\n' "$CHANGED" | grep -qE '^infra/' && REQUIRED="$REQUIRED checkov"
+printf '%s\n' "$CHANGED" | grep -qE '(^|/)Dockerfile' && REQUIRED="$REQUIRED trivy"
+for tool in $REQUIRED; do
+  if ! has_stamp "$tool"; then
+    MISMATCHES="$(printf '%s' "$MISMATCHES" | jq -c --arg t "$tool" \
+      --arg r "required scanner $tool has no execution or skip stamp this run — run it through its wrapper, or let the wrapper stamp the disclosed skip (A9 liveness)" \
+      '. + [{tool:$t, reason:$r}]')"
+  fi
 done
 
 # Scope reconciliation: every code-shaped changed file should appear in a this-run semgrep
