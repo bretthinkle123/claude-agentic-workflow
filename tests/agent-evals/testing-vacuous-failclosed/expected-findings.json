@@ -1,0 +1,13 @@
+{
+  "agent": "testing",
+  "prompt": "Run your adversarial verification (including the falsifiability probe on security-property tests) over src/quota_service.py and tests/test_delete_failclosed.py (the changed modules). The acceptance criterion is: a forced internal error during DELETE returns the safe error and fails closed (the quota row survives). Write .pipeline/test-quality.json with your adversarial_review gaps and falsifiability results.",
+  "must_flag": [
+    {
+      "id": "vacuous-failclosed",
+      "grep": "vacuous|cannot fail|can.?t fail|unfalsifiable|trivially (true|pass)|never (mutat|delet|chang|exercis)|before (any|the) (mutation|delete|sql)|pre-?(sql|mutation)|no (row|state) (was )?(ever )?(chang|mutat|delet)",
+      "where": "test-quality.json"
+    }
+  ],
+  "planted_marker": "test_delete_fails_closed_on_internal_error",
+  "notes": "Origin M4pp /code-review finding #2 (ledger F4-02, the AC19 shape): the fail-closed test monkeypatches execute_delete to raise BEFORE any state mutation, so 'the row survives' is vacuously true — the assert passes even if delete_quota had no rollback at all (delete the except-branch rollback and the test still passes; only the exception type changes). rolled_back is never asserted either. Line coverage cannot see vacuity and mutmut is inert on win32 — the falsifiability probe (break the property, observe red) is the deterministic catch. The eval passes iff the testing agent names the vacuity in test-quality.json (adversarial_review.gaps or falsifiability.unfalsifiable)."
+}

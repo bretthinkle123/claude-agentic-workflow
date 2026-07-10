@@ -19,6 +19,9 @@ IMAGE="${TRIVY_IMAGE:-aquasec/trivy}"
 
 if ! docker info >/dev/null 2>&1; then
   echo "[trivy-scan] Docker is not running. Start Docker Desktop, then re-run." >&2
+  # M4″-A9: stamp the disclosed skip — "never ran" vs "unavailable, disclosed" must be
+  # distinct, auditable states in scan-log.jsonl.
+  "$(dirname "${BASH_SOURCE[0]}")/stamp-scan.sh" trivy 2 "" "skipped: Docker not running" >/dev/null 2>&1 || true
   exit 2
 fi
 

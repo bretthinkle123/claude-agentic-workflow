@@ -15,6 +15,8 @@ set -uo pipefail
 
 if ! command -v checkov >/dev/null 2>&1; then
   echo "[checkov-scan] checkov not found on PATH. Install it (pip install checkov) then re-run. Do NOT report infra-clean without it." >&2
+  # M4″-A9: stamp the disclosed skip — silent absence must be distinguishable.
+  "$(dirname "${BASH_SOURCE[0]}")/stamp-scan.sh" checkov 2 "" "skipped: binary not on PATH" >/dev/null 2>&1 || true
   exit 2
 fi
 

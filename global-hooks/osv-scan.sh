@@ -15,6 +15,8 @@ set -uo pipefail
 
 if ! command -v osv-scanner >/dev/null 2>&1; then
   echo "[osv-scan] osv-scanner not found on PATH. Install it (https://google.github.io/osv-scanner/) then re-run. Do NOT report dependency-clean without it." >&2
+  # M4″-A9: stamp the disclosed skip — silent absence must be distinguishable.
+  "$(dirname "${BASH_SOURCE[0]}")/stamp-scan.sh" osv 2 "" "skipped: binary not on PATH" >/dev/null 2>&1 || true
   exit 2
 fi
 

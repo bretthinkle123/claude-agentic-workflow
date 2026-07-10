@@ -56,6 +56,22 @@ rule:
 note: If the app role owns this table, RLS is advisory without ALTER TABLE ... FORCE ROW LEVEL SECURITY — verify ownership.
 ```
 
+### R3 — exact-count assert over a migration/revision listing (Python) — M4″ ledger F4-04
+Flags the time-bomb test shape: `assert len(<something that lists migration files>) == N`
+passes today and breaks on the next migration, and the failure lands on whoever adds it.
+The M4″ run shipped `len(...) == 3` over the alembic versions dir. Assert properties
+(monotonic ordering, a specific revision present, head reachable), never an exact count
+of a collection that grows by design.
+```yaml
+id: migration-exact-count-assert
+language: python
+rule:
+  pattern: assert len($LISTING) == $N
+constraints:
+  LISTING: { regex: "(?i)(migration|revision|version)" }
+note: Exact-count asserts on migration listings are time bombs — the next migration breaks this test. Assert a property (specific revision present / head reachable), not the count.
+```
+
 ## Running
 
 ```

@@ -17,4 +17,29 @@
 # silently change the concatenation (and thus the hash). This is byte-identical to the
 # old bare-`sort | xargs` output for ordinary filenames, so it does NOT invalidate any
 # previously-approved hash — it only closes the cross-locale / odd-filename divergence.
+#
+# COMMITTED-DIFF MODE (M4″ 6c currency): `--committed <base> [<head>]` hashes the
+# three-dot diff `git diff <base>...<head>` instead of the working tree. This is the
+# merge-phase anchor: record it against origin/main when the PR opens; after merging
+# main INTO the feature branch, recompute — an equal hash proves the feature-side diff
+# survived integration unchanged (no re-approval needed); a different hash routes back
+# to the 5b human checkpoint. NOT interchangeable with the default mode's hash (that
+# one covers the uncommitted tree + untracked contents; this one covers committed
+# patch bytes) — compare committed to committed only.
+if [ "${1:-}" = "--committed" ]; then
+  BASE="${2:?usage: compute-change-hash.sh --committed <base> [<head>]}"
+  HEAD_REF="${3:-HEAD}"
+  # FAIL LOUDLY on a bad ref (PR #38 review finding 1): with errors swallowed, an
+  # invalid base hashed the EMPTY diff (e3b0c44…) — and since the currency check
+  # compares an anchor hash to a recompute hash, the same typo'd ref in both
+  # invocations produced two equal garbage hashes and a false "currency holds".
+  git rev-parse --verify -q "$BASE^{commit}" >/dev/null \
+    || { echo "compute-change-hash: unknown base ref '$BASE'" >&2; exit 1; }
+  git rev-parse --verify -q "$HEAD_REF^{commit}" >/dev/null \
+    || { echo "compute-change-hash: unknown head ref '$HEAD_REF'" >&2; exit 1; }
+  DIFF_OUT="$(git diff "$BASE...$HEAD_REF")" \
+    || { echo "compute-change-hash: git diff failed for $BASE...$HEAD_REF (no merge base?)" >&2; exit 1; }
+  printf '%s' "$DIFF_OUT" | sha256sum | awk '{print $1}'
+  exit 0
+fi
 { git diff HEAD 2>/dev/null; git ls-files -z --others --exclude-standard | LC_ALL=C sort -z | xargs -0 -r cat; } | sha256sum | awk '{print $1}'

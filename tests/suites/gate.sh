@@ -24,6 +24,21 @@ gate_case 0 "green fixture → pass (exit 0)" ''
 # Tests not passing.
 gate_case 2 "test-results.status=fail → block" '.status="fail"'
 
+# --- M4″-A4: pass-with-failures needs structured pre_existing_failures[] ------------
+# The M4″ run shipped status "pass" with failed:1 disclosed only in prose; the gate
+# consumed the bare status. Now: every failure must be named in failures[] AND matched
+# by name in pre_existing_failures[]; anything less blocks.
+gate_case 2 "pass with failed=1, no pre_existing_failures[] → block" \
+  '.failed=1 | .failures=[{name:"tests/test_perf.py::t1",reason:"machine-load p95"}]'
+gate_case 2 "pass with failed=1, failures[] not enumerated → block" \
+  '.failed=1 | .failures=[]'
+gate_case 2 "pass with failed=1, pre_existing entry names a DIFFERENT test → block" \
+  '.failed=1 | .failures=[{name:"tests/test_perf.py::t1",reason:"r"}]
+   | .pre_existing_failures=[{name:"tests/other.py::t9",evidence:"e"}]'
+gate_case 0 "pass with failed=1, matching pre_existing_failures entry → pass" \
+  '.failed=1 | .failures=[{name:"tests/test_perf.py::t1",reason:"r"}]
+   | .pre_existing_failures=[{name:"tests/test_perf.py::t1",evidence:"out-of-diff; fails at since_commit (CI run 123)"}]'
+
 # Acceptance criteria not fully covered.
 gate_case 2 "criteria covered<total → block" '.criteria_covered.covered = (.criteria_covered.total - 1)'
 

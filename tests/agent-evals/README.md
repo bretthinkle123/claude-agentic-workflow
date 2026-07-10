@@ -31,6 +31,7 @@ execution.
 | `plan-audit-crossfeature/` | plan-audit | a dashboard plan reading per-key rollups with a reader key that owns no rows (R3-1) | cross-feature data-flow material flag |
 | `doc-invented-name/` | documentation | a README naming a nonexistent function + a wrong signature on a real one (R2-5/R3-5) | doc-identifier resolution |
 | `testing-dead-knob/` | testing | an env knob whose only test pins it to the constant default; nothing ever sets it (R2-9/R2-10, M4 #4) | dead-flexibility gap in test-quality.json |
+| `testing-vacuous-failclosed/` | testing | a fail-closed test whose monkeypatch raises BEFORE the state mutation — "row survives" is vacuously true, rollback never exercised (M4″ #2, ledger F4-02) | vacuity named in test-quality.json (adversarial gap or falsifiability.unfalsifiable) |
 | `impl-k6-fork/` | implementation | an env-parameterized k6 harness + a plan asking for a new scenario — will the agent extend or fork? (R2-7/R3-7, M4 #3) | inverted: `check-no-fork.sh` exit 0 (U-21) |
 
 ## Contract: `expected-findings.json`

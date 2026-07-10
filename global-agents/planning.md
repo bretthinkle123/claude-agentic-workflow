@@ -287,6 +287,14 @@ When invoked:
      user lookup query. An input with no contract is an unmitigated injection/abuse
      vector; security verifies the contract and plan-audit's completeness check
      flags any boundary input that lacks one.
+     **Param-less endpoints get an explicit NO-PARAMS contract (M4″ ledger F4-01):**
+     an endpoint that declares no query/body params still needs a row stating what
+     happens to params a caller sends anyway — "unknown query params rejected 422
+     (`extra='forbid'` model bound via Query())" or an explicit N/A-with-rationale.
+     The M4″ GET endpoint had no row (nothing declared, so nothing checked), silently
+     ignored `?customer_id=X`, and returned the full tenant list — the escape passed
+     five stages because no stage owned "reject the undeclared". No row = a gap
+     plan-audit flags; testing asserts the declared behavior per route.
 
 8. **Self-audit before you hand it over.** Re-read your own `plan.md` against
    this rubric and fix any gap *before* reporting it ready — the human should be
@@ -310,7 +318,9 @@ When invoked:
    - **Validation contracts**: every boundary input the feature accepts carries a
      validation contract (type + bound + an anchored allowlist where the value is
      free-form into a sensitive sink + the sink it protects + the schema/file) —
-     none left to implementation's discretion.
+     none left to implementation's discretion. Every param-less endpoint carries
+     its explicit no-params contract (unknown-param rejection or N/A-with-rationale)
+     — an endpoint with no row at all is the F4-01 escape shape.
    - The `## Threat Model` section includes a Mermaid DFD diagram (renders
      in GitHub/VS Code) and a self-contained copy-paste LLM prompt block.
    - **Files affected** is concrete (paths + one-line reason each) and matches
