@@ -48,7 +48,9 @@ the mechanism for a field is a **named facade call**, greppable in the diff.
 - **Password KDF:** prefer the auth provider (Firebase/Cognito never expose the raw hash). If the app
   hashes its own, the facade calls a slow KDF (argon2id default) — never a fast hash (md5/sha*).
 - **KMS envelope encryption:** the facade requests a data key from **AWS KMS** (`GenerateDataKey`),
-  encrypts the field with it, stores `{ciphertext, wrapped_data_key, key_id}`, and decrypts on read.
+  encrypts the field with it **using an AEAD mode — AES-256-GCM default (unique nonce per
+  encryption; or use the AWS Encryption SDK, which enforces this), never an unauthenticated mode
+  (CBC/CTR/ECB without a MAC)** — stores `{ciphertext, wrapped_data_key, key_id}`, and decrypts on read.
   Key access follows `secrets-management` (runtime fetch, least-privilege IAM on the CMK, no key in
   the tree). Rotation is KMS's / `secrets-management`'s job — name it, don't reimplement it.
 - **SSE:** for personal data, declare storage-service SSE in `infra/` (Checkov enforces it).
