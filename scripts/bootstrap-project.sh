@@ -88,6 +88,43 @@ else
   note "[new]  .claude/settings.json (pipeline permissions, project-scoped)"
 fi
 
+# --- derived Bash allow rules from --start/--test/--build (autonomy plan 1.2) --
+# The commands bootstrap wires into smoke.env / CLAUDE.md are exactly the commands
+# the pipeline will run unattended — allowlist their prefixes now or the first run
+# prompts, which with nobody watching is a silent stall. jq-merge, idempotent
+# (re-running bootstrap never duplicates an entry). Prefix = first word, or first
+# two words for the venv-module form (".venv/bin/python -m app.main" -> ".venv/bin/python -m").
+SETTINGS="$TARGET/.claude/settings.json"
+if command -v jq >/dev/null 2>&1 && [[ -f "$SETTINGS" ]]; then
+  derived=0
+  for _cmd in "$START" "$TEST" "$BUILD"; do
+    [[ -z "$_cmd" ]] && continue
+    read -r _w1 _w2 _ <<<"$_cmd"
+    case "${_w2:-}" in
+      -m|-c) _prefix="$_w1 $_w2" ;;
+      *)
+        # Multi-word launchers keep their subcommand — "npm run" not the too-broad "npm".
+        case "$_w1" in
+          npm|gh|go|git|docker|terraform|cargo|make|poetry|uv)
+            _prefix="$_w1${_w2:+ $_w2}" ;;
+          *) _prefix="$_w1" ;;
+        esac ;;
+    esac
+    _rule="Bash(${_prefix}:*)"
+    if ! jq -e --arg r "$_rule" '.permissions.allow | index($r)' "$SETTINGS" >/dev/null 2>&1; then
+      _tmp="$(mktemp)"
+      if jq --arg r "$_rule" '.permissions.allow += [$r]' "$SETTINGS" > "$_tmp"; then
+        mv "$_tmp" "$SETTINGS"
+        derived=$((derived + 1))
+      else
+        rm -f "$_tmp"
+        echo "Warning: could not merge allow rule $_rule into $SETTINGS" >&2
+      fi
+    fi
+  done
+  [[ "$derived" -gt 0 ]] && note "[perm] $derived derived Bash allow rule(s) from --start/--test/--build"
+fi
+
 # --- per-project skill templates --------------------------------------------
 # test-conventions and semgrep-ruleset-guide carry <PLACEHOLDERS> the planning/
 # security agents fill per project, so they are project-local, not global.
@@ -367,4 +404,7 @@ echo "     in a design/ folder and set 'Design source:' in PROJECT.md — the de
 echo "     then replicates it. (Live Figma instead of an export: see docs/pipeline-mcp-config.md.)"
 echo "  3. Start a Claude Code session in this repo and tell it to run the pipeline"
 echo "     from planning (it loads the pipeline-orchestration skill)."
+echo "  4. Unattended runs: copy ~/.claude/pipeline-templates/notify.env.example to"
+echo "     ~/.claude/notify.env and set NTFY_TOPIC — checkpoint/cap/attention events"
+echo "     then page your phone via ntfy instead of waiting silently."
 echo "  Note: nothing here was committed — the deployment agent makes the first commit."

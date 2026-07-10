@@ -30,6 +30,10 @@ github.com
 api.github.com
 codeload.github.com
 
+# notify-checkpoint.sh — operator paging (autonomy plan 2.3). Notification-only:
+# payload = event kind + feature slug + repo name, never run content.
+ntfy.sh
+
 # implementation — package installs reuse the npm/PyPI hosts above; context7 MCP endpoint
 # is added per-project ONLY when the project wires it in .mcp.json.
 

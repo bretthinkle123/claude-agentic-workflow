@@ -9,7 +9,25 @@
       "Glob",
       "Write(./**)",
       "Edit(./**)",
-      "WebFetch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.github.com)",
+      "WebFetch(domain:code.claude.com)",
+      "WebFetch(domain:docs.claude.com)",
+      "WebFetch(domain:anthropic.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:packaging.python.org)",
+      "WebFetch(domain:fastapi.tiangolo.com)",
+      "WebFetch(domain:docs.pydantic.dev)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:nodejs.org)",
+      "WebFetch(domain:react.dev)",
+      "WebFetch(domain:osv.dev)",
+      "WebFetch(domain:semgrep.dev)",
+      "WebFetch(domain:owasp.org)",
+      "WebFetch(domain:developer.mozilla.org)",
       "WebSearch",
       "Skill",
       "TodoWrite",
@@ -50,7 +68,30 @@
       "Bash(npm install:*)",
       "Bash(pip install:*)",
       "Bash(pytest:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(bash $HOME/.claude/pipeline-templates/*)",
+      "Bash(bash ~/.claude/pipeline-templates/*)",
+      "Bash($HOME/.claude/pipeline-templates/*.sh)",
+      "Bash(~/.claude/pipeline-templates/*.sh)",
+      "Bash(gh run:*)",
+      "Bash(gh api:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(test:*)",
+      "Bash(wc:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(cp:*)",
+      "Bash(cd:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(node:*)",
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(.venv/bin/python:*)"
     ],
     "ask": [
       "Bash(git push --force:*)",
@@ -78,6 +119,29 @@
     ]
   },
   "enableAllProjectMcpServers": true,
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/hooks/notify-checkpoint.sh\" attention"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/hooks/guard-webfetch-domains.sh\""
+          }
+        ]
+      }
+    ]
+  },
   "autoMode": {
     "environment": [
       "$defaults",
@@ -91,6 +155,7 @@
       "$defaults",
       "Creating, modifying, or deleting the .pipeline approval markers (plan-approved, diff-approved, design-approved) or waivers.json by ANY means, including shell redirection, scripts, or git operations — these files exist solely so a human can approve pipeline checkpoints",
       "Shell commands that send data to external network destinations other than the project's git remote or package registries (use WebFetch or MCP tools instead)",
+      "Using WebFetch on any domain not present in the enumerated WebFetch allow rules (mirrored in ~/.claude/hooks/webfetch-domains.txt) — unlisted domains are DENIED, never prompted; an attacker-controlled URL is an exfiltration channel",
       "Reading credential material (~/.ssh, ~/.aws, .env files, cloud or API tokens) or writing anywhere outside the repository working directory"
     ]
   }

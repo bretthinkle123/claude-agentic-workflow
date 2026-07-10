@@ -73,6 +73,9 @@ string and those files — never assume it can see the conversation.
 1c. read revision_recommended from .pipeline/plan-audit.md frontmatter:
      if true: Agent(planning, "Revise .pipeline/plan.md: address every [material] flag in
               .pipeline/plan-audit.md, append ## Revision notes.")   # ONE pass only, no recursion
+     -> bash ~/.claude/hooks/notify-checkpoint.sh plan "$(jq -r '.feature // empty' .pipeline/state.json)"
+        # page the operator that the plan checkpoint is reached (unattended-run support);
+        # payload = event + slug + repo name only, never plan content
      -> review plan.md + plan-audit.md, then the HUMAN runs (in their own terminal, NOT the
         orchestrator — U-15/D1):
           bash ~/.claude/hooks/approve-plan.sh    # TTY-only; verifies plan.md exists, confirms, writes the marker
@@ -99,6 +102,9 @@ string and those files — never assume it can see the conversation.
 3-4. RUN-TO-CONDITION LOOP — security ⇄ debugging ⇄ testing, DETERMINISTIC exit only:
      repeat:
        bash ~/.claude/hooks/loop-guard.sh             # tick; exit 2 => CAP HIT: STOP + escalate to human
+       #   (on exit 2, ALSO page the operator before stopping:
+       #    bash ~/.claude/hooks/notify-checkpoint.sh capped "$(jq -r '.feature // empty' .pipeline/state.json)"
+       #    — same on a debugging max_retries cap-out escalation)
        Agent(security, "Scan per diff-scoping-conventions. Write security-report.md + security-status.json.")
        if jq -r .status security-status.json == "issues-found":
             Agent(debugging, "<finding>");  continue   # re-tick, re-scan from security
@@ -222,6 +228,8 @@ string and those files — never assume it can see the conversation.
         per-candidate with its own evidence quote (never a batch-level verdict); candidates
         whose fixes would interact (same file/function) go to the same verifier. Note the
         batching in the findings summary so the human knows the verification shape.
+     -> bash ~/.claude/hooks/notify-checkpoint.sh diff "$(jq -r '.feature // empty' .pipeline/state.json)"
+        # page the operator that the diff checkpoint is reached (never include diff/report content)
      -> present the diff + the /code-review findings + security/test/quality reports; the HUMAN
         reviews and runs:
           bash ~/.claude/hooks/approve-diff.sh     # human-only (refuses without a TTY); writes .pipeline/diff-approved
