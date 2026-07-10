@@ -90,6 +90,12 @@ When invoked:
      rate-limit tier against `api-edge-conventions`: a per-owner limit must be
      **principal-keyed post-auth**, not IP-keyed — flag a plan that says "per-owner" but
      describes an IP key or a pre-auth hook.
+     **Param-less endpoints too (M4″ ledger F4-01):** an endpoint that declares NO
+     query/body params must still carry an explicit no-params contract — unknown params
+     rejected (422 via `extra='forbid'`) or an N/A-with-rationale. The M4″ GET had no
+     row, so "N/A validation" read as complete while `?customer_id=X` was silently
+     ignored against the API-wide forbid convention — five stages passed it. An endpoint
+     absent from the contract table entirely is a **material** flag, not an N/A.
    - **Data-protection complete (MATERIAL) — every stored sensitive field has a named
      at-rest mechanism (or reasoned waiver), and the plan states a class per stored field.**
      Only when the plan stores user data. Confirm `plan.md`'s Data section classifies each

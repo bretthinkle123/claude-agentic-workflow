@@ -139,6 +139,13 @@ When invoked:
    tests covering the happy path, key error cases, and edge cases.
 3. For each changed API endpoint or service boundary, check whether an
    integration test exists. Write missing integration tests.
+   **Unknown-param assertion per changed endpoint (M4″ ledger F4-01):** for every
+   new/changed HTTP endpoint — INCLUDING param-less ones — one test sends an
+   undeclared query param (e.g. `?bogus=1`) and asserts the plan's no-params/
+   validation contract: rejected 422 under an `extra='forbid'` convention, or the
+   documented alternative the plan names. The M4″ GET silently ignored unknown
+   params against the API-wide forbid convention and no test could catch it
+   because no test sent one — the assertion is one line and closes the class.
 4. If the change touches the frontend, write missing E2E/UI specs per the
    E2E rule above (specs authored from reading the code — not live
    browser-driving). Skip entirely for backend-only changes.
@@ -258,6 +265,20 @@ When invoked:
      still leaves — untested branches, unasserted side effects, a criterion whose
      test verifies a weaker condition than it claims. Record `gaps[]`, each
      `{area, gap, severity}` (`low`/`medium`/`high`).
+   - **Falsifiability probe on security-property tests (M4″ ledger F4-02/F4-03 —
+     the vacuous-test class).** For each test asserting a security property
+     (redaction, fail-closed rollback, authz denial, safe-error envelope): prove
+     the assert CAN fail — break the property once (invert the guard, bypass the
+     redactor, point the assert at a scoped capture that excludes pre-existing
+     content), observe the test go RED, restore, observe GREEN. M4″ shipped two
+     vacuous tests this class would have caught: a fail-closed test whose
+     monkeypatch raised before any SQL ran (rollback never exercised) and a
+     redaction assert satisfied by a sentinel already present in the seed log.
+     Line coverage cannot see vacuity and mutation tooling is inert on win32 —
+     the probe is the deterministic substitute. Record
+     `falsifiability: {probed: N, unfalsifiable: [{test, reason}]}` in
+     `test-quality.json`; a test you cannot make fail belongs in `unfalsifiable`
+     (that IS the finding), never silently in `probed`.
    - Set `quality_ok` (bool) as an at-a-glance summary. **This artifact is advisory:
      no gate hook and no loop-exit condition reads it** — it informs the human
      reviewer (documentation surfaces it in the PR description). Skip mutation (and
@@ -376,12 +397,19 @@ When invoked:
      },
      "adversarial_review": {
        "gaps": [{ "area": "<module or ACn>", "gap": "", "severity": "low|medium|high" }]
+     },
+     "falsifiability": {
+       "probed": 0,
+       "unfalsifiable": [{ "test": "<test id>", "reason": "<why the assert cannot fail>" }]
      }
    }
    ```
    `mutation.score` is the kill ratio (advisory — not a threshold gate here);
    `adversarial_review.gaps` is what a passing suite still doesn't catch. An empty
    `gaps` list is a legitimate "no material gap found," not a skipped review.
+   `falsifiability` records the security-property probe (step 6b): `probed` counts
+   tests proven able to fail; `unfalsifiable` names any that could not — each is a
+   vacuous-test finding for the human, not a reason to delete the test silently.
 8. Report a summary listing:
    - **Passing tests**: count and test suite names
    - **Failing tests**: name and failure reason for each

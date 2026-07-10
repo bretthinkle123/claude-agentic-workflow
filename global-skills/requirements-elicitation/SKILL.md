@@ -39,7 +39,13 @@ beats "how should errors work?"). Probe at least:
   reject / degrade? what does the user see? is it idempotent?
 - **Non-functional budgets** — latency/throughput targets, data volume, expected
   concurrency (these become perf acceptance criteria; a number here is worth a dozen
-  later).
+  later). **Unbounded-collection budget (M4″ ledger F4-05):** whenever an endpoint
+  returns a collection and the operator declines pagination, do not stop there —
+  ask the expected maximum size AND the behavior at excess (hard cap? 413? accepted
+  risk, stated?). M4″ pinned "no pagination" and nobody asked what bounds the
+  response; the shipped SELECT had no LIMIT of any kind — a DoS lever at scale.
+  "No pagination" is a UX answer; "no bound" is a resource decision the operator
+  must make explicitly.
 - **Data & trust** — what is stored, its sensitivity (drives data-protection controls),
   who may see/act on each resource (authz boundaries).
 - **Assumptions to confirm** — anything you are about to assume, state it and get a
