@@ -247,6 +247,22 @@ test that asserts the property must exercise the variable that would actually br
   the plaintext never appears in storage. This proves the declared at-rest mechanism is actually in
   the persisted form, not just named (**ASVS V14 / 11.4.2**; the test half of security's
   `data_surface` reconciliation). A field with a `data_protection_waiver` needs no such test.
+- **Any `audit_trail` criterion** (a covered action on regulated records — see
+  `audit-trail-conventions`) → an **audit-event + append-only** test: perform the covered action as
+  an authenticated user, **query the raw audit sink** and assert the event exists with the right
+  actor/action/resource/outcome and **no field values** (references only); then attempt to
+  UPDATE/DELETE that event through every app-exposed path (and as the app's DB role) and assert it
+  is **refused** — for a managed sink with no mutable API (CloudWatch Logs, S3 Object Lock),
+  assert the immutability/retention **configuration** in `infra/` instead. A trail the app can
+  rewrite proves nothing; this is the test half of the audit-trail contract (HIPAA
+  access-accounting / SOC 2 monitoring).
+- **Any `data_lifecycle` criterion** (a declared retention/erasure path or DSR flow — see
+  `data-lifecycle-conventions`) → an **erasure-cascade** test: seed a user with data in **every
+  copy the criterion declares** (primary rows, cache, index, object storage), run the erasure flow,
+  then **query each raw store** and assert the data is gone or anonymized, declared-exempt rows
+  (audit events, legal-basis records) survive, and the erasure left an audit event. For an
+  export-my-data flow: the payload contains the requester's declared fields and **no other user's
+  data** (the cross-owner shape applied to DSR).
 - **Any feature that issues/consumes a self-contained token** (JWT/PASETO) → a **token-validation**
   test (ASVS-DET **T2-3**, ASVS 9.2.1/9.2.3): an **expired** token AND a **wrong-audience** (or
   wrong-issuer) token are **both rejected** (401), not just a happy-path valid token. A suite that

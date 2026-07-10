@@ -38,6 +38,14 @@ identity or protected resources; `logging-conventions` when it produces new
 observable events; `secrets-management` when the feature consumes runtime secrets
 or credentials (API keys, DB passwords, tokens); `data-protection-conventions` when the
 feature **stores** user data (classify each stored field → named at-rest control);
+`regulated-data-conventions` when the brief or `PROJECT.md` names a compliance regime
+(HIPAA, SOC 2, PCI DSS, GDPR/CCPA) **or** the data is health, financial, payment-card,
+or EU/California consumer data even if no regime is named — it maps the regime to owning
+skills and the organizational honesty list; `audit-trail-conventions` when a feature
+reads/writes regulated records (per-record access trail, `audit_trail` criteria);
+`data-lifecycle-conventions` when the app stores personal data beyond a transient
+request or adds a delete/deactivate/export flow (retention + erasure declarations,
+`data_lifecycle` criteria, DSR product features);
 `iac-conventions` when it
 provisions cloud infrastructure; `api-edge-conventions` when the feature exposes
 or consumes an HTTP surface (new routes, public API, webhook receiver, outbound

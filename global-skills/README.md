@@ -1,6 +1,14 @@
 # Global Skills
 
-This directory is the **source of truth** for all 15 global Claude Code skills used by the pipeline. Skills are not read from here at runtime — they must be installed to `~/.claude/skills/` where Claude Code resolves them.
+This directory is the **source of truth** for all global Claude Code skills used by the pipeline. Skills are not read from here at runtime — they must be installed to `~/.claude/skills/` where Claude Code resolves them.
+
+> **Standards review — last done 2026-07-09, next due 2027-07.** Skills are static text: the
+> security-standards-bearing ones (`data-protection-conventions`, `auth-patterns`,
+> `api-edge-conventions`, `secrets-management`, `regulated-data-conventions`,
+> `audit-trail-conventions`, `data-lifecycle-conventions`, `stride-threat-model-template`)
+> encode OWASP/ASVS/NIST guidance as of when they were written and nothing re-checks them
+> automatically. Once a year, re-verify their named mechanisms (KDF choice, cipher modes, TLS
+> versions, ASVS numbering, regime requirements) against current guidance and bump this line.
 
 ## How it works
 

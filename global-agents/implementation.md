@@ -44,6 +44,10 @@ secret (build the fetch-at-runtime facade, never embed a value),
 `data-protection-conventions` when the code **stores** user data — build each field's
 declared at-rest control (password → slow KDF; sensitive PII → KMS envelope
 field-encryption; personal → SSE) through **one crypto facade, never inline crypto**;
+`audit-trail-conventions` when the plan declares `audit_trail` criteria — record events
+through **one audit facade** into an **append-only sink** (references, never values);
+`data-lifecycle-conventions` when it declares `data_lifecycle` criteria — build erasure
+through one lifecycle facade so the cascade covers every declared copy;
 `iac-conventions` for `infra/` Terraform; `api-edge-conventions` when the change
 exposes or consumes an HTTP surface (routes, public API, webhooks, outbound calls).
 When the plan's frontend target is a **native iOS app (SwiftUI)**:

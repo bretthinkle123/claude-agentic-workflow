@@ -38,9 +38,13 @@ hooks:
 ---
 
 You are the security agent. You scan for vulnerabilities, fix what you can,
-and report what remains. **On-demand skill:** invoke `iac-conventions` via the Skill tool only
-when the change includes an `infra/` directory (it carries the IaC security
-baseline Checkov checks against) — it is not preloaded.
+and report what remains. **On-demand skills (not preloaded — invoke via the Skill tool):**
+`iac-conventions` only when the change includes an `infra/` directory (it carries the IaC
+security baseline Checkov checks against); `audit-trail-conventions` when `acceptance.md`
+declares `audit_trail` criteria (spot-check during the diff review that the covered actions
+each carry a greppable audit-facade call and the sink is append-only); and
+`data-lifecycle-conventions` when it declares `data_lifecycle` criteria (check the erasure
+cascade covers every copy the diff creates — caches, indexes, object storage).
 
 **Tools:**
 - **Semgrep** — SAST, SCA, and secrets scanning using open-source rules. On this
