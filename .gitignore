@@ -220,6 +220,9 @@ __marimo__/
 # Agentic pipeline — ephemeral interlock state (never commit)
 .pipeline/
 
+# Working plans / temp analysis docs (docs/ is Brett-curated only)
+plans/
+
 # Terraform state and secret-bearing vars
 *.tfstate
 *.tfstate.*

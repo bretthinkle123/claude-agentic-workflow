@@ -25,13 +25,16 @@ Skip standard-library modules and packages already present in an existing manife
 ## 2. Reality check each dependency (anti-slopsquatting)
 
 A hallucinated or typosquatted package name is a supply-chain attack vector — the implementation agent
-would install whatever is named. Verify each package **actually exists** on its registry by querying the
-registry JSON API with `curl` (deterministic, no LLM guessing). Use a short timeout and treat a network
-failure as "unverified", not "absent".
-- **npm:** `curl -fsS --max-time 15 https://registry.npmjs.org/<pkg>`
-  → HTTP 200 with a JSON body = exists; 404 = **does not exist**.
-- **PyPI:** `curl -fsS --max-time 15 https://pypi.org/pypi/<pkg>/json`
-  → 200 = exists; 404 = **does not exist**.
+would install whatever is named. Verify each package **actually exists** on its registry via the
+scoped wrapper (deterministic, no LLM guessing — and never bare `curl`, which is not allowlisted;
+the wrapper enumerates the registry hosts and rides the hooks allow rule, so the lookup never
+prompts an unattended run):
+- **npm:** `bash ~/.claude/hooks/registry-check.sh npm <pkg>`
+- **PyPI:** `bash ~/.claude/hooks/registry-check.sh pypi <pkg>`
+
+Exit codes: **0** = exists (registry JSON on stdout — reuse it for the version-policy dates in
+section 3); **4** = **does not exist** (404 — the slopsquat signal); **3** = network failure —
+treat as "unverified", NOT "absent"; **2** = bad invocation (fix the call, don't reinterpret).
 
 For each package classify:
 - **Does not exist (404)** → flag **critical**: "`<pkg>` not found on `<registry>` — possible

@@ -1,0 +1,43 @@
+# webfetch-domains.txt — domain allowlist for the WebFetch tool (autonomy plan 4.1/4.2).
+#
+# Enforced by guard-webfetch-domains.sh (settings-level PreToolUse hook, fails closed);
+# mirrored by the WebFetch(domain:...) allow rules in settings. One domain per line;
+# `#` comments and blank lines ignored; a leading `.` means "this host and any subdomain"
+# (same format as egress-allowlist.txt).
+#
+# ADMISSION RULE: documentation/registry/reference hosts only. NEVER add a paste/storage/
+# upload site (gists, pastebin, transfer.sh, file.io, ...) — an allowlisted RECEIVER
+# re-opens the exfiltration channel this list exists to close.
+#
+# Seed derived from M4″ mining (exactly one WebFetch in the whole run: code.claude.com)
+# plus the registry/docs hosts the stack predictably needs. Grow it from
+# .pipeline/webfetch-denied.jsonl triage, never speculatively.
+
+# GitHub (code, raw files, docs — API writes go through gh, not WebFetch)
+github.com
+raw.githubusercontent.com
+docs.github.com
+
+# Claude / Anthropic docs (observed in M4″)
+code.claude.com
+docs.claude.com
+.anthropic.com
+
+# Python ecosystem
+pypi.org
+docs.python.org
+packaging.python.org
+fastapi.tiangolo.com
+docs.pydantic.dev
+
+# Node ecosystem
+registry.npmjs.org
+www.npmjs.com
+nodejs.org
+react.dev
+
+# Security references
+osv.dev
+semgrep.dev
+owasp.org
+.mozilla.org
