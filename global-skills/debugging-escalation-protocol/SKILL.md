@@ -29,6 +29,19 @@ approach. There are two roles, one debugging agent definition.
 A bare warning never triggers remediation — only `critical_count > 0`, a gating
 dependency CVE (unwaived CVSS ≥ 7.0), or a failing test does.
 
+## Large-remediation decomposition (M4″-A6 — F-M4-11 extended to remediation)
+
+The per-task-segment sizing lesson applies to remediation briefs, not just
+implementation: the M4″ CI-fix was feature-sized (14 files, 6 independent root
+causes), was single-shotted, and capped twice (~260k subagent tokens; breadcrumbs
+and warm resumes recovered it, but that is the safety net, not the plan). Whoever
+drives you (orchestrator or operator): when a remediation brief spans **≥ 8 files
+or ≥ 3 independent root causes**, decompose it into per-root-cause segments and
+invoke debugging once per segment — each segment gets the reproduce→fix→prove
+cycle and its own turn budget, and a cap in one segment doesn't strand the others'
+completed work. Root causes are independent when their fixes touch disjoint files
+and neither's verification depends on the other's fix.
+
 ## Fixing discipline (every remediation)
 
 A fix is not done when the error stops — it is done when it is **proven** done.

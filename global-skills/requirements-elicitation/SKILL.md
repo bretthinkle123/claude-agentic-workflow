@@ -80,3 +80,13 @@ gate** — planning reads it, the deterministic gates never do.
 item into scope/criteria, each `Open` item into either a defaulted criterion (stated) or a
 checkpoint question, and treats `Out of scope` as hard exclusions. Its absence changes
 nothing — planning proceeds from the raw brief exactly as it does today.
+
+**Session isolation (M4″-A2).** After writing `requirements.md`, STOP and tell the
+operator to kick off the pipeline in a **fresh session** — `requirements.md` is the
+sanctioned channel between elicitation and planning, and the interview conversation
+should not precede orchestration in the same context window (it biases the
+orchestrator's escalation framing even though stage agents spawn with fresh
+contexts). You cannot mint a new top-level session yourself, so this is a handoff
+instruction, not a mechanism. If the operator kicks off in-session anyway, proceed
+(operator's call) but record it as a logged deviation in the run's touchpoint
+journal so the auditor sees it.

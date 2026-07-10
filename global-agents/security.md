@@ -550,6 +550,24 @@ When invoked:
      prior run's). A tool you did NOT run this pass (legitimately carried forward — infra
      byte-identical) is simply OMITTED from `scan_artifacts`; say "carried forward" in the report
      rather than claiming execution. Gitleaks is exempt (its in-scope filtering is triage).
+   - **Scanner liveness (M4″-A9): "zero findings" may only be recorded for a scanner that
+     provably RAN.** The M4″ run wrote `checkov_findings: 0` when Checkov had never executed
+     (no `scan-log.jsonl` stamp), and CI's OSV step had been exiting 127 for two features while
+     reading as "no findings" — a broken scanner step is indistinguishable from a clean one
+     unless you check liveness. Before writing `security-status.json`: (1) derive the REQUIRED
+     scanner set from the change set's own triggers — semgrep, osv, gitleaks, and trivy-fs
+     always; checkov iff the diff touches `infra/`; trivy config iff it touches a
+     Dockerfile/image; (2) for each required scanner, confirm a `scan-log.jsonl` execution
+     stamp from THIS pass with a non-empty result artifact (empty ≠ absent — an artifact of
+     zero findings still has parseable structure), or an explicit DISCLOSED reason in the
+     report — "carried forward: infra byte-identical" or "skipped: Docker down" both count;
+     the target is silent absence, not disclosed impossibility. For a wrapper that does not
+     yet stamp scan-log (currently gitleaks), the non-empty, freshly-mtimed
+     `.pipeline/gitleaks.json` itself is the liveness evidence;
+     (3) write each per-tool `*_findings` count as **`null` (or omit it) for a tool
+     that did not run** — `0` is a claim that the scanner ran and found nothing, never a
+     default. A required scanner with no stamp and no disclosure is itself a
+     **critical** finding ("scanner did not run"), not a zero.
    - `input_surface` (REQUIRED when the change exposes any input source — an HTTP route that
      accepts a body/query/path param, a form, a queue/message consumer, a file/CSV ingest, or
      a webhook receiver): reconcile the **implemented** input surface against the **declared**

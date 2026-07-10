@@ -287,6 +287,7 @@ When invoked:
      "total": 0, "passed": 0, "failed": 0,
      "skipped": { "count": 0, "tests": [] },
      "failures": [{ "name": "", "reason": "" }],
+     "pre_existing_failures": [{ "name": "", "evidence": "" }],
      "tests_by_type": { "unit": 0, "integration": 0, "e2e": 0 },
      "criteria_covered": {
        "total": 0, "covered": 0,
@@ -314,6 +315,17 @@ When invoked:
    `unit`/`integration` blocks are best-effort diagnostics — fill the fields you
    can produce and omit (or null) the rest. `tests_by_type` is the realized
    pyramid shape; `test_strategy` echoes the shape you followed from the plan.
+   **`pre_existing_failures` (M4″-A4):** `status: "pass"` with `failed > 0` is legal
+   ONLY when every failing test is out-of-diff AND has an entry here. Each entry's
+   `evidence` must state BOTH halves: (a) the test file and the code it exercises are
+   untouched by the change set (diff-scoping), and (b) the failure reproduces at
+   `since_commit` (check it out or cite the base-branch CI run) — "not my diff" without
+   reproduction at base is not evidence. The gate consumes `status`, so this field is
+   what keeps "pass with a disclosed pre-existing failure" structured instead of prose:
+   a failure in `failures[]` with no matching `pre_existing_failures[]` entry means
+   `status` MUST be `"fail"`. Never fix the pre-existing failure yourself (out of
+   scope); it surfaces in the PR description and, if it also breaks CI, gets routed by
+   the merge phase's pre-existing classification (see `pipeline-orchestration` 6c).
    **`skipped` (U-16g):** record `{count, tests:[names]}` for any tests skipped
    this run (e.g. a k6 load test that self-skips without Docker). `total` should
    equal `passed + failed + skipped.count` — the feature-3 run reported 161 total /

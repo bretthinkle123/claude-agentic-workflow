@@ -203,6 +203,12 @@ string and those files — never assume it can see the conversation.
         NOT --fix: applying changes here would alter the tree and force a re-review). Surface its
         findings so the human reviews an already-triaged diff. Advisory: findings inform, don't gate;
         a /code-review hiccup never wedges the pipeline — fall back to presenting the raw diff.
+     -> batched verification (M4″-A3, codified): when the finder pass yields > 8 candidates you
+        MAY batch verification into shared verifier agents (cost call) instead of one verifier
+        per candidate, under three conditions: ≤ 8 candidates per verifier; every verdict is
+        per-candidate with its own evidence quote (never a batch-level verdict); candidates
+        whose fixes would interact (same file/function) go to the same verifier. Note the
+        batching in the findings summary so the human knows the verification shape.
      -> present the diff + the /code-review findings + security/test/quality reports; the HUMAN
         reviews and runs:
           bash ~/.claude/hooks/approve-diff.sh     # human-only (refuses without a TTY); writes .pipeline/diff-approved
@@ -218,6 +224,45 @@ string and those files — never assume it can see the conversation.
      # after the deployment line is logged, makes .pipeline/run-summary.json the true whole-run
      # summary the retrospective quotes. Keep 4c too (the loop-GREEN snapshot still has value
      # if a run stops before deployment).
+6c. MERGE PHASE (M4″-A5 — post-deployment CI-watch → classify → merge; a MODELED phase,
+     not an improvisation. The M4″ run spent 04:25–07:09 doing all of this under an ad-hoc
+     escalation because the pipeline's invariants ended at "PR opened"; the loop-exit ≡ gate
+     equivalence does not extend to the merge unless this phase carries it there.)
+     -> WATCH: poll `gh pr checks <pr>` until every required context concludes. All green →
+        merge the PR; done.
+     -> CLASSIFY each failing context (deterministic first pass): find the latest run of that
+        context on the PR's merge-base commit on main. Failed there too → PRE-EXISTING.
+        Passed there (or the failing item touches files in the diff) → DIFF-CAUSED.
+     -> ROUTE diff-caused → the debugging agent ON THE FEATURE BRANCH (normal remediation
+        caps), then re-push and re-watch. The feature is not done while its own diff is red.
+     -> ROUTE pre-existing → ESCALATE to the operator (AskUserQuestion, journaled); never
+        fix main's debt inside the feature branch. Recommended shape: a dedicated
+        `ci-fix/<slug>` branch off main with its own PR that merges FIRST. That side-run:
+        (a) logs under its own key — run-log lines carry the ci-fix branch and MUST NOT
+        overwrite the feature's loop-quality metrics (`first_pass_clean` is a loop-window
+        metric; NOTE run-summary.sh does not yet segment by branch — until that lands,
+        quote the loop-GREEN 4c snapshot for loop quality and say so in the retrospective,
+        exactly the M4″ attribution nuance); (b) decomposes per
+        debugging-escalation-protocol's large-remediation rule (≥8 files / ≥3 root causes);
+        (c) is a NON-FEATURE COMMIT and gets the same human anchor the feature got: present
+        its diff and require `approve-diff.sh` (or an explicit journaled operator waiver
+        naming what was skipped) BEFORE its PR merges — M4″'s PR #5 shipped app-source
+        changes with no gate of any kind, which worked but was luck plus CI.
+     -> POST-INTEGRATION CURRENCY (the diff-approved clause, M4″ §4-item-6): if main moved
+        while the PR was open, merge main INTO the feature branch. No re-approval needed IFF
+        both: (a) `git show --cc <merge-commit>` is EMPTY — the resolution introduced zero
+        bytes beyond the parents (a union/superset resolution of a trivial conflict passes
+        this; verify, don't assume); (b) the feature-side diff is unchanged — compare
+        `git diff <new-merge-base>...HEAD` against the approved diff (NOTE
+        compute-change-hash.sh only hashes the working tree today; until it grows a
+        committed-diff mode, diff the three-dot patch against the approved patch by hand
+        and record the comparison in the journal). Either check fails → back to 5b for
+        re-approval.
+     -> STANDING POLICY CHANGES (repo settings, branch protection — M4″ §4-item-5): only on
+        an explicit journaled operator selection, recorded with a REVERT CONDITION (e.g.
+        "restore required_approving_review_count=1 when a second maintainer exists") in the
+        run's open-items list. Prefer the operator runs the `gh api` themselves; if you run
+        it, quote the exact command + before/after state in the journal.
 7. LEDGER DELTAS (U-10 — post-ship, do this before closing the run). For every
      verifier-CONFIRMED /code-review finding the human deferred (and any production incident
      later triaged), append a row to `docs/finding-ledger.md`: {finding, class,
