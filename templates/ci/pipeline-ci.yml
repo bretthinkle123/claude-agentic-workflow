@@ -187,10 +187,25 @@ jobs:
         # Image pinned by DIGEST (M4P-14): the unpinned :latest broke on an upstream flag
         # removal (--lockfile-scan-mode, exit 127) — the exact drift digest-pinning exists
         # to prevent. Bump the digest deliberately, in a reviewed diff.
+        # M4pp-A9 (scanner liveness): a scanner MALFUNCTION (exit 127-class) must read as
+        # "broken scan step", never blend into "dependency findings" — the 127 above was
+        # misread for two features while it masked a real CVE. Findings (exit 1 + a
+        # parseable result) and malfunction (anything else) now fail with distinct errors.
         run: |
+          set +e
           docker run --rm -v "$PWD:/src" -w /src \
             ghcr.io/google/osv-scanner@sha256:5116601dedc01c1c580eb92371883ec052fc4c13c3fbc109d621a63ac416d475 \
-            scan -r /src
+            scan -r --format json --output /src/osv-result.json /src
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then echo "OSV clean"; exit 0; fi
+          if [ "$rc" -eq 1 ] && jq -e . osv-result.json >/dev/null 2>&1; then
+            echo "::error::OSV found vulnerabilities (unwaived by osv-scanner.toml):"
+            jq -r '[.results[]?.packages[]?.vulnerabilities[]?.id] | unique | .[]' osv-result.json
+            exit 1
+          fi
+          echo "::error::OSV scanner MALFUNCTION (exit $rc, no parseable result) — a broken scan step, NOT a findings failure; fix the step, do not read this as dependency state (M4pp-A9)"
+          exit "$rc"
       - name: Lockfile integrity vs merge base (exit 2 blocks; exit 1 = warn, annotated not failed)
         if: steps.base.outputs.sha != ''
         run: |
@@ -225,19 +240,54 @@ jobs:
           fi
 
   containers-iac:
+    # M4pp-A9 (scanner liveness): Trivy and Checkov are INDEPENDENT steps — for two
+    # features the Trivy step failed first and short-circuited Checkov, which had
+    # therefore NEVER run; its true surface (48 failed checks) surfaced only when Trivy
+    # was fixed. Each scanner runs regardless of the other (continue-on-error +
+    # if: always()), each must emit a parseable result artifact (absence ≠ clean; a
+    # disclosed no-infra skip writes a sentinel), and a final liveness step fails the
+    # job on any missing artifact or failed scanner — so "scanner never ran" and
+    # "scanner ran, found nothing" are mechanically distinct states.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Trivy fs (vuln + secret + misconfig; honors committed .trivyignore)
+        id: trivy
+        continue-on-error: true   # a Trivy red must not stop Checkov; the liveness step re-fails the job
         run: |
           docker run --rm -v "$PWD:/src" -w /src aquasec/trivy:latest \
-            fs --scanners vuln,secret,misconfig --exit-code 1 --severity HIGH,CRITICAL /src
+            fs --scanners vuln,secret,misconfig --exit-code 1 --severity HIGH,CRITICAL \
+            --format json --output /src/trivy-result.json /src
       - name: Checkov (only when infra/ exists)
+        id: checkov
+        if: always()               # runs even when Trivy failed (the M4pp short-circuit)
+        continue-on-error: true
         run: |
           if [ -d infra ]; then
-            docker run --rm -v "$PWD:/src" -w /src bridgecrew/checkov:latest -d /src/infra
-          else echo "no infra/ — skipped"; fi
+            docker run --rm -v "$PWD:/src" -w /src bridgecrew/checkov:latest \
+              -d /src/infra -o cli -o json --output-file-path console,/src/checkov-result.json
+          else
+            echo '{"skipped":"no infra/ in this repo"}' > checkov-result.json
+            echo "no infra/ — skipped (sentinel artifact written)"
+          fi
+      - name: Scanner liveness + verdict (M4pp-A9)
+        if: always()
+        run: |
+          fail=0
+          if ! jq -e . trivy-result.json >/dev/null 2>&1; then
+            echo "::error::Trivy produced no parseable result artifact — a scanner that never ran is not a clean scan"; fail=1
+          fi
+          if ! jq -e . checkov-result.json >/dev/null 2>&1; then
+            echo "::error::Checkov produced no parseable result artifact (and no disclosed skip sentinel)"; fail=1
+          fi
+          if [ "${{ steps.trivy.outcome }}" = "failure" ]; then
+            echo "::error::Trivy failed (findings or crash — see its step log)"; fail=1
+          fi
+          if [ "${{ steps.checkov.outcome }}" = "failure" ]; then
+            echo "::error::Checkov failed checks (see its step log)"; fail=1
+          fi
+          exit $fail
 
   asvs-markers:
     runs-on: ubuntu-latest
