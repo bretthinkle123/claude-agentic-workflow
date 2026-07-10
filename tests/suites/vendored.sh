@@ -29,12 +29,14 @@ fi
 #    manifest row naming its dir. This is the "no vendoring without a row" invariant.
 is_firstparty() {
   case "$1" in
-    api-edge-conventions|auth-patterns|ci-conventions|code-standards|\
-containerization-conventions|dast-conventions|data-protection-conventions|ddia-patterns|\
+    api-edge-conventions|audit-trail-conventions|auth-patterns|ci-conventions|code-standards|\
+containerization-conventions|dast-conventions|data-lifecycle-conventions|\
+data-protection-conventions|ddia-patterns|\
 debugging-escalation-protocol|delivery-conventions|dependency-audit-policy|\
 deployment-checklist-and-rollback|diff-scoping-conventions|doc-conventions|\
 iac-conventions|logging-conventions|observability-conventions|pipeline-orchestration|\
-requirements-elicitation|secrets-management|stride-threat-model-template|triage-conventions) return 0 ;;
+regulated-data-conventions|requirements-elicitation|secrets-management|\
+stride-threat-model-template|triage-conventions) return 0 ;;
     *) return 1 ;;
   esac
 }
