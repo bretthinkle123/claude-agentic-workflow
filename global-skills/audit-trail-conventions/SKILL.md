@@ -44,8 +44,11 @@ declares slips through; the plan checkpoint + security's diff review are the bac
 ```
 
 The **references-not-values** rule is what lets the trail be retained for years without itself
-becoming a sensitive-PII store needing field encryption. If a change needs before/after forensics,
-store a pointer to a versioned record, not the data in the event.
+becoming a sensitive-PII store needing field encryption. It is still not non-sensitive: actor ids
+and `origin_ip` are **personal**-class data (`data-protection-conventions`) — classify the events
+table `personal` (SSE at rest) and record its erasure exemption with a legal-obligation basis in
+the lifecycle table. If a change needs before/after forensics, store a pointer to a versioned
+record, not the data in the event.
 
 ## The audit facade (one module, like crypto)
 

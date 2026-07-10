@@ -33,7 +33,7 @@ Extend the `data-protection-conventions` classification table with two columns:
 | field | class | at-rest mechanism | retention | deletion path |
 | users.email | personal | SSE | life of account + 30d | hard delete on account deletion |
 | orders.* | personal | SSE | 7y (tax law) — survives account deletion | anonymize user linkage |
-| audit_events.* | non-sensitive (refs only) | — | 6y (HIPAA) | exempt from erasure (legal hold) |
+| audit_events.* | personal (actor ids + origin IP, values-free) | SSE | 6y (HIPAA) | exempt from erasure (legal-obligation basis) |
 ```
 
 Every retention that **outlives account deletion needs a stated legal basis** (tax, audit trail,

@@ -252,8 +252,10 @@ test that asserts the property must exercise the variable that would actually br
   an authenticated user, **query the raw audit sink** and assert the event exists with the right
   actor/action/resource/outcome and **no field values** (references only); then attempt to
   UPDATE/DELETE that event through every app-exposed path (and as the app's DB role) and assert it
-  is **refused**. A trail the app can rewrite proves nothing; this is the test half of the
-  audit-trail contract (HIPAA access-accounting / SOC 2 monitoring).
+  is **refused** — for a managed sink with no mutable API (CloudWatch Logs, S3 Object Lock),
+  assert the immutability/retention **configuration** in `infra/` instead. A trail the app can
+  rewrite proves nothing; this is the test half of the audit-trail contract (HIPAA
+  access-accounting / SOC 2 monitoring).
 - **Any `data_lifecycle` criterion** (a declared retention/erasure path or DSR flow — see
   `data-lifecycle-conventions`) → an **erasure-cascade** test: seed a user with data in **every
   copy the criterion declares** (primary rows, cache, index, object storage), run the erasure flow,
