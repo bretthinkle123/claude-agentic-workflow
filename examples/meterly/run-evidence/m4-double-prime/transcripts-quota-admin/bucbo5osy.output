@@ -1,0 +1,584 @@
+ .gitignore                                    |  1 +
+ PROJECT.md                                    |  8 ++--
+ docs/system_architecture.md                   | 64 ++++++++++++++++++++++---
+ src/api/README.md                             | 10 ++--
+ src/api/middleware.py                         |  2 +-
+ src/api/routes/quotas.py                      | 45 +++++++++++++++---
+ src/api/schemas/quotas.py                     | 16 +++++++
+ src/repositories/README.md                    | 10 +++-
+ src/repositories/quotas_repo.py               | 66 ++++++++++++++++++++++++++
+ src/services/README.md                        |  7 +--
+ src/services/quota_service.py                 | 65 +++++++++++++++++++++++---
+ tests/README.md                               |  2 +-
+ tests/integration/README.md                   |  3 +-
+ tests/integration/test_quotas_rls_backstop.py | 67 +++++++++++++++++++++++++++
+ tests/test_schemas_quotas.py                  | 64 ++++++++++++++++++++++++-
+ 15 files changed, 393 insertions(+), 37 deletions(-)
+----
+diff --git a/src/api/README.md b/src/api/README.md
+index d49e044..d5ece81 100644
+--- a/src/api/README.md
++++ b/src/api/README.md
+@@ -11,14 +11,14 @@ HTTP API layer: FastAPI route handlers, request/response schemas (Pydantic v2),
+ | `routes/events.py` | `POST /v1/events` handler; calls `events_service.create_event`. |
+ | `routes/usage.py` | `GET /v1/usage` handler; calls `usage_service.get_usage`. |
+ | `routes/usage_export.py` | `GET /v1/usage/export` handler; two-phase pre-flight row-cap check (`usage_export_service.prepare_export`) then a `StreamingResponse` body (`usage_export_service.stream_export_csv`). Kept in its own module (not added to `usage.py`) so `GET /v1/usage`'s code path stays untouched. Declares explicit `responses=` OpenAPI metadata (200 `text/csv`, 422) since a `StreamingResponse` has no `response_model` to introspect. |
+-| `routes/quotas.py` | `PUT /v1/quotas` handler; composes auth -> Tier-2 throttle -> an `admin`-scope gate (403 `forbidden` otherwise) -> `quota_service.upsert_tenant_quota`. |
++| `routes/quotas.py` | `PUT /v1/quotas`, `GET /v1/quotas`, and `DELETE /v1/quotas` handlers, all composing the shared `_require_admin_and_throttled` dependency (auth -> Tier-2 throttle -> an `admin`-scope gate, 403 `forbidden` otherwise). `PUT` calls `quota_service.upsert_tenant_quota`; `GET` (`list_quotas_endpoint`) calls `quota_service.list_tenant_quotas` and returns `list[QuotaResponse]`; `DELETE` (`delete_quota_endpoint`) takes `Annotated[QuotaDeleteParams, Query()]`, calls `quota_service.delete_tenant_quota`, and returns `204 No Content` (404 if no such quota exists in the caller's tenant). |
+ | `routes/health.py` | `GET /health` (liveness, no dependencies) and `GET /health/ready` (readiness, DB + migration check). |
+ | `schemas/events.py` | Pydantic models for POST /v1/events request and response; `extra='forbid'` contract enforcement. Also defines the `CustomerId`/`Metric` anchored-allowlist `constr` types reused by `schemas/usage.py` and `schemas/usage_export.py`. |
+ | `schemas/usage.py` | Pydantic models for GET /v1/usage request (query parameters) and response. |
+ | `schemas/usage_export.py` | `UsageExportQueryParams` for GET /v1/usage/export — optional `customer_id`/`metric`/`from`/`to` filters (`from` bound via a Pydantic alias to the `from_` field, since `from` is a Python keyword), the same `[now-90d, now+1h]` range bound as `usage.py`, `extra='forbid'`. |
+-| `schemas/quotas.py` | Pydantic models for PUT /v1/quotas request (`customer_id`, `metric`, `limit_per_window`, `extra='forbid'`) and response (echo shape). |
++| `schemas/quotas.py` | Pydantic models for `/v1/quotas`: `QuotaPutRequest` (PUT body: `customer_id`, `metric`, `limit_per_window`, `extra='forbid'`), `QuotaResponse` (PUT/GET response echo shape, minimal field set), and `QuotaDeleteParams` (DELETE query params: `customer_id`, `metric`, reusing the same anchored `CustomerId`/`Metric` allowlists as `QuotaPutRequest`, `extra='forbid'`). |
+ | `csv_export.py` | The CSV encoding facade for the export route: `EXPORT_HEADER`, `escape_csv_text_cell` (the OWASP CSV/formula-injection escape, applied at the encoding sink independent of upstream ingest validation), and the `format_window_start`/`format_total_quantity` value formatters. |
+-| `middleware.py` | Request-ID / trace-ID assignment, security headers (HSTS, CSP, X-Frame-Options), CORS (allows GET/POST/PUT). |
++| `middleware.py` | Request-ID / trace-ID assignment, security headers (HSTS, CSP, X-Frame-Options), CORS (allows GET/POST/PUT/DELETE). |
+ | `errors.py` | Error-envelope boundary: catches all unhandled exceptions and returns `{error:{code,message,requestId}}` with no stack/secret leakage. `AppError` lets a raised exception carry an explicit `app_code` (e.g. `quota_exceeded`) that overrides the default status->code map — needed because 429 is shared by two distinct codes (`rate_limited` vs `quota_exceeded`). |
+ 
+ ## Relationships
+@@ -53,11 +53,13 @@ HTTP API layer: FastAPI route handlers, request/response schemas (Pydantic v2),
+ - `quantity` is a decimal > 0 (no zero or negative); `idempotency_key` is alphanumeric + underscore/dash.
+ - GET `/v1/usage` requires a timezone-aware ISO-8601 `window` parameter within 90 days past to 1 hour future (naive datetimes rejected).
+ - PUT `/v1/quotas`: `limit_per_window` is an integer `>= 1` (`<= 1e15`, BIGINT-safe); `customer_id`/`metric` reuse the same anchored allowlists as events; unknown fields (including a client-supplied `api_key_id`/`scope`) are rejected outright.
++- GET `/v1/quotas` accepts no body/query/path parameter (full, unpaginated list of the caller's tenant); DELETE `/v1/quotas` takes `customer_id`/`metric` as **query parameters** (`QuotaDeleteParams`), reusing PUT's exact same anchored allowlists; unknown query params (including a client-supplied `api_key_id`) are rejected outright.
+ - GET `/v1/usage/export`: every filter (`customer_id`, `metric`, `from`, `to`) is optional; `from`/`to` follow the same timezone-aware, `[now-90d, now+1h]`-bounded contract as `usage.py`'s `window`, plus `from <= to`; unknown query params (including a client-supplied `api_key_id`) are rejected outright. A result exceeding 100,000 rows is rejected 422 *before* any response byte (a pre-flight `COUNT`, not a mid-stream cutoff).
+ 
+ **Error handling:**
+ - Authentication failures (missing/invalid key) → 401/403 before handlers run.
+-- `PUT /v1/quotas` from a non-`admin`-scoped key → 403 `forbidden` (function-level authorization, checked in the route's composed dependency).
++- `PUT`/`GET`/`DELETE /v1/quotas` from a non-`admin`-scoped key → 403 `forbidden` (function-level authorization, checked in the route's shared `_require_admin_and_throttled` dependency).
++- `DELETE /v1/quotas` for a `(customer_id, metric)` not present in the caller's tenant → 404 `not_found` (explicit, not silently idempotent); a cross-tenant delete attempt is indistinguishable from this (matches zero rows under the `api_key_id` filter + FORCE RLS).
+ - Rate-limit exceeded (Tier-1 or Tier-2) → 429 `rate_limited` + Retry-After header.
+ - `POST /v1/events` over its quota → 429 `quota_exceeded` (distinct code, same status) + Retry-After to the next hour boundary; no event/rollup written (transaction rolled back).
+ - Schema validation failure → 422 with Pydantic error detail.
+diff --git a/src/api/middleware.py b/src/api/middleware.py
+index f21399c..7b6f60b 100644
+--- a/src/api/middleware.py
++++ b/src/api/middleware.py
+@@ -160,6 +160,6 @@ def configure_cors(app: FastAPI, settings: Settings) -> None:
+         CORSMiddleware,
+         allow_origins=list(settings.cors_allowed_origins),
+         allow_credentials=False,
+-        allow_methods=["GET", "POST", "PUT"],
++        allow_methods=["GET", "POST", "PUT", "DELETE"],
+         allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+     )
+diff --git a/src/api/routes/quotas.py b/src/api/routes/quotas.py
+index 2443d41..b31d62b 100644
+--- a/src/api/routes/quotas.py
++++ b/src/api/routes/quotas.py
+@@ -1,21 +1,30 @@
+-"""`PUT /v1/quotas` — admin-scoped create-or-replace of a per-customer,
+-per-metric usage cap.
++"""`/v1/quotas` — admin-scoped create-or-replace (`PUT`), list (`GET`), and
++remove (`DELETE`) of a per-customer, per-metric usage cap.
+ 
+ Edge behavior (security headers, CORS, body-size guard, Tier-1 throttle) is
+-inherited from the middleware stack; this route wires
++inherited from the middleware stack; every route on this router wires
+ auth -> Tier-2 throttle -> admin-scope check -> schema validation -> service,
+ mirroring the `events`/`usage` routes' sibling `_require_authenticated_and_throttled`
+-pattern (kept per-route, not shared, per the existing convention).
++pattern (kept per-route, not shared, per the existing convention). All three
++verbs depend on the same `_require_admin_and_throttled` chain — GET/DELETE
++reuse it verbatim rather than introducing a new scope or auth path.
+ """
+ 
+-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
++from typing import Annotated
+ 
+-from src.api.schemas.quotas import QuotaPutRequest, QuotaResponse
++from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
++
++from src.api.schemas.quotas import QuotaDeleteParams, QuotaPutRequest, QuotaResponse
+ from src.auth import require_api_key
+ from src.auth.api_key import AuthenticatedPrincipal
+ from src.auth.rate_limit import enforce_tier2_rate_limit
+ from src.logging import get_logger
+-from src.services.quota_service import to_response, upsert_tenant_quota
++from src.services.quota_service import (
++    delete_tenant_quota,
++    list_tenant_quotas,
++    to_response,
++    upsert_tenant_quota,
++)
+ 
+ router = APIRouter(tags=["quotas"])
+ logger = get_logger(service="meterly")
+@@ -54,3 +63,25 @@ async def put_quota(
+     outcome = await upsert_tenant_quota(principal, payload)
+     response.status_code = outcome.http_status
+     return to_response(outcome)
++
++
++@router.get("/v1/quotas", response_model=list[QuotaResponse])
++async def list_quotas_endpoint(
++    principal: AuthenticatedPrincipal = Depends(_require_admin_and_throttled),
++) -> list[QuotaResponse]:
++    """Return the caller's own tenant's full, unpaginated quota list,
++    deterministically ordered by `(customer_id, metric)`. An empty tenant
++    gets `200 []`, never a 404."""
++    return await list_tenant_quotas(principal)
++
++
++@router.delete("/v1/quotas", status_code=status.HTTP_204_NO_CONTENT)
++async def delete_quota_endpoint(
++    params: Annotated[QuotaDeleteParams, Query()],
++    principal: AuthenticatedPrincipal = Depends(_require_admin_and_throttled),
++) -> Response:
++    """Remove the cap for `(customer_id, metric)` under the caller's own
++    tenant — 204 on success, 404 if no such quota exists in this tenant
++    (explicit, not silently idempotent)."""
++    await delete_tenant_quota(principal, params)
++    return Response(status_code=status.HTTP_204_NO_CONTENT)
+diff --git a/src/api/schemas/quotas.py b/src/api/schemas/quotas.py
+index d1270ff..3fcd099 100644
+--- a/src/api/schemas/quotas.py
++++ b/src/api/schemas/quotas.py
+@@ -45,3 +45,19 @@ class QuotaResponse(BaseModel):
+     customer_id: str
+     metric: str
+     limit_per_window: int
++
++
++class QuotaDeleteParams(BaseModel):
++    """The two required query parameters of `DELETE /v1/quotas`, reusing the
++    exact same anchored `CustomerId`/`Metric` allowlists `QuotaPutRequest`
++    validates against — same identifiers, same sinks, same rejection
++    behavior (422). `extra='forbid'` rejects any unknown query param
++    (including a client-supplied `api_key_id`), the mass-assignment defense
++    that keeps the delete target's tenant resolved only from the
++    authenticated principal (ASVS 15.3.3).
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    customer_id: CustomerId
++    metric: Metric
+diff --git a/src/repositories/README.md b/src/repositories/README.md
+index fb6b4da..fdb474f 100644
+--- a/src/repositories/README.md
++++ b/src/repositories/README.md
+@@ -11,14 +11,14 @@ Data access layer: SQL queries with parameterization, row-level scoping (by auth
+ | `events_repo.py` | `insert_event_if_new(session, *, api_key_id, customer_id, metric, quantity, idempotency_key, window_start)` — `INSERT ... ON CONFLICT (api_key_id, idempotency_key) DO NOTHING`, returning `None` on a duplicate. `find_event_by_idempotency_key(session, *, api_key_id, idempotency_key)` — reads back the original row on a duplicate replay. `increment_usage_rollup(session, *, api_key_id, customer_id, metric, window_start, quantity)` — the rollup upsert, called only after `insert_event_if_new` returns a row. |
+ | `usage_repo.py` | `find_usage_rollup(api_key_id, customer_id, metric, window_start)` — SELECT from `usage_rollup` scoped by `api_key_id`. Returns None if missing (caller handles zero conversion). `count_usage_rollups(api_key_id, customer_id=None, metric=None, window_from=None, window_to=None)` — the export's pre-flight row-cap count over the same optional filters. `stream_usage_rollups(api_key_id, ..., limit)` — the export's server-side-cursor stream (`session.stream(...)`, yields `UsageRollupExportRecord`), ordered by a **fixed literal** `ORDER BY window_start, customer_id, metric` (never client-derived) with `LIMIT`. The count and stream queries share a `_export_filter_clause_and_params` helper so their WHERE clauses can never drift apart. |
+ | `api_keys_repo.py` | `find_active_key_by_key_id(key_id)` — SELECT from `api_keys` by public `key_id` (used by auth cache miss); returns the full row including `scope`. `create_api_key(..., scope="ingest")` — the only key-provisioning path. |
+-| `quotas_repo.py` | `upsert_quota(...)` — `INSERT ... ON CONFLICT (api_key_id, customer_id, metric) DO UPDATE ... RETURNING (xmax = 0) AS inserted`, reporting create-vs-replace in one round-trip. `read_tenant_quota_state_locked(...)` — the atomic check-then-decide: locks the quota row (`FOR UPDATE`), then reads the current-window rollup total as a **separate, fresh** statement (see *Notes* below for why). Returns `None` when no quota exists (unlimited, no lock taken). |
++| `quotas_repo.py` | `upsert_quota(...)` — `INSERT ... ON CONFLICT (api_key_id, customer_id, metric) DO UPDATE ... RETURNING (xmax = 0) AS inserted`, reporting create-vs-replace in one round-trip. `read_tenant_quota_state_locked(...)` — the atomic check-then-decide: locks the quota row (`FOR UPDATE`), then reads the current-window rollup total as a **separate, fresh** statement (see *Notes* below for why). Returns `None` when no quota exists (unlimited, no lock taken). `list_quotas(session, *, api_key_id)` — `api_key_id`-scoped `SELECT customer_id, metric, limit_per_window ... ORDER BY customer_id, metric` (index-friendly on the table's PK prefix), returns `list[QuotaListItem]`. `delete_quota(session, *, api_key_id, customer_id, metric)` — parameterized `DELETE ... WHERE api_key_id = :api_key_id AND customer_id = :customer_id AND metric = :metric RETURNING customer_id`, returns `bool` (whether a row matched and was removed). |
+ 
+ ## Relationships
+ 
+ **Public surface:**
+ - Imported by `src/services.{events_service, usage_service, usage_export_service, quota_service}` to execute queries.
+ - `api_keys_repo` is also imported by `src/auth.api_key` (credential lookup on cache miss).
+-- `quotas_repo` is imported by both `quota_service` (the upsert) and `events_service` (the read-and-decide).
++- `quotas_repo` is imported by `quota_service` (the upsert, list, and delete) and `events_service` (the read-and-decide).
+ 
+ **Dependencies:**
+ - All functions are async; they receive an `AsyncSession` from the service layer (obtained via `src/db.session_context`).
+@@ -34,6 +34,7 @@ Data access layer: SQL queries with parameterization, row-level scoping (by auth
+ **Field projections (minimal surface):**
+ - `insert_event_if_new` / `find_event_by_idempotency_key` return an `EventRecord{id, api_key_id, customer_id, metric, quantity, idempotency_key, window_start}` — the service layer maps this to the minimal public response shape (not the full row is a service-layer concern, not a repo-layer projection).
+ - `find_usage_rollup` returns only `{total_quantity, event_count}` — not internal bookkeeping (`updated_at`, `api_key_id`).
++- `list_quotas` returns `QuotaListItem{customer_id, metric, limit_per_window}` — the same minimal shape `QuotaResponse` echoes, never `api_key_id`/timestamps.
+ - `stream_usage_rollups` yields `UsageRollupExportRecord{customer_id, metric, window_start, total_quantity}` — exactly the four exported columns, never `event_count`, `updated_at`, or `api_key_id`.
+ - `api_keys_repo.get_by_key_id` returns the full row (needed by auth for `secret_hash`, `rate_limit_per_sec`, `revoked_at`).
+ 
+@@ -48,6 +49,11 @@ Data access layer: SQL queries with parameterization, row-level scoping (by auth
+ - If the unique constraint is violated, the INSERT returns no rows.
+ - The service layer checks `if result` — if a row was returned, this request won the insert; if not, a duplicate is detected.
+ 
++**DELETE ... RETURNING pattern:**
++- `delete_quota` issues a single parameterized `DELETE ... WHERE api_key_id = :api_key_id AND customer_id = :customer_id AND metric = :metric RETURNING customer_id`.
++- Whether a row was returned (not a row-count check) is what the service uses to distinguish "removed" from "nothing there to remove" — avoids a separate existence check and the TOCTOU gap that would introduce between check and delete.
++- A cross-tenant call matches zero rows here (the `api_key_id` filter + FORCE RLS backstop), which the service maps to the same 404 as a truly-absent quota — the BOLA-safe behavior.
++
+ **RLS context setup:**
+ - Before any query, `src/db.session_context` sets `SET LOCAL app.current_api_key_id = :id` in the transaction.
+ - This context variable is read by the PostgreSQL RLS policy on every table access.
+diff --git a/src/repositories/quotas_repo.py b/src/repositories/quotas_repo.py
+index 52e9394..9578be4 100644
+--- a/src/repositories/quotas_repo.py
++++ b/src/repositories/quotas_repo.py
+@@ -36,6 +36,15 @@ class QuotaState:
+     current_total: Decimal
+ 
+ 
++@dataclass(frozen=True)
++class QuotaListItem:
++    """One row of `GET /v1/quotas`'s listing — the minimal, public quota shape."""
++
++    customer_id: str
++    metric: str
++    limit_per_window: int
++
++
+ async def upsert_quota(
+     session: AsyncSession,
+     *,
+@@ -147,3 +156,60 @@ async def read_tenant_quota_state_locked(
+     rollup_row = rollup_result.mappings().first()
+     current_total = rollup_row["total_quantity"] if rollup_row is not None else Decimal(0)
+     return QuotaState(limit_per_window=lock_row["limit_per_window"], current_total=Decimal(current_total))
++
++
++async def list_quotas(session: AsyncSession, *, api_key_id: int) -> list[QuotaListItem]:
++    """Return every quota row for the caller's own tenant, ordered by
++    `(customer_id, metric)` for a deterministic, repeatable listing.
++
++    The `ORDER BY` matches the leading columns of the table's primary key
++    `(api_key_id, customer_id, metric)`, so the sort is index-friendly on top
++    of the already-scoped index scan (plan §"deterministic ORDER BY").
++    """
++    result = await session.execute(
++        text(
++            """
++            SELECT customer_id, metric, limit_per_window
++            FROM quotas
++            WHERE api_key_id = :api_key_id
++            ORDER BY customer_id, metric
++            """
++        ),
++        {"api_key_id": api_key_id},
++    )
++    return [
++        QuotaListItem(
++            customer_id=row["customer_id"],
++            metric=row["metric"],
++            limit_per_window=row["limit_per_window"],
++        )
++        for row in result.mappings().all()
++    ]
++
++
++async def delete_quota(
++    session: AsyncSession, *, api_key_id: int, customer_id: str, metric: str
++) -> bool:
++    """Remove the cap for `(api_key_id, customer_id, metric)`, returning
++    whether a row actually matched and was removed.
++
++    `RETURNING customer_id` on a single-statement, parameterized `DELETE` is
++    what lets the service distinguish "removed" from "nothing there to
++    remove" without a separate existence check (avoiding a TOCTOU gap
++    between check and delete). The explicit `api_key_id` filter is the
++    primary tenant-confinement control; `quotas_tenant_isolation` FORCE RLS
++    (migration `0003`) is the backstop — a cross-tenant call matches zero
++    rows here, which the service maps to 404 (plan §"Tenant confinement is
++    structural, not a special case").
++    """
++    result = await session.execute(
++        text(
++            """
++            DELETE FROM quotas
++            WHERE api_key_id = :api_key_id AND customer_id = :customer_id AND metric = :metric
++            RETURNING customer_id
++            """
++        ),
++        {"api_key_id": api_key_id, "customer_id": customer_id, "metric": metric},
++    )
++    return result.mappings().first() is not None
+diff --git a/src/services/README.md b/src/services/README.md
+index c7aacf6..8ce7cfc 100644
+--- a/src/services/README.md
++++ b/src/services/README.md
+@@ -11,7 +11,7 @@ Business logic layer: event ingestion (with idempotency and counter atomicity),
+ | `events_service.py` | `create_event(principal, payload)` — inserts an event, checks the caller's quota (if any) on the winning-insert branch, and increments the hourly counter, all in one transaction; idempotent on `idempotency_key`. Raises `QuotaExceededError` (429 `quota_exceeded`) when `R + Q > L`, which rolls back the event insert. Returns the created/replayed event. |
+ | `usage_service.py` | `get_usage(principal, query)` — reads the aggregated counter for the `(customer_id, metric, window)` bucket in `query` (a `UsageQueryParams`); returns zeros if the bucket is empty (never 404). |
+ | `usage_export_service.py` | `prepare_export(principal, params)` — the pre-flight row-cap check: a `COUNT(*)` in its own transaction, raising a plain 422 `HTTPException` over `MAX_EXPORT_ROWS` (100,000) *before* any response byte; any other (non-cap) error propagates uncaught to the error-envelope boundary (fail-closed 500, no stream ever started). `stream_export_csv(principal, params)` — the `StreamingResponse` body generator: opens its own tenant-scoped transaction (Starlette pulls it only after the route returns), yields the header row first always (so an empty result is a 200 header-only CSV, never 404), then one CSV-encoded row per streamed rollup at constant memory (a reused `io.StringIO`, drained and reset per row), and logs one `usage.export` audit event in a `finally` block (fires even on a client disconnect or a mid-stream error). |
+-| `quota_service.py` | `upsert_tenant_quota(principal, payload)` — create-or-replaces the caller's cap for `(customer_id, metric)` in one transaction; maps the repository's insert-vs-replace signal to 201/200 and logs the `quota.upsert` audit event. |
++| `quota_service.py` | `upsert_tenant_quota(principal, payload)` — create-or-replaces the caller's cap for `(customer_id, metric)` in one transaction; maps the repository's insert-vs-replace signal to 201/200 and logs the `quota.upsert` audit event. `list_tenant_quotas(principal)` — opens a `scoped_transaction`, calls `quotas_repo.list_quotas`, and maps the rows to `list[QuotaResponse]`; an empty tenant gets an empty list (no dedicated business log — a plain read of the caller's own config, mirroring `usage_service.get_usage`). `delete_tenant_quota(principal, params)` — opens a `scoped_transaction`, calls `quotas_repo.delete_quota`; raises `HTTPException(404)` if no row matched, otherwise logs the `quota.delete` audit event. |
+ | `time_windows.py` | `floor_to_hour_utc(timestamp: datetime)` — floors a timezone-aware timestamp to the hour (UTC); used by `events_service` and `usage_service`. |
+ 
+ ## Relationships
+@@ -23,8 +23,8 @@ Business logic layer: event ingestion (with idempotency and counter atomicity),
+ - `events_service` imports `src/repositories.{events_repo, quotas_repo}` to insert the event, check the quota, and upsert the counter.
+ - `usage_service` imports `src/repositories.usage_repo` to read the rollup.
+ - `usage_export_service` imports `src/repositories.usage_repo` (`count_usage_rollups`, `stream_usage_rollups`) and `src/api/csv_export.py` (the column contract + formula-escape facade) — it owns the `csv.writer`/`io.StringIO` streaming mechanics, `csv_export.py` owns only the encoding/escaping contract.
+-- `quota_service` imports `src/repositories.quotas_repo` to upsert the cap.
+-- All services receive an authenticated `AuthenticatedPrincipal` from the route handler (set by `require_api_key` guard); `principal.scope` gates `PUT /v1/quotas` at the route layer before `quota_service` ever runs (the export has no scope gate — any authenticated key may export its own tenant's data).
++- `quota_service` imports `src/repositories.quotas_repo` to upsert, list, and delete quota rows.
++- All services receive an authenticated `AuthenticatedPrincipal` from the route handler (set by `require_api_key` guard); `principal.scope` gates `PUT`/`GET`/`DELETE /v1/quotas` at the route layer (via the shared `_require_admin_and_throttled` dependency) before `quota_service` ever runs (the export has no scope gate — any authenticated key may export its own tenant's data).
+ - `time_windows` is imported by `events_service` and `usage_service` to floor timestamps.
+ 
+ **Transaction boundary:**
+@@ -33,6 +33,7 @@ Business logic layer: event ingestion (with idempotency and counter atomicity),
+ - If the insert loses (duplicate key), the quota is never consulted and neither the counter nor any side effect happens — a no-op.
+ - If the quota check rejects (`R + Q > L`), raising `QuotaExceededError` propagates out of the transaction context and rolls it back — the event insert is undone and the counter is never touched (no partial write).
+ - `upsert_tenant_quota` wraps the quota upsert in its own transaction; a single `INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING (xmax = 0)` reports create-vs-replace with no second round-trip.
++- `list_tenant_quotas` and `delete_tenant_quota` each wrap their query in their own `scoped_transaction`; an unexpected exception inside either propagates to the route's centralized `handle_unexpected_error` boundary and rolls the transaction back — for `delete_tenant_quota` this means a failed DELETE leaves the target row intact (fail-closed, no partial delete).
+ 
+ ## Notes
+ 
+diff --git a/src/services/quota_service.py b/src/services/quota_service.py
+index eb3cc40..40da34c 100644
+--- a/src/services/quota_service.py
++++ b/src/services/quota_service.py
+@@ -1,18 +1,22 @@
+-"""Service for `PUT /v1/quotas` — the admin-scoped upsert + 201/200 mapping.
++"""Service for `/v1/quotas` — the admin-scoped upsert (`PUT`), list (`GET`),
++and remove (`DELETE`) operations.
+ 
+-Orchestrates one transaction per request: the `xmax` upsert in
+-`src/repositories/quotas_repo.py` reports create-vs-replace in a single
+-round-trip, so this layer only maps that to the HTTP status and emits the
+-audit-trail log (`quota.upsert`, plan §"Repudiation").
++Each entry point orchestrates one transaction per request: the `xmax` upsert
++in `src/repositories/quotas_repo.py` reports create-vs-replace in a single
++round-trip for `PUT`; `GET` opens a read-only scoped transaction for the
++ordered listing; `DELETE` maps "no row matched" to a 404 rather than a
++silent success (plan §"DELETE — remove one cap, explicitly").
+ """
+ 
+ from dataclasses import dataclass
+ 
+-from src.api.schemas.quotas import QuotaPutRequest, QuotaResponse
++from fastapi import HTTPException, status
++
++from src.api.schemas.quotas import QuotaDeleteParams, QuotaPutRequest, QuotaResponse
+ from src.auth.api_key import AuthenticatedPrincipal
+ from src.db.session import scoped_transaction
+ from src.logging import get_logger
+-from src.repositories.quotas_repo import upsert_quota
++from src.repositories.quotas_repo import delete_quota, list_quotas, upsert_quota
+ 
+ logger = get_logger(service="meterly")
+ 
+@@ -69,3 +73,50 @@ def to_response(outcome: QuotaUpsertOutcome) -> QuotaResponse:
+         metric=outcome.metric,
+         limit_per_window=outcome.limit_per_window,
+     )
++
++
++async def list_tenant_quotas(principal: AuthenticatedPrincipal) -> list[QuotaResponse]:
++    """Return the caller's own tenant's full, deterministically ordered quota
++    list — an empty tenant gets an empty list, never a 404 (plan §"Empty set
++    -> 200 [], never 404"). Deliberately not logged as a business event (open
++    question 1, resolved default): a plain read of the caller's own
++    configuration, mirroring `GET /v1/usage`.
++    """
++    async with scoped_transaction(principal.api_key_id) as session:
++        rows = await list_quotas(session, api_key_id=principal.api_key_id)
++
++    return [
++        QuotaResponse(customer_id=row.customer_id, metric=row.metric, limit_per_window=row.limit_per_window)
++        for row in rows
++    ]
++
++
++async def delete_tenant_quota(
++    principal: AuthenticatedPrincipal, params: QuotaDeleteParams
++) -> None:
++    """Remove the cap for `(customer_id, metric)` under the caller's own
++    tenant, raising 404 if no such quota exists (explicit, not silently
++    idempotent — plan §"Why 404-on-absent, not idempotent-204").
++
++    A cross-tenant delete attempt matches zero rows (the `api_key_id` filter
++    + FORCE RLS backstop), which is indistinguishable from a truly-absent
++    quota — the intended BOLA-safe behavior (threat E2).
++    """
++    async with scoped_transaction(principal.api_key_id) as session:
++        removed = await delete_quota(
++            session,
++            api_key_id=principal.api_key_id,
++            customer_id=params.customer_id,
++            metric=params.metric,
++        )
++
++    if not removed:
++        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="quota not found")
++
++    logger.info(
++        "quota.delete",
++        userId=principal.api_key_id,
++        action="delete",
++        customer_id=params.customer_id,
++        metric=params.metric,
++    )
+diff --git a/tests/README.md b/tests/README.md
+index 9860087..286c156 100644
+--- a/tests/README.md
++++ b/tests/README.md
+@@ -22,7 +22,7 @@ unit tests here, endpoint/migration/concurrency/perf tests under `integration/`.
+ | `test_logging_redaction.py` | A raw `customer_id` (or other sensitive field) must never reach the rendered log line regardless of call site. |
+ | `test_rate_limit_fail_open.py` | Regression test for the Tier-2 rate-limit logging facade in `src/auth/rate_limit.py`. |
+ | `test_schemas_events.py` | Validation-contract tests for `EventCreateRequest`. |
+-| `test_schemas_quotas.py` | Validation-contract tests for `QuotaPutRequest` (anchored `customer_id`/`metric` allowlists, `limit_per_window` bounds, injection rejection). |
++| `test_schemas_quotas.py` | Validation-contract tests for `QuotaPutRequest` (anchored `customer_id`/`metric` allowlists, `limit_per_window` bounds, injection rejection) and `QuotaDeleteParams` (accept/missing/mass-assignment/injection-oversized/invalid-metric cases, plus a Hypothesis property test that acceptance implies the anchored regex). |
+ | `test_schemas_usage.py` | Validation-contract tests for `UsageQueryParams`. |
+ | `test_schemas_usage_export.py` | Validation-contract tests for `UsageExportQueryParams`: all-filters-optional, the `from`/`from_` alias binding, naive-datetime rejection, `from<=to` and `[now-90d, now+1h]` bound enforcement, `extra="forbid"` rejecting unknown/injected fields. |
+ | `test_slo_alarms_defined.py` | Static assertion that the declared SLO burn-rate + canary CloudWatch alarms exist in the Terraform source with the exact names `deploy.yml` expects. |
+diff --git a/tests/integration/README.md b/tests/integration/README.md
+index a19bbec..08c8eda 100644
+--- a/tests/integration/README.md
++++ b/tests/integration/README.md
+@@ -23,7 +23,8 @@ suite in `tests/` (no live DB/Redis there).
+ | `test_quota_concurrency.py` | N concurrent distinct-`idempotency_key` posts against a quota cap `L` never drive the rollup total above `L` (`FOR UPDATE` row-lock serialization proof). |
+ | `test_quota_migration.py` | Migration `0003` (`quotas` table + `api_keys.scope`) round-trip and constraint re-enforcement. |
+ | `test_quotas_endpoint.py` | `PUT /v1/quotas` integration tests: create/replace, auth, admin-scope enforcement, validation, tenant isolation, rate limiting, OpenAPI exposure. |
+-| `test_quotas_rls_backstop.py` | Adversarial proof that the `quotas_tenant_isolation` RLS policy alone (connecting as a `NOBYPASSRLS` role, primary `api_key_id` filter removed) still confines reads/updates to the caller's own tenant, and fails closed when the tenant context is unset. |
++| `test_quotas_list_delete.py` | `GET /v1/quotas` and `DELETE /v1/quotas` integration tests: GET ordering + minimal fields, tenant isolation, empty-list 200, ingest-key 403, no-auth 401; DELETE 204 + row removed, 404 on absent, cross-tenant 404 with the victim row intact, validation 422, ingest-key 403, no-auth 401, `quota.delete`/`quota.forbidden` logging; the two-principals-one-IP Tier-2 rate-limit shape on both verbs; the no-usage-reset / uncapped-events-accepted cross-behavior; the safe-error / fail-closed 500 path on both verbs (AC19); a concurrent-DELETE-of-the-same-row race (exactly one winner); and OpenAPI exposure of both new verbs. |
++| `test_quotas_rls_backstop.py` | Adversarial proof that the `quotas_tenant_isolation` RLS policy alone (connecting as a `NOBYPASSRLS` role, primary `api_key_id` filter removed) still confines reads/updates/deletes to the caller's own tenant, and fails closed when the tenant context is unset. `test_rls_blocks_cross_tenant_delete_when_app_filter_is_absent` (new, quota-admin feature) is the DELETE-specific backstop proof, mirroring the existing read/update cases. |
+ | `test_rate_limit.py` | Tier-2 (`api_key_id`-keyed) rate limiting: two principals on one IP get independent buckets; one principal across two IPs shares one bucket. |
+ | `test_seed_api_key_script.py` | `scripts/seed_api_key.py` provisions a key against a real database, including the `--admin` flag setting `scope='admin'` (default `scope='ingest'`). |
+ | `test_usage_endpoint.py` | `GET /v1/usage` integration tests (aggregation, tenant isolation). |
+diff --git a/tests/integration/test_quotas_rls_backstop.py b/tests/integration/test_quotas_rls_backstop.py
+index 297093c..3f29b9f 100644
+--- a/tests/integration/test_quotas_rls_backstop.py
++++ b/tests/integration/test_quotas_rls_backstop.py
+@@ -130,6 +130,73 @@ async def test_rls_blocks_cross_tenant_read_when_app_filter_is_absent(
+         await role_engine.dispose()
+ 
+ 
++async def test_rls_blocks_cross_tenant_delete_when_app_filter_is_absent(
++    postgres_url, nobypassrls_role, make_api_key
++):
++    """AC8/AC15 backstop proof for the quota-admin feature's new `DELETE
++    /v1/quotas` surface: with the explicit `api_key_id` filter entirely
++    removed from the query (simulating the primary control being
++    missing/buggy in `quotas_repo.delete_quota`), the RLS policy alone must
++    still confine a `NOBYPASSRLS` session's DELETE to only its own tenant's
++    row -- tenant B's row must survive an unfiltered DELETE issued under
++    tenant A's session setting.
++    """
++    _, tenant_a_id = await make_api_key(label="rls-delete-tenant-a", scope="admin")
++    _, tenant_b_id = await make_api_key(label="rls-delete-tenant-b", scope="admin")
++
++    admin_engine = create_async_engine(postgres_url)
++    async with admin_engine.begin() as connection:
++        await connection.execute(
++            text(
++                "INSERT INTO quotas (api_key_id, customer_id, metric, limit_per_window) "
++                "VALUES (:id, 'rls_del_cust', 'api_calls', 1000)"
++            ),
++            {"id": tenant_a_id},
++        )
++        await connection.execute(
++            text(
++                "INSERT INTO quotas (api_key_id, customer_id, metric, limit_per_window) "
++                "VALUES (:id, 'rls_del_cust', 'api_calls', 2000)"
++            ),
++            {"id": tenant_b_id},
++        )
++    await admin_engine.dispose()
++
++    role_engine = create_async_engine(nobypassrls_role)
++    try:
++        async with role_engine.begin() as connection:
++            await connection.execute(
++                text("SELECT set_config('app.current_api_key_id', :id, true)"),
++                {"id": str(tenant_a_id)},
++            )
++            # No api_key_id predicate at all -- mirrors delete_quota's DELETE
++            # statement with its primary WHERE clause stripped out.
++            result = await connection.execute(
++                text("DELETE FROM quotas WHERE customer_id = 'rls_del_cust' RETURNING api_key_id")
++            )
++            deleted_ids = {row[0] for row in result.fetchall()}
++        assert deleted_ids == {tenant_a_id}, (
++            "an unfiltered DELETE under tenant A's session setting must only "
++            f"remove tenant A's own row; deleted api_key_ids={deleted_ids}"
++        )
++
++        admin_check_engine = create_async_engine(postgres_url)
++        async with admin_check_engine.connect() as connection:
++            survivor = (
++                await connection.execute(
++                    text(
++                        "SELECT limit_per_window FROM quotas "
++                        "WHERE api_key_id = :id AND customer_id = 'rls_del_cust'"
++                    ),
++                    {"id": tenant_b_id},
++                )
++            ).mappings().one()
++        await admin_check_engine.dispose()
++        assert survivor["limit_per_window"] == 2000, "tenant B's row must survive the cross-tenant DELETE"
++    finally:
++        await role_engine.dispose()
++
++
+ async def test_rls_denies_all_rows_when_tenant_setting_is_unset(
+     postgres_url, nobypassrls_role, make_api_key
+ ):
+diff --git a/tests/test_schemas_quotas.py b/tests/test_schemas_quotas.py
+index a079863..a316414 100644
+--- a/tests/test_schemas_quotas.py
++++ b/tests/test_schemas_quotas.py
+@@ -1,11 +1,12 @@
+-"""Validation-contract tests for `QuotaPutRequest` (AC5, AC18)."""
++"""Validation-contract tests for `QuotaPutRequest` (AC5, AC18) and
++`QuotaDeleteParams` (AC9)."""
+ 
+ import pytest
+ from hypothesis import given
+ from hypothesis import strategies as st
+ from pydantic import ValidationError
+ 
+-from src.api.schemas.quotas import QuotaPutRequest
++from src.api.schemas.quotas import QuotaDeleteParams, QuotaPutRequest
+ 
+ 
+ def _valid_payload(**overrides) -> dict:
+@@ -89,3 +90,62 @@ def test_property_customer_id_only_ever_accepts_the_allowlist(customer_id):
+     except ValidationError:
+         return
+     assert re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", quota.customer_id)
++
++
++def _valid_delete_params(**overrides) -> dict:
++    params = {"customer_id": "cust_123", "metric": "api_calls"}
++    params.update(overrides)
++    return params
++
++
++def test_delete_params_accepts_well_formed_identifiers():
++    """AC9: a valid (customer_id, metric) pair parses with the exact values supplied."""
++    params = QuotaDeleteParams(**_valid_delete_params())
++    assert params.customer_id == "cust_123"
++    assert params.metric == "api_calls"
++
++
++def test_delete_params_rejects_missing_fields():
++    """AC9: both customer_id and metric are required."""
++    with pytest.raises(ValidationError):
++        QuotaDeleteParams(customer_id="cust_123")
++    with pytest.raises(ValidationError):
++        QuotaDeleteParams(metric="api_calls")
++
++
++def test_delete_params_rejects_unknown_fields_mass_assignment():
++    """AC9: `extra='forbid'` rejects a client-supplied `api_key_id` — the
++    server alone resolves the tenant from the authenticated principal
++    (ASVS 15.3.3)."""
++    with pytest.raises(ValidationError):
++        QuotaDeleteParams(**_valid_delete_params(api_key_id=999))
++
++
++@pytest.mark.parametrize(
++    "customer_id",
++    ["' OR 1=1--", "../../etc/passwd", "line1\r\nline2", "a" * 129, ""],
++)
++def test_delete_params_rejects_injection_and_oversized_customer_id(customer_id):
++    """AC9: SQLi/path-traversal/CRLF/oversized customer_id is rejected at the
++    schema boundary and never reaches the DELETE SQL sink."""
++    with pytest.raises(ValidationError):
++        QuotaDeleteParams(**_valid_delete_params(customer_id=customer_id))
++
++
++@pytest.mark.parametrize("metric", ["' OR 1=1--", "a" * 65, ""])
++def test_delete_params_rejects_invalid_metric(metric):
++    """AC9: injection/oversized metric is rejected at the schema boundary."""
++    with pytest.raises(ValidationError):
++        QuotaDeleteParams(**_valid_delete_params(metric=metric))
++
++
++@given(customer_id=st.text(min_size=1, max_size=300))
++def test_property_delete_customer_id_only_ever_accepts_the_allowlist(customer_id):
++    """Hypothesis: any customer_id accepted by QuotaDeleteParams matches the anchored allowlist."""
++    import re
++
++    try:
++        params = QuotaDeleteParams(**_valid_delete_params(customer_id=customer_id))
++    except ValidationError:
++        return
++    assert re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", params.customer_id)
