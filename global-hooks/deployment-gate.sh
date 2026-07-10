@@ -27,6 +27,31 @@ if [ ! -f "$TEST_RESULTS" ] || [ "$(jq -r '.status' "$TEST_RESULTS")" != "pass" 
   exit 2
 fi
 
+# M4″-A4 backstop: status "pass" with failed > 0 is legal ONLY when every failing test
+# is enumerated in failures[] AND matched by name in pre_existing_failures[] (each entry
+# carrying out-of-diff + reproduces-at-base evidence, per the testing agent contract).
+# The M4″ run shipped "pass" with 1 failure disclosed in prose — the gate consumed the
+# bare status and could not tell disclosed from undisclosed. Now it can.
+PEF_REASON=$(jq -r '
+  (.failed // 0) as $f
+  | if $f == 0 then "ok"
+    else
+      ((.failures // []) | map(.name)) as $names
+      | ((.pre_existing_failures // []) | map(.name)) as $pef
+      | if ($names | length) != $f then
+          "failed=\($f) but failures[] enumerates \($names | length) — every failure must be named"
+        else
+          ($names | map(select(. as $n | ($pef | index($n)) | not))) as $undisclosed
+          | if ($undisclosed | length) == 0 then "ok"
+            else "failing test(s) with no matching pre_existing_failures[] entry: \($undisclosed | join(", "))"
+            end
+        end
+    end' "$TEST_RESULTS" 2>/dev/null)
+if [ "$PEF_REASON" != "ok" ]; then
+  echo "Blocked: test status is \"pass\" with unaccounted failures (M4″-A4). $PEF_REASON — a failure is only ignorable when pre_existing_failures[] records its out-of-diff + reproduces-at-base evidence; otherwise status must be \"fail\". See $TEST_RESULTS." >&2
+  exit 2
+fi
+
 # Acceptance-criteria coverage must be COMPLETE and its arithmetic HONEST (PR C + U-01).
 # In the M3 run the recorded summary said covered:24/24 while the same file's by_id
 # marked AC20 covered:false — the gate compared two trusted integers and passed. Now,

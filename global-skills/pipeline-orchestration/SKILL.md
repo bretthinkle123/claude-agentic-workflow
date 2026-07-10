@@ -74,7 +74,11 @@ string and those files — never assume it can see the conversation.
      if true: Agent(planning, "Revise .pipeline/plan.md: address every [material] flag in
               .pipeline/plan-audit.md, append ## Revision notes.")   # ONE pass only, no recursion
      -> review plan.md + plan-audit.md, then the HUMAN runs (in their own terminal, NOT the
-        orchestrator — U-15/D1): touch .pipeline/plan-approved                    # human checkpoint
+        orchestrator — U-15/D1):
+          bash ~/.claude/hooks/approve-plan.sh    # TTY-only; verifies plan.md exists, confirms, writes the marker
+        (bare `touch .pipeline/plan-approved` still works — existence is the contract — but
+        the helper makes M4″-A1's "answered approved, marker never touched" impossible: it
+        either wrote the marker or it told you it didn't)                        # human checkpoint
 2. IMPLEMENTATION — two shapes (F-M4-11):
      WITHOUT .pipeline/tasks.md (small feature):
        Agent(implementation, "Implement .pipeline/plan.md.")   # SINGLE-SHOT — runs exactly once
@@ -120,6 +124,11 @@ string and those files — never assume it can see the conversation.
               and (.asvs.reconciled != false)
               and (.scan_reconciled != false)' security-status.json   AND
        jq -e '.status == "pass"
+              and ( (.failed // 0) == 0
+                    or ( ((.failures // []) | map(.name)) as $names
+                         | ((.pre_existing_failures // []) | map(.name)) as $pef
+                         | (($names | length) == (.failed // 0))
+                       and (($names | map(select(. as $n | ($pef | index($n)) | not)) | length) == 0) ) )
               and ( (.criteria_covered // {}) as $c
                     | if ($c.by_id // null) == null
                       then (($c.covered // 0) >= ($c.total // 0))
@@ -133,7 +142,11 @@ string and those files — never assume it can see the conversation.
                      and (.perf.budget.throughput_rps == null or .perf.measured.throughput_rps != null)
                      and (.perf.scenario != null) ) )' test-results.json
      # These are EXACTLY the gate's test/security/criteria + perf-completeness (PR G) checks, so the
-     # loop never exits green on anything deployment-gate.sh would reject. The criteria clause (U-01)
+     # loop never exits green on anything deployment-gate.sh would reject. The failed-tests clause
+     # (M4″-A4) mirrors the gate: failed > 0 only passes when failures[] names every failure AND each
+     # name has a pre_existing_failures[] entry (out-of-diff + reproduces-at-base evidence) — a
+     # disclosed pre-existing failure keeps the loop exitable; an undisclosed one keeps it running.
+     # The criteria clause (U-01)
      # RECOMPUTES the summary integers from by_id: every criterion must be covered or delegated to
      # "security" (the only valid delegate — its clean/asvs checks are already conjuncts above), the
      # recorded covered must equal the covered==true count (delegation never inflates it), and total
@@ -240,9 +253,8 @@ string and those files — never assume it can see the conversation.
         `ci-fix/<slug>` branch off main with its own PR that merges FIRST. That side-run:
         (a) logs under its own key — run-log lines carry the ci-fix branch and MUST NOT
         overwrite the feature's loop-quality metrics (`first_pass_clean` is a loop-window
-        metric; NOTE run-summary.sh does not yet segment by branch — until that lands,
-        quote the loop-GREEN 4c snapshot for loop quality and say so in the retrospective,
-        exactly the M4″ attribution nuance); (b) decomposes per
+        metric; run-summary.sh segments non-feature-branch lines into
+        `post_deploy_remediation` and excludes them from first_pass_clean); (b) decomposes per
         debugging-escalation-protocol's large-remediation rule (≥8 files / ≥3 root causes);
         (c) is a NON-FEATURE COMMIT and gets the same human anchor the feature got: present
         its diff and require `approve-diff.sh` (or an explicit journaled operator waiver
@@ -252,12 +264,18 @@ string and those files — never assume it can see the conversation.
         while the PR was open, merge main INTO the feature branch. No re-approval needed IFF
         both: (a) `git show --cc <merge-commit>` is EMPTY — the resolution introduced zero
         bytes beyond the parents (a union/superset resolution of a trivial conflict passes
-        this; verify, don't assume); (b) the feature-side diff is unchanged — compare
-        `git diff <new-merge-base>...HEAD` against the approved diff (NOTE
-        compute-change-hash.sh only hashes the working tree today; until it grows a
-        committed-diff mode, diff the three-dot patch against the approved patch by hand
-        and record the comparison in the journal). Either check fails → back to 5b for
-        re-approval.
+        this; verify, don't assume); (b) the feature-side diff — anchor at PR-open time
+        with `compute-change-hash.sh --committed origin/main` (journal the hash),
+        recompute after the integration merge. EQUAL ⇒ currency holds, continue
+        (committed-diff hashes compare only to committed-diff hashes, never to the
+        working-tree diff-approved hash). UNEQUAL is NOT automatically stale — when the
+        feature and the concurrent main change touched the same file, the feature-side
+        hunks legitimately shrink (M4″: both added `.gitignore` lines; the post-merge
+        three-dot diff loses the hunk main now carries). Produce the interdiff
+        (`diff <(git diff <old-base>...<pre-merge-head>) <(git diff <new-base>...HEAD)`);
+        if every divergent hunk lies in files the incoming main commits also changed,
+        it is integration fallout — journal it and continue. Any divergence in a file
+        main did NOT touch → back to 5b for re-approval. Check (a) failing → 5b, always.
      -> STANDING POLICY CHANGES (repo settings, branch protection — M4″ §4-item-5): only on
         an explicit journaled operator selection, recorded with a REVERT CONDITION (e.g.
         "restore required_approving_review_count=1 when a second maintainer exists") in the

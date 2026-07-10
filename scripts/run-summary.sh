@@ -68,11 +68,22 @@ fi
 # record invocations (line count), the max attempt seen, cap-out lines (status=="capped"),
 # the distinct models, and the last recorded status. Models come from the log, which
 # auto-derives them from agent frontmatter — so this can never desync from the real model.
+# M4″-A5/§2 (attribution): first_pass_clean is a LOOP-WINDOW metric. The M4″ run's loop
+# exited GREEN on cycle 1 with zero caps, then an operator-authorized post-deployment
+# CI-fix (on a ci-fix/* branch, logged under the same feature key) added 2 capped lines —
+# and the final summary flipped first_pass_clean to false, overwriting the loop's real
+# quality. Segment by BRANCH: lines on the feature branch (the branch of the run's first
+# line) are the loop; lines on any other branch are out-of-band remediation, rolled into
+# post_deploy_remediation and EXCLUDED from first_pass_clean. Stage rollups and totals
+# stay whole-run (cost attribution keeps the stable per-feature key, U-16b).
 jq -rs \
   --arg gen "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --arg assurance "$ASSURANCE" \
   --argjson loop_caps "${LOOP_CAPS:-0}" '
-  (group_by(.stage) | map({
+  (.[0].branch // "") as $feature_branch
+  | map(select((.branch // $feature_branch) == $feature_branch)) as $loop_lines
+  | map(select((.branch // $feature_branch) != $feature_branch)) as $oob
+  | (group_by(.stage) | map({
      key: (.[0].stage // "unknown"),
      value: {
        invocations: length,
@@ -94,13 +105,18 @@ jq -rs \
       },
       models_used: (map(.model // "unknown") | unique),
       first_pass_clean: (
-        (map(select(.status=="capped")) | length) == 0
+        ($loop_lines | map(select(.status=="capped")) | length) == 0
         and $loop_caps == 0
-        and (map(.retries // 0) | add // 0) == 0
-      )
+        and ($loop_lines | map(.retries // 0) | add // 0) == 0
+      ),
+      post_deploy_remediation: {
+        lines: ($oob | length),
+        caps: ($oob | map(select(.status=="capped")) | length),
+        branches: ($oob | map(.branch) | unique)
+      }
     }' "$LOG" > "$OUT"
 
 echo "[run-summary] wrote $OUT"
-jq -r '"  stages=\(.stages|keys|length)  log_lines=\(.totals.log_lines)  capped=\(.totals.capped_lines)  loop_caps=\(.totals.loop_cap_events)  first_pass_clean=\(.first_pass_clean)  assurance=\(.assurance)"' "$OUT"
+jq -r '"  stages=\(.stages|keys|length)  log_lines=\(.totals.log_lines)  capped=\(.totals.capped_lines)  loop_caps=\(.totals.loop_cap_events)  first_pass_clean=\(.first_pass_clean)  oob_remediation=\(.post_deploy_remediation.lines) lines/\(.post_deploy_remediation.caps) caps  assurance=\(.assurance)"' "$OUT"
 [ "$ASSURANCE" != "standard" ] && echo "[run-summary] ⚠ assurance=$ASSURANCE — do NOT describe this run as gate-verified until the Swift language adapters (iOS Layer 3) land." >&2
 exit 0

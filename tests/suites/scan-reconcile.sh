@@ -16,7 +16,10 @@ mk_scan_proj() {
   printf '{}' > "$w/.pipeline/state.json"
   cp "$FX/semgrep.json" "$FX/osv.json" "$FX/trivy-config.json" "$FX/checkov.json" "$w/.pipeline/"
   local t
-  for t in semgrep osv trivy checkov; do
+  # gitleaks included since M4″-A9: it is an always-required scanner and its wrapper
+  # now stamps every execution — a fixture with no gitleaks stamp models the exact
+  # silent-absence defect the liveness check exists to block (tested below).
+  for t in semgrep osv trivy checkov gitleaks; do
     jq -nc --arg t "$t" '{tool:$t,ran_at:"t",args:"scan",exit_code:0}' >> "$w/.pipeline/scan-log.jsonl"
   done
   echo "$w"
@@ -80,7 +83,7 @@ mk_scan_git() {
       && printf '.pipeline/\n' > .gitignore && git add .gitignore && git commit -qm base ) >/dev/null 2>&1
   mkdir -p "$w/.pipeline"; printf '{}' > "$w/.pipeline/state.json"
   cp "$FX/semgrep.json" "$FX/osv.json" "$FX/trivy-config.json" "$FX/checkov.json" "$w/.pipeline/"
-  local t; for t in semgrep osv trivy checkov; do jq -nc --arg t "$t" '{tool:$t,ran_at:"t",args:"scan",exit_code:0}' >> "$w/.pipeline/scan-log.jsonl"; done
+  local t; for t in semgrep osv trivy checkov gitleaks; do jq -nc --arg t "$t" '{tool:$t,ran_at:"t",args:"scan",exit_code:0}' >> "$w/.pipeline/scan-log.jsonl"; done
   echo "$w"
 }
 # (a) changed code file NOT in paths.scanned → scope gap → block.
@@ -96,5 +99,45 @@ assert_eq "true" "$(reconciled "$w")" "scope: changed file present in paths.scan
 w="$(mk_scan_git)"; write_status "$w"; printf '[tool]\nx=1\n' > "$w/pyproject.toml"
 run "$w" >/dev/null
 assert_eq "true" "$(reconciled "$w")" "scope: changed .toml (non-code shape) does NOT false-block (allowlist, not blocklist)"
+
+# --- A9 scanner liveness (M4″) — silent absence must never read as 0 findings ----------
+# (a) THE M4″ ESCAPE: checkov_findings recorded as 0 while checkov has NO stamp and is
+#     NOT claimed in scan_artifacts — a never-ran scanner presented as a clean count.
+w="$(mk_scan_proj)"; write_status "$w"
+grep -v '"checkov"' "$w/.pipeline/scan-log.jsonl" > "$w/t" && mv "$w/t" "$w/.pipeline/scan-log.jsonl"
+jq 'del(.scan_artifacts.checkov) | .checkov_findings = 0' "$w/.pipeline/security-status.json" > "$w/t" && mv "$w/t" "$w/.pipeline/security-status.json"
+run "$w" >/dev/null
+assert_eq "false" "$(reconciled "$w")" "A9: checkov_findings=0 with no stamp and no artifact claim → scan_reconciled=false"
+assert_eq 1 "$(jq '[.count_mismatches[]|select(.tool=="checkov")]|length' "$w/.pipeline/scan-reconciliation.json")" "A9: the phantom-zero mismatch is recorded"
+
+# (b) the honest form of the same state: count null (not 0) + still no stamp → the
+#     count-liveness check passes (null is not a claim), and with no infra/ in the
+#     change set checkov is not required → reconciled.
+w="$(mk_scan_proj)"; write_status "$w"
+grep -v '"checkov"' "$w/.pipeline/scan-log.jsonl" > "$w/t" && mv "$w/t" "$w/.pipeline/scan-log.jsonl"
+jq 'del(.scan_artifacts.checkov) | .checkov_findings = null' "$w/.pipeline/security-status.json" > "$w/t" && mv "$w/t" "$w/.pipeline/security-status.json"
+run "$w" >/dev/null
+assert_eq "true" "$(reconciled "$w")" "A9: null count for a not-run, not-required scanner → reconciled (0 is a claim, null is not)"
+
+# (c) REQUIRED-scanner liveness: the change set touches infra/ but checkov left no stamp
+#     of any kind (and no count/artifact claim) → block.
+w="$(mk_scan_git)"; write_status "$w"
+grep -v '"checkov"' "$w/.pipeline/scan-log.jsonl" > "$w/t" && mv "$w/t" "$w/.pipeline/scan-log.jsonl"
+jq 'del(.scan_artifacts.checkov) | .checkov_findings = null' "$w/.pipeline/security-status.json" > "$w/t" && mv "$w/t" "$w/.pipeline/security-status.json"
+mkdir -p "$w/infra"; printf 'infra notes\n' > "$w/infra/README.md"
+run "$w" >/dev/null
+assert_eq "false" "$(reconciled "$w")" "A9: infra/ changed + checkov silent (no stamp at all) → scan_reconciled=false"
+
+# (d) a DISCLOSED skip stamp satisfies liveness: same infra/ change, checkov stamped
+#     exit 2 "skipped: binary not on PATH" → accounted for, reconciled.
+jq -nc '{tool:"checkov",ran_at:"t",args:"skipped: binary not on PATH",exit_code:2}' >> "$w/.pipeline/scan-log.jsonl"
+run "$w" >/dev/null
+assert_eq "true" "$(reconciled "$w")" "A9: a disclosed skip stamp counts — silent absence blocks, disclosed impossibility does not"
+
+# (e) gitleaks is always-required: strip its stamp from an otherwise-clean project → block.
+w="$(mk_scan_proj)"; write_status "$w"
+grep -v '"gitleaks"' "$w/.pipeline/scan-log.jsonl" > "$w/t" && mv "$w/t" "$w/.pipeline/scan-log.jsonl"
+run "$w" >/dev/null
+assert_eq "false" "$(reconciled "$w")" "A9: gitleaks (always required) with no stamp → scan_reconciled=false (the M4″ gitleaks gap)"
 
 finish scan-reconcile
