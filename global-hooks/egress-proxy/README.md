@@ -36,8 +36,12 @@ docker network connect pipeline-egress-out pipeline-egress-proxy
 
 # 4. Point the scanner wrappers at the restricted network (they already opt in on this env var).
 export PIPELINE_EGRESS_NETWORK=pipeline-egress
-export HTTPS_PROXY=http://pipeline-egress-proxy:8888        # for host commands (curl/gh/pip/npm)
-export HTTP_PROXY=http://pipeline-egress-proxy:8888
+# Host commands (curl/gh/pip/npm) reach the proxy on loopback — container names do NOT
+# resolve from the host shell, so the proxy must be published there (setup-wsl-pipeline.sh
+# runs the container with `-p 127.0.0.1:8888:8888` on the -out network for exactly this).
+# Containerized clients keep using http://pipeline-egress-proxy:8888 via docker DNS.
+export HTTPS_PROXY=http://127.0.0.1:8888
+export HTTP_PROXY=http://127.0.0.1:8888
 export NO_PROXY=127.0.0.1,localhost
 ```
 

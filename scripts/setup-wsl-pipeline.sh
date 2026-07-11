@@ -108,18 +108,25 @@ if [ "$SKIP_PROXY" = false ]; then
       docker rm -f pipeline-egress-proxy >/dev/null   # recreate to flip modes
     fi
     if ! docker inspect pipeline-egress-proxy >/dev/null 2>&1; then
+      # Start on the -out (publishable) network with the proxy port bound to loopback so
+      # HOST commands can actually route through it — container names don't resolve from
+      # the host shell, so http://pipeline-egress-proxy:8888 only ever worked for
+      # containerized clients. Then connect the internal network for those clients.
+      # (-p on an --internal network is not supported, hence the two-step order.)
       docker run -d --name pipeline-egress-proxy \
-        --network pipeline-egress \
+        --network pipeline-egress-out \
+        -p 127.0.0.1:8888:8888 \
         -v "$REPO_ROOT/global-hooks/egress-proxy/$CONF:/etc/tinyproxy/tinyproxy.conf:ro" \
         -v "$REPO_ROOT/global-hooks/egress-proxy/egress-filter.txt:/etc/tinyproxy/egress-filter.txt:ro" \
         -v pipeline-egress-logs:/var/log/tinyproxy \
         vimagick/tinyproxy
-      docker network connect pipeline-egress-out pipeline-egress-proxy
+      docker network connect pipeline-egress pipeline-egress-proxy
     fi
     echo "  Proxy up in $MODE mode. Add to your shell profile (guarded so a proxy-down host still works):"
     echo "    if docker inspect pipeline-egress-proxy >/dev/null 2>&1; then"
     echo "      export PIPELINE_EGRESS_NETWORK=pipeline-egress"
-    echo "      export HTTPS_PROXY=http://pipeline-egress-proxy:8888 HTTP_PROXY=http://pipeline-egress-proxy:8888"
+    echo "      # host commands reach the proxy on loopback; containerized clients use the network name"
+    echo "      export HTTPS_PROXY=http://127.0.0.1:8888 HTTP_PROXY=http://127.0.0.1:8888"
     echo "      export NO_PROXY=127.0.0.1,localhost"
     echo "    fi"
     echo "  START LOG-ONLY: reconcile observed hosts against egress-allowlist.txt in the canary,"

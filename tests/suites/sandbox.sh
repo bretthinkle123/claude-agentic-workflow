@@ -29,6 +29,16 @@ rm -rf "$CLEAN"
 # (guards against a future edit that drops the required proxy conjunct.)
 assert_match "$(grep -c 'HTTPS_PROXY' "$VS")" '^[1-9]' "verify-sandbox still checks HTTPS_PROXY"
 
+# --- verify-sandbox FALSE-OK regression (found live 2026-07-10): HTTPS_PROXY set but the ---
+# proxy UNREACHABLE made every curl fail, and "deny-probe failed" was read as "enforcing".
+# An unreachable proxy must FAIL the allowlisted-host conjunct, never bless the environment.
+CLEAN="$(mktemp -d)"
+out="$(HOME="$CLEAN" HTTPS_PROXY="http://127.0.0.1:9" HTTP_PROXY="http://127.0.0.1:9" bash "$VS" 2>&1)"; rc=$?
+assert_eq 1 "$rc" "verify-sandbox exits nonzero when the proxy is unreachable (no false OK)"
+assert_match "$out" 'cannot prove enforcement' "unreachable proxy fails the allowlisted-host conjunct"
+assert_match "$out" 'SANDBOX INCOMPLETE'       "unreachable proxy reports INCOMPLETE"
+rm -rf "$CLEAN"
+
 # --- bridge-log: tinyproxy log -> {"ts","host","action"} JSON ----------------------------
 mk() { printf '%s\n' "$@" | bash "$BRIDGE" /dev/stdout; }
 deny_line='CONNECT Jan 01 00:00:00 [1]: Filtered connection to evil.example:443'

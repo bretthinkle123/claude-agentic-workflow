@@ -53,20 +53,24 @@ else
 fi
 
 # 4. REQUIRED: the egress proxy is wired AND actually enforces default-deny — proven by a
-#    non-allowlisted host being REFUSED, not merely by HTTPS_PROXY being set.
+#    non-allowlisted host being REFUSED *while an allowlisted host succeeds*. The allowlisted
+#    probe is a required conjunct, not a warning: if pypi.org can't get through, a "refusal"
+#    of the deny-probe is indistinguishable from the proxy being down or unreachable from
+#    this shell — exactly the false OK this script exists to never emit (found live
+#    2026-07-10: an unresolvable proxy hostname made every curl fail and check 4 passed).
 if [ -n "${HTTPS_PROXY:-}" ]; then
   ok "HTTPS_PROXY set ($HTTPS_PROXY)"
   if curl -fsS --max-time 8 -o /dev/null https://pypi.org 2>/dev/null; then
     ok "allowlisted host reachable through proxy (pypi.org)"
+    # example.com is stable and deliberately NOT in egress-allowlist.txt: if it resolves, the
+    # proxy is not enforcing default-deny.
+    if curl -fsS --max-time 8 -o /dev/null https://example.com 2>/dev/null; then
+      no "non-allowlisted host example.com was REACHABLE — proxy is NOT enforcing default-deny (log-only mode?)"
+    else
+      ok "non-allowlisted host refused (proxy enforcing default-deny)"
+    fi
   else
-    warn "allowlisted host pypi.org unreachable through proxy — proxy down or ACL too tight"
-  fi
-  # example.com is stable and deliberately NOT in egress-allowlist.txt: if it resolves, the
-  # proxy is not enforcing default-deny.
-  if curl -fsS --max-time 8 -o /dev/null https://example.com 2>/dev/null; then
-    no "non-allowlisted host example.com was REACHABLE — proxy is NOT enforcing default-deny"
-  else
-    ok "non-allowlisted host refused (proxy enforcing default-deny)"
+    no "allowlisted host pypi.org NOT reachable through proxy — cannot prove enforcement (proxy down, unreachable from this shell, or ACL broken)"
   fi
 else
   no "HTTPS_PROXY not set — shell egress is unrestricted (provision the egress proxy, Phase 5)"
