@@ -17,11 +17,13 @@ set -uo pipefail
 
 SKIP_TOOLCHAIN=false
 SKIP_PROXY=false
+ENFORCE=false
 for a in "$@"; do
   case "$a" in
     --skip-toolchain) SKIP_TOOLCHAIN=true ;;
     --skip-proxy)     SKIP_PROXY=true ;;
-    *) echo "unknown arg: $a (use --skip-toolchain | --skip-proxy)" >&2; exit 2 ;;
+    --enforce)        ENFORCE=true ;;
+    *) echo "unknown arg: $a (use --skip-toolchain | --skip-proxy | --enforce)" >&2; exit 2 ;;
   esac
 done
 
@@ -97,23 +99,31 @@ if [ "$SKIP_PROXY" = false ]; then
     bash "$REPO_ROOT/global-hooks/egress-proxy/build-filter.sh" > "$REPO_ROOT/global-hooks/egress-proxy/egress-filter.txt"
     docker network inspect pipeline-egress     >/dev/null 2>&1 || docker network create --internal pipeline-egress
     docker network inspect pipeline-egress-out >/dev/null 2>&1 || docker network create pipeline-egress-out
+    # LOG-ONLY by default (plan 5.3: measure, don't guess): mount the no-filter conf so every
+    # host passes but is logged. --enforce (Phase 7.3, after canary reconciliation) recreates
+    # the container with the default-deny conf + filter. The two confs differ ONLY in filtering.
+    CONF="tinyproxy-logonly.conf"; MODE="LOG-ONLY"
+    if [ "$ENFORCE" = true ]; then CONF="tinyproxy.conf"; MODE="ENFORCING"; fi
+    if [ "$ENFORCE" = true ] && docker inspect pipeline-egress-proxy >/dev/null 2>&1; then
+      docker rm -f pipeline-egress-proxy >/dev/null   # recreate to flip modes
+    fi
     if ! docker inspect pipeline-egress-proxy >/dev/null 2>&1; then
       docker run -d --name pipeline-egress-proxy \
         --network pipeline-egress \
-        -v "$REPO_ROOT/global-hooks/egress-proxy/tinyproxy.conf:/etc/tinyproxy/tinyproxy.conf:ro" \
+        -v "$REPO_ROOT/global-hooks/egress-proxy/$CONF:/etc/tinyproxy/tinyproxy.conf:ro" \
         -v "$REPO_ROOT/global-hooks/egress-proxy/egress-filter.txt:/etc/tinyproxy/egress-filter.txt:ro" \
         -v pipeline-egress-logs:/var/log/tinyproxy \
         vimagick/tinyproxy
       docker network connect pipeline-egress-out pipeline-egress-proxy
     fi
-    echo "  Proxy up. Add to your shell profile (guarded so a proxy-down host still works):"
+    echo "  Proxy up in $MODE mode. Add to your shell profile (guarded so a proxy-down host still works):"
     echo "    if docker inspect pipeline-egress-proxy >/dev/null 2>&1; then"
     echo "      export PIPELINE_EGRESS_NETWORK=pipeline-egress"
     echo "      export HTTPS_PROXY=http://pipeline-egress-proxy:8888 HTTP_PROXY=http://pipeline-egress-proxy:8888"
     echo "      export NO_PROXY=127.0.0.1,localhost"
     echo "    fi"
     echo "  START LOG-ONLY: reconcile observed hosts against egress-allowlist.txt in the canary,"
-    echo "  THEN flip FilterDefaultDeny on (Phase 7.3). Do not enforce before reconciling."
+    echo "  THEN re-run with --enforce (Phase 7.3). Do not enforce before reconciling."
   fi
 fi
 
