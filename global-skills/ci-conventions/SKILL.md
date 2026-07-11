@@ -9,7 +9,7 @@ description: The per-project CI merge gate (pipeline-ci.yml) — what each job r
 The pipeline's gates run pre-merge on the author's machine; **CI re-RUNS every objective
 check on the merge commit** as the source of truth. It never re-reads `.pipeline/`
 artifacts — those are the author's claims; re-execution is the only honest verification.
-Full rationale: `docs/ci-merge-gate-plan.md`.
+Full rationale: `plan/ci-merge-gate-plan.md`.
 
 ## What CI does and does not re-verify (the honest-scope table)
 

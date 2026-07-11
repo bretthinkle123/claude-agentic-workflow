@@ -5,7 +5,7 @@
 > Phases 2–5, §10 rows M–P). Turns a gate-verified merge commit into a signed artifact, deploys it
 > through staging to production with progressive delivery and automated rollback, observes it in
 > operation, and validates it holds under load with a tested recovery path. Chains onto
-> `docs/ci-merge-gate-plan.md` (PR L, required first). Companions: `docs/dast-plan.md` (targets the
+> `plan/ci-merge-gate-plan.md` (PR L, required first). Companions: `docs/dast-plan.md` (targets the
 > staging env PR N builds), `docs/pipeline-deployment-targets.md` (existing recipes this operationalizes),
 > and the skills `iac-conventions`, `deployment-checklist-and-rollback`, `logging-conventions`,
 > `containerization-conventions`, `secrets-management`, `ddia-patterns` (all already shipped).
@@ -133,7 +133,7 @@ gives for deferring DOC). Readiness differs per PR:
   reuses shipped pieces (`generate-sbom.sh`, the OIDC identity). No open design question.
 - **PR N — NOT build-ready; needs its own plan doc at kickoff.** It bundles five heavy, coupled
   decisions (staging IaC shape, migration executor, canary-vs-blue/green mechanism, load harness,
-  WAF/edge) — each an implementation choice, not a detail. Write `docs/environments-delivery-plan.md`
+  WAF/edge) — each an implementation choice, not a detail. Write `plan/environments-delivery-plan.md`
   when N starts, the same way this workstream got the CI doc first.
 - **PR O — NOT build-ready; the triage agent needs a dedicated design.** A new pipeline surface
   (read-only Sentry MCP, re-enters the pipeline, never auto-deploys) deserves the same threat-model
@@ -166,13 +166,13 @@ first deployable repo.
 - **Not new gate hooks / no `loop-exit` change** — the local invariant is untouched; this is CI/CD +
   infra the pipeline scaffolds, plus the read-only triage agent.
 - **Not multi-cloud** — AWS default (matches the whole repo); GCP/Cognito stay in `pipeline-alternatives.md`.
-- **Not the app-store delivery path** — that's the mobile sibling (`docs/store-compliance-plan.md`
+- **Not the app-store delivery path** — that's the mobile sibling (`plan/store-compliance-plan.md`
   for the gate; a Fastlane/Gradle *delivery* row for the upload) and depends on the macOS runner.
 - **Not auto-remediating prod** — the triage agent proposes; humans + the pipeline approve.
 
 ## Tie-in
 
-Chains onto `docs/ci-merge-gate-plan.md`; operationalizes the recipes in
+Chains onto `plan/ci-merge-gate-plan.md`; operationalizes the recipes in
 `docs/pipeline-deployment-targets.md`; consumes `generate-sbom.sh` (PR I) and every infra/logging/
 deploy skill already shipped; provides the staging target `docs/dast-plan.md` needs. Update
 `pipeline-june-analysis.md` §10 rows M–P (and add the named audit items — continuous vuln, WAF/edge,

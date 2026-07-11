@@ -9,7 +9,7 @@
 # objective check on the merge commit — it never re-reads .pipeline/ artifacts (those are
 # the author's claims; re-execution is the only honest verification). Agent-judgment gates
 # (criteria mapping, reconciliations) remain pre-merge guarantees; branch protection +
-# required human review are their CI-side counterpart. See docs/ci-merge-gate-plan.md.
+# required human review are their CI-side counterpart. See plan/ci-merge-gate-plan.md.
 #
 # The re-run scripts live in scripts/ci/ — copied INTO this repo at bootstrap (committed,
 # human-reviewed, pinned at the bootstrap-time version) so CI never fetches them remotely.
@@ -133,7 +133,7 @@ jobs:
   # pattern matching; findings surface as code-scanning ALERTS on the PR/merge commit (the
   # job fails only on analysis error, not on findings — added assurance, not a delivery
   # step). CI-only BY DESIGN: it builds a database and is slow, so it stays out of the local
-  # security⇄debug⇄test loop (docs/ci-merge-gate-plan.md Layer 4). Free on public repos;
+  # security⇄debug⇄test loop (plan/ci-merge-gate-plan.md Layer 4). Free on public repos;
   # private repos need GitHub Advanced Security — if neither applies, delete this job (the
   # Semgrep/ASVS layers above still run). One include entry PER LANGUAGE, each paired with
   # its build mode (duplicate the entry for a second language):

@@ -1,4 +1,4 @@
-# deploy.yml — environments + progressive delivery (PR N, docs/environments-delivery-plan.md).
+# deploy.yml — environments + progressive delivery (PR N, plan/environments-delivery-plan.md).
 # Written to .github/workflows/deploy.yml by bootstrap-project.sh. INERT until the operator
 # sets the repo variable DEPLOY_ENABLED=true (gh variable set DEPLOY_ENABLED --body true) —
 # so it ships to every project costlessly, like build-provenance's Dockerfile gate.

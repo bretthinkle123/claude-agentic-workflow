@@ -3,9 +3,9 @@
 > **Status: Layers 1–4 BUILT (L1 2026-07-05 PR #26; L2/L3/L4 2026-07-06 PR #33). L2/L3 are `templates/ci/dast-staging.yml`, inert until a staging env + `DAST_STAGING_ENABLED=true`; first real run is M3 Phase B.** Closes the biggest security gap named in the
 > 2026-07-05 audit: every existing security control (Semgrep/OSV/Trivy/Gitleaks/ASVS-DET/ASVS-6g)
 > analyzes code **at rest, pre-merge**; nothing ever attacks the **running** app. Companions:
-> `docs/ci-merge-gate-plan.md` (PR L — provides the CI runner and the job slot this fills),
-> `docs/delivery-operations-plan.md` (PR N — provides the staging environment DAST targets),
-> `docs/egress-control-plan.md` (the engine-scope network posture; unrelated — this is app-scope).
+> `plan/ci-merge-gate-plan.md` (PR L — provides the CI runner and the job slot this fills),
+> `plan/delivery-operations-plan.md` (PR N — provides the staging environment DAST targets),
+> `plan/egress-control-plan.md` (the engine-scope network posture; unrelated — this is app-scope).
 > Needs a **running app instance**, but *where* it runs is a choice: **Layer 1 (passive baseline)
 > can run TODAY as a local post-GREEN advisory stage** (boot an ephemeral instance the way
 > `smoke-check.sh` already does, then scan it — the same runtime-bound-advisory pattern as
@@ -146,7 +146,7 @@ Dependency order overall: **(Layer 1 + Layer 4, done) → L (re-home Layer 1 to 
 
 ## Tie-in
 
-Fills the `dast-baseline` job slot from `docs/ci-merge-gate-plan.md`; targets the staging env from
-`docs/delivery-operations-plan.md` (PR N). Add a DAST row to `pipeline-june-analysis.md` §10 (Track 2,
+Fills the `dast-baseline` job slot from `plan/ci-merge-gate-plan.md`; targets the staging env from
+`plan/delivery-operations-plan.md` (PR N). Add a DAST row to `plan/pipeline-june-analysis.md` §10 (Track 2,
 depends on L + N) when this moves from spec to build — it is currently **absent from the roadmap**
 and should be added as part of approving this plan.

@@ -1,37 +1,15 @@
-# Pipeline refinement loops
+# Pipeline refinement loops — candidate designs
 
-> **Status mixed.** The **planning quality loop** is now **IMPLEMENTED** as a lighter,
-> plan-audit-sourced variant (completeness check → at most one Opus revision on material
-> flags) — see that section. The remaining loops here are still candidate designs; each
-> becomes active only by following its own "Implementation notes" section.
-
-Documents planned or candidate loop patterns for the agentic pipeline. Each
-entry records the design, token cost, and trigger conditions so the decision to
-implement is informed rather than speculative.
+> **Candidate designs only.** The planning quality loop **shipped** as a lighter,
+> plan-audit-sourced variant (completeness check → at most one Opus revision on material flags) —
+> the as-built record is in `docs/pipeline-changelog.md` (PR B) and the live wiring is
+> `global-agents/plan-audit.md` / `global-agents/planning.md` / the orchestration SKILL. What
+> remains here is the heavier **numeric-score → re-plan** design it was scaled down from, kept as
+> the promotion path: implement it only when its telemetry trigger below fires.
 
 ---
 
-## Planning quality loop (plan-audit completeness → one Opus revision)
-
-**Status: IMPLEMENTED (lighter variant).** Rather than a separate Haiku scoring
-evaluator, the loop is sourced from the existing **`plan-audit`** agent (Sonnet).
-plan-audit runs its **completeness check**, classifies each flag **material vs.
-advisory**, and writes `revision_recommended` into `.pipeline/plan-audit.md`'s
-frontmatter. When `revision_recommended: true`, the orchestrator re-invokes
-**planning (Opus) exactly once** to address the material flags before the human
-checkpoint — capped at one pass, no recursion. This is wired today in
-`global-agents/plan-audit.md` (completeness + classification), `global-agents/planning.md`
-(revision pass), and `global-skills/pipeline-orchestration/SKILL.md` (conditional
-re-invoke). The heavier *numeric-score → re-plan* design below is retained as the
-record of the original concept and the trigger for promoting to a scored loop.
-
-> **Why the lighter variant shipped now.** The original gating condition was
-> telemetry ("implement once `run-log` shows the human repeatedly sending plans
-> back"). Because plan-audit and telemetry were already wired, the bounded variant
-> (one Sonnet completeness pass + at most one Opus revision) was cheap enough to
-> ship ahead of that signal, trading a small bounded cost for earlier oversight.
-> The retroactive telemetry trigger below still governs promotion to the full
-> numeric-score loop.
+## Scored planning loop (Haiku evaluator → numeric rubric → re-plan)
 
 ### What it does
 

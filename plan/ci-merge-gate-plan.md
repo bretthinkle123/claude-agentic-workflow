@@ -4,7 +4,7 @@
 > keystone of Track 2 (`pipeline-june-analysis.md`
 > §7 Phase 1, §10 row L): everything downstream (M–P, CQ, DAST Layers 2–3 / the CI re-home — DAST
 > Layer 1 is Docker-local and shipped before L) depends on it. Companions:
-> `docs/dast-plan.md` (runtime security jobs that slot into this CI), `docs/delivery-operations-plan.md`
+> `docs/dast-plan.md` (runtime security jobs that slot into this CI), `plan/delivery-operations-plan.md`
 > (PRs M–P, which chain deploy workflows onto this one), `docs/pipeline-deployment-targets.md`
 > (existing post-merge recipes this supersedes-in-part). Scope is the **per-project CI wiring the
 > pipeline scaffolds** plus the **engine's own CI**; it adds no new agents and changes no gate hook.
@@ -165,7 +165,7 @@ name and the skill documents where it lands, so CQ becomes a one-job diff once L
 - **Not re-deriving agent judgments** (criteria mapping, ASVS 6g, DP/input reconciliation) — stated
   above; pretending CI covers these would be the vacuous-green failure mode with extra steps.
 - **Not deployment** — jobs end at "merge commit verified"; deploy workflows are PR M/N
-  (`docs/delivery-operations-plan.md`).
+  (`plan/delivery-operations-plan.md`).
 - Not GitLab/Jenkins portability (GitHub Actions only — matches the gh-CLI/OIDC posture).
 
 ## Tie-in

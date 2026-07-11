@@ -252,7 +252,7 @@ Your gut: where it impressed you, where it disappointed.
   [free text — trust your read]
 ```
 
-With (A) + (B) I can grade the real output against every claim in `pipeline-june-analysis.md`,
+With (A) + (B) I can grade the real output against every claim in `../pipeline-june-analysis.md`,
 populate the empty **§8 "observed failures,"** and design **M1 (the quality-grading gate)** against
 the *actual* failure modes instead of my guesses.
 

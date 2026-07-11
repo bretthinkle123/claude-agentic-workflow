@@ -8,7 +8,7 @@ description: Digest a Claude Design (or any HTML/CSS/JS) export and replicate it
 
 > **Project-scoped.** Loaded on-demand by **planning** (to plan the SwiftUI view tree
 > against the design) and **implementation** (to build it). Consumes the approved
-> `.pipeline/design-spec.md` (see `docs/design-spec-stage-plan.md`) and/or the raw
+> `.pipeline/design-spec.md` (see `plan/design-spec-stage-plan.md`) and/or the raw
 > `design/` export. **This is not a transpiler.** You are extracting *design intent*
 > from a web artifact and expressing it in native SwiftUI — a faithful reproduction of
 > the visual result, not a line-by-line port of the DOM. A literal port produces

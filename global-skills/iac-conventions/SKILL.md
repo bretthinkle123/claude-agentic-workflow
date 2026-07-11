@@ -59,7 +59,7 @@ one-off job, a static asset bucket, or any stack with no always-on service.
 
 ## Environments split (PR N — D1)
 
-When a project deploys through staging to prod (`docs/environments-delivery-plan.md`), the
+When a project deploys through staging to prod (`plan/environments-delivery-plan.md`), the
 `infra/` facade grows an environment axis — **same modules, two thin instantiations**:
 
 ```

@@ -29,7 +29,7 @@ and every human checkpoint.
 ## Cross-cutting rules (apply to every pipeline PR)
 
 - **Mirror project-skill edits:** `global-project-skills/*` → `.agents/skills/*`. *(The `.codex/agents` Codex mirror was deleted 2026-06-29 — staying Anthropic-only; agent edits no longer need a Codex mirror.)*
-- **Keep specs in sync:** `docs/agentic-pipeline-plan.md` + `docs/system_architecture.md`.
+- **Keep specs in sync:** `plan/agentic-pipeline-plan.md` + `docs/system_architecture.md`.
 - **After agent `skills:` changes:** re-run `scripts/list-skills.sh --annotate`.
 - **After any change:** re-run `scripts/install-global.sh` (publishes to `~/.claude/`); restart Claude Code/IDE to load.
 - **Agents stay file-based (never packaged as a plugin):** plugin subagents silently ignore `hooks:` and `mcpServers:` (per the sub-agents docs), which would disable every Stop-hook telemetry/gate. Keep them as user/project agents in `~/.claude/agents/`.

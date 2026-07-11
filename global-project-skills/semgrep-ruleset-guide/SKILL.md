@@ -44,7 +44,7 @@ also auto-selects language rules, so these are depth on top, not the only covera
 | JWT-heavy | `p/jwt` | — |
 
 > **Swift / iOS** is **not** covered here — a Semgrep-Swift ruleset + SwiftLint is the deferred
-> **SB slice 4** (macOS/iOS-bound; see the **iOS** roadmap row + `docs/ios-swiftui-target-plan.md`).
+> **SB slice 4** (macOS/iOS-bound; see the **iOS** roadmap row + `plan/ios-swiftui-target-plan.md`).
 
 **Selected for this project:** `<STACK CONFIGS — fill from the menu above, e.g. p/python p/django p/dockerfile>`
 

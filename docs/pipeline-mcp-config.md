@@ -1,4 +1,4 @@
-# Pipeline MCP Configuration (companion to agentic-pipeline-plan.md)
+# Pipeline MCP Configuration (companion to `system_architecture.md`)
 
 **Status:** documentation-only. Nothing here loads at runtime unless you wire a
 server into `.mcp.json` and grant a subagent access to it. Treat MCP as opt-in

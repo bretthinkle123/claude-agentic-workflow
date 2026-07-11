@@ -1,7 +1,7 @@
 # System architecture
 
 This document is the single reference for how every file in this repo fits together, what each one
-does, and why it exists. Read it alongside `docs/agentic-pipeline-plan.md` (the full design rationale)
+does, and why it exists. Read it alongside `plan/agentic-pipeline-plan.md` (the full design rationale)
 and the [Anthropic Claude Code docs](https://code.claude.com/docs/en/overview).
 
 ---
@@ -353,31 +353,32 @@ claude-agentic-workflow/
 │   │                           snapshot, decision records, reconstructed artifacts) — audit corpus + suite fixtures
 │   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
 │
-├── docs/
-│   ├── agentic-pipeline-plan.md      Full design doc — chronological design log (historical; lags the live pipeline)
-│   ├── system_architecture.md        This file
+├── docs/                   Curated living documentation only (operator-placed)
+│   ├── system_architecture.md        This file — the current-state reference
+│   ├── pipeline-changelog.md         What shipped, by design unit (PR A–K, Track 2 L–P, side-tracks), with rationale links
+│   ├── roadmap.md                    Forward-looking only — open items, deferred workstreams, standing cadences
 │   ├── pr-history.md                 Every PR made against this repo + a by-concept summary
 │   ├── pipeline-threat-model.md      Engine-scope STRIDE model (PR K) — the pipeline itself as target
 │   ├── asvs-determinism-roadmap.md   ASVS-DET: agent-reasoned checks promoted to deterministic gates (Slices A–D shipped)
-│   ├── design-spec-stage-plan.md     DS side-track plan — design bundle → vouched design-spec.md (Layers 0–4 built)
-│   ├── ios-swiftui-target-plan.md    iOS side-track plan (skills/planning layers built; Layer 3 gate adapters macOS-bound)
-│   ├── data-protection-enforcement-plan.md  DP side-track plan — per-field at-rest accountability (built)
-│   ├── egress-control-plan.md        EG side-track plan — default-deny egress (deterministic slices built; proxy operator-provisioned)
-│   ├── dast-plan.md                  DAST side-track plan — fully delivered: Layer 1 (PR #26) + Layers 2–4 (PR #33: dast-conventions, planning ACs, dast-staging.yml); Layer 5 (Nuclei) optional
-│   ├── store-compliance-plan.md      STORE side-track plan — fully delivered: Layers A–E (PR #27) + SC-6/7/9 (PR #33)
+│   ├── dast-plan.md                  DAST living convention doc — fully delivered: Layer 1 (PR #26) + Layers 2–4 (PR #33); Layer 5 (Nuclei) optional
 │   ├── finding-ledger.md             U-10: one row per verifier-CONFIRMED escape/incident — each becomes a permanent check (suite case, hook, or agent-eval), never a re-learned lesson
-│   ├── m3-validation-run-plan.md     The M3 validation-run plan (Meterly): 4 phases, scorecard, evidence rule 0
-│   ├── ci-merge-gate-plan.md         PR L spec — CI as the merge gate (built, PR #28)
-│   ├── delivery-operations-plan.md   PRs M–P spec — artifact/provenance, observability, scale/DR (built, PRs #29/#31/#32)
-│   ├── environments-delivery-plan.md PR N spec — environments + progressive delivery + real load (built, PR #30)
-│   ├── triage-agent-plan.md          PR O spec — the read-only triage agent (built, PR #31)
-│   ├── DOC-consolidation-plan.md     Planned doc-set consolidation (the DOC roadmap row)
+│   ├── sk-assessment-log.md          Ongoing skill-assessment log
 │   ├── decisions/<branch>/           Design-record retention (PR L Layer 0): documentation copies plan/acceptance/plan-audit/security-report here before the review manifest
 │   ├── pipeline-alternatives.md      Non-default stack scaffolds (Cognito, GCP, JS backend)
 │   ├── pipeline-deployment-targets.md  CI/CD patterns for after the PR merges
 │   ├── pipeline-mcp-config.md        MCP server wiring per agent
 │   ├── pipeline-code-quality-audit.md  [DESIGN, not built] code-audit stage spec
 │   └── pipeline-refinement-loops.md  Candidate refinement loops (the planning loop shipped; the rest are designs)
+│
+├── plan/                   Tracked plan archive — shipped one-shot PR plans, run plans, audits (convention: plan/README.md)
+│   ├── agentic-pipeline-plan.md      Full design doc — chronological design log (historical; lags the live pipeline)
+│   ├── pipeline-june-analysis.md     The original assessment + PR-sequenced master roadmap (§10) — historical
+│   ├── ci-merge-gate-plan.md / delivery-operations-plan.md / environments-delivery-plan.md / triage-agent-plan.md   Track-2 specs (built, PRs #28–#32)
+│   ├── design-spec-stage-plan.md / ios-swiftui-target-plan.md / data-protection-enforcement-plan.md / egress-control-plan.md / store-compliance-plan.md   Side-track specs (built)
+│   ├── m3-validation-run-plan.md / m4-*-run-plan.md / eval/m2-run-*.md   Executed run plans
+│   └── …                             plus the shipped audits and plans (PIPELINE-AUDIT-REPORT, revision plan, DOC consolidation plan)
+│
+├── plans/                  Gitignored — new private plan drafts/scratch (promoted into plan/ when a PR publishes them)
 │
 ├── .github/workflows/
 │   └── eval.yml            The engine's own CI merge gate: runs the full 28-suite / ~474-assertion harness on every push/PR to main (PR L Layer 1; `eval` is a required check)
@@ -1131,7 +1132,7 @@ Desktop is not running.
 now lives as the **deploy-verify job in `templates/ci/pipeline-ci.yml`**, inert until a project
 enables `deploy.yml` (PR N) and sets `DEPLOY_HEALTH_URL`. It was never, and still isn't, a pipeline
 Stop hook: the deployment agent stops at the PR; there is no live instance to probe inside the
-authoring loop. See `docs/ci-merge-gate-plan.md`.
+authoring loop. See `plan/ci-merge-gate-plan.md`.
 
 ---
 

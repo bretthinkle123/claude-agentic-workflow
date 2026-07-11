@@ -1,4 +1,4 @@
-# dr-drill.yml — executed backup/restore + DR drill (PR P, docs/delivery-operations-plan.md §P).
+# dr-drill.yml — executed backup/restore + DR drill (PR P, plan/delivery-operations-plan.md §P).
 # Written by bootstrap-project.sh. INERT until the operator sets DR_DRILL_ENABLED=true.
 #
 # "A backup you have never restored is a hope, not a backup." This drill RESTORES the latest

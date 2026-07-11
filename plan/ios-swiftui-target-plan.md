@@ -9,7 +9,7 @@
 > the Windows dev host**; until a macOS runner exists, iOS runs are stamped reduced-assurance by
 > construction.
 > Scope is the **engine's ability to plan, build, and gate a native iOS app** (Project 3),
-> NOT the app itself. Consumes the artifact from `docs/design-spec-stage-plan.md` (a design
+> NOT the app itself. Consumes the artifact from `plan/design-spec-stage-plan.md` (a design
 > bundle → approved `design-spec.md`). This is the front-end workstream's iOS specialization
 > (`[[deferred-frontend-workstream]]`).
 
@@ -155,7 +155,7 @@ deployment mechanism — the gap here was *accountability*, not the recipe.
 
 1. **Layer 0** — the three skills (`swift-conventions` first). **S–M.** Unblocks planning/impl.
 2. **Layer 1** — planning's iOS target branch + native-from-reference instruction + App Store ACs.
-   **S–M.** Depends on Layer 0 and (for design intent) `docs/design-spec-stage-plan.md`.
+   **S–M.** Depends on Layer 0 and (for design intent) `plan/design-spec-stage-plan.md`.
 3. **Layer 3 gate adaptation** — the precondition for trust; **L**, platform-bound (macOS). Should
    land **before** an iOS build is treated as gate-verified, even though Layer 2 can technically
    run without it.
@@ -163,7 +163,7 @@ deployment mechanism — the gap here was *accountability*, not the recipe.
 
 ## Tie-in
 
-Directly depends on `docs/design-spec-stage-plan.md` (design intent) and reuses the existing
+Directly depends on `plan/design-spec-stage-plan.md` (design intent) and reuses the existing
 deploy recipe. Recorded in the front-end workstream (`[[deferred-frontend-workstream]]`); update
 the parallel side-tracks table in `pipeline-june-analysis.md` with a DS and an iOS row when these
 move from spec to build.

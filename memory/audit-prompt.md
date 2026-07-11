@@ -20,7 +20,7 @@ Read these files in order before forming any opinions:
 - `memory/brett-profile.md` — preferences and working style
 
 **Main spec (read in full):**
-- `docs/agentic-pipeline-plan.md` — the authoritative design doc (~2600 lines, three parts:
+- `plan/agentic-pipeline-plan.md` — the authoritative design doc (~2600 lines, three parts:
   orientation guide, main document, implementation appendix)
 
 **Companion files (skim for cross-reference checks):**
@@ -51,7 +51,7 @@ A reusable Claude Code multi-agent SDLC pipeline:
 - The deployment agent makes the pipeline's only commit.
 
 It is in the DESIGN phase. Nothing has been built yet. The goal of this audit is to
-determine whether `docs/agentic-pipeline-plan.md` and the repo are fully ready to start
+determine whether `plan/agentic-pipeline-plan.md` and the repo are fully ready to start
 creating the actual files.
 
 ---

@@ -141,7 +141,7 @@ as the infra-layer floor underneath.
   skills' job; DR/backup encryption is Track-2 infra).
 - Not an LLM-judged gate — the floor is `jq` on a field the agent populates; classification is the
   agent's analysis, the *block* is deterministic.
-- Not the engine egress work (separate — `docs/egress-control-plan.md`).
+- Not the engine egress work (separate — `plan/egress-control-plan.md`).
 
 ## Sequencing (each slice independent; none on the critical path)
 
