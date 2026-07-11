@@ -21,7 +21,11 @@ set -uo pipefail
 
 # Drain stdin when invoked as a Notification hook (payload JSON arrives on stdin; we
 # deliberately ignore its contents — payload rule above). Skip when run from a TTY.
-[ ! -t 0 ] && cat >/dev/null 2>&1
+# BOUNDED (2026-07-11): an unbounded `cat` blocks forever when the caller hands us an
+# open pipe that never EOFs — wedging the CALLER, the one failure mode this hook must
+# never have. If `timeout` is missing the drain is skipped entirely (a writer EPIPE is
+# acceptable; a hang is not).
+[ ! -t 0 ] && timeout 2 cat >/dev/null 2>&1
 
 EVENT="${1:-attention}"
 SLUG="${2:-}"
