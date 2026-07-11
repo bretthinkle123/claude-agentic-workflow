@@ -1,7 +1,12 @@
 # Documentation consolidation plan (DOC side-track)
 
 > **Status: EXECUTED 2026-07-10 (branch `docs/doc-consolidation`)** — this archived copy is the
-> plan of record; the checklist below was carried out as written. **Revised 2026-07-09** to fold
+> plan of record; the checklist below was carried out as written. **Post-execution operator
+> adjustments (same branch, 2026-07-11):** `system_architecture.md` moved from `docs/` to the repo
+> root, and a follow-up sort audit moved four more delivered/design docs into `plan/`
+> (`dast-plan.md`, `asvs-determinism-roadmap.md`, `pipeline-code-quality-audit.md`,
+> `pipeline-refinement-loops.md`) — so the final tree is root README + `system_architecture.md`,
+> nine living docs in `docs/`, and everything else under `plan/`. **Revised 2026-07-09** to fold
 > in the new `plans/`-vs-`docs/` split (see Decisions). **Revised 2026-07-10** — migration destination changed to the new
 > **tracked `plan/` directory** (operator decision; `plans/` stays as the gitignored scratch
 > area), cross-reference table re-verified against the current tree (deltas folded in:

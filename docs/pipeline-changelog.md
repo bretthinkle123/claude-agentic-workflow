@@ -61,7 +61,7 @@
   `plan/input-controls-enforcement-plan.md`.
 - **ASVS 5.0.0 + ASVS-DET** (#19/#20/#25). The 17-chapter checklist as enforced
   definition-of-done with deterministic gate floors (`asvs.reconciled`, human-owned waivers,
-  `asvs-sast.sh` Tier-1 rules). Roadmap doc: `plan/asvs-determinism-roadmap.md`.
+  `asvs-sast.sh` Tier-1 rules). Delivered spec: `plan/asvs-determinism-roadmap.md`.
 - **DS — design-spec stage** (#21/#22). Untrusted design bundles (Claude Design / Figma / 
   screenshots) normalized into a human-vouched, hash-anchored `design-spec.md` with an injection
   report. `plan/design-spec-stage-plan.md`.
@@ -69,8 +69,8 @@
   (`plan/data-protection-enforcement-plan.md`); default-deny egress allowlist + detection
   (`plan/egress-control-plan.md`); scanner breadth (Gitleaks, `trivy fs`, per-stack Semgrep).
 - **DAST** (#26, completed #33). Runtime security in four layers, from the post-GREEN local ZAP
-  passive baseline to nightly staging Schemathesis fuzz + authenticated active scan. Living
-  convention doc: `plan/dast-plan.md`.
+  passive baseline to nightly staging Schemathesis fuzz + authenticated active scan. Delivered
+  spec: `plan/dast-plan.md`.
 - **STORE — app-store compliance gate** (#27, completed #33). Deterministic `store-compliance.sh`
   (SC-1…SC-9) blocking known auto-rejection causes for a declared iOS/Android target; reduced-
   assurance stamp for gate-unverifiable targets. `plan/store-compliance-plan.md`.
