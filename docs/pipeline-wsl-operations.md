@@ -97,18 +97,38 @@ Precondition: the target repo is bootstrapped and its `PROJECT.md` describes the
 scope (the normal flow from the root README — nothing about it changes in WSL).
 
 1. Open a **fresh WSL terminal** (fresh = the proxy env from `.bashrc` is loaded).
-2. `cd ~/repos/<app>` and start `claude`. It's the same conversational interface as the
-   VSCode extension — describe the feature in plain English and ask for a pipeline run.
+2. `cd ~/repos/<app>` and start the session:
+
+   ```bash
+   claude --permission-mode auto
+   ```
+
+   **The flag is load-bearing on current CLI builds** (see §6): Claude Code ≥2.1.207
+   accepts `"auto"` from this flag but silently ignores it as a settings
+   `permissions.defaultMode` value — the session then opens in `default` mode and prompts
+   for every file edit, which feels like the entire autonomy setup doesn't exist. The
+   provisioning adds a `claude` alias carrying the flag to `~/.bashrc`, so a plain
+   `claude` in an interactive WSL terminal is safe; type the flag explicitly anywhere the
+   alias doesn't reach. (Mid-session, Shift+Tab cycles the permission mode live.)
+
+   It's the same conversational interface as the VSCode extension — describe the feature
+   in plain English and ask for a pipeline run.
 3. **Walk away.** The run proceeds with zero prompts. You get a toast at exactly these
    moments:
    - `plan` — the plan is ready for review
    - `diff` — the built change + findings are ready for review
    - `capped` — a retry/loop cap was hit and the run stopped for a human
    - `attention` — the session hit an unexpected prompt or is waiting on input
-4. **At each checkpoint, YOU type the approval in the terminal** — never the agent, never
-   from a phone (settled decisions: desk-only, human-typed):
+4. **At each checkpoint, YOU type the approval — in a second WSL tab, `cd`'d into the
+   same repo the run is using** — never the agent, never from a phone (settled decisions:
+   desk-only, human-typed):
    - plan: `bash ~/.claude/hooks/approve-plan.sh` (or `touch .pipeline/plan-approved`)
    - diff: `bash ~/.claude/hooks/approve-diff.sh`
+
+   The location matters: the marker file must land on the same filesystem the run is
+   polling. Running the approve script from a Windows terminal (or a Windows clone of the
+   repo) writes it somewhere the WSL run will never see — the run just keeps waiting.
+   The scripts print the host + absolute path they wrote so you can catch this.
 5. An `attention` toast between checkpoints is a bug in the allowlist, not a fact of
    life: triage every one to a resolution — a new scoped allow rule in
    `templates/project-settings.json`, a wrapper hook (the `registry-check.sh` pattern),
@@ -203,6 +223,8 @@ separately from the Windows clone — the two hosts don't share a `~/.claude`.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
+| Prompts for EVERY file edit, as if no settings exist | CLI ≥2.1.207 silently ignores `defaultMode: "auto"` in settings; session opened in `default` mode | launch with `claude --permission-mode auto` (the flag path works); Shift+Tab fixes a live session |
+| Approved a checkpoint but the run keeps waiting | approve script ran outside the run's repo/filesystem (e.g. Windows terminal vs WSL run) | re-run it in a WSL tab `cd`'d to the run's repo; the script prints host + path it wrote |
 | `attention` toast mid-run | command not in the allowlist | triage per §2.5 |
 | Deployment push 403 on the granted repo | token's Contents perm is Read-only, or token expired | §3 gotcha 1 / renew |
 | Push asks for username/password | credential helper not wired | `gh auth setup-git` |

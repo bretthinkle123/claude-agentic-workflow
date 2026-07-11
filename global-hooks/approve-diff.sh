@@ -56,4 +56,7 @@ fi
 jq -nc --arg h "$CURRENT" --arg t "$(date -u +%FT%TZ)" \
   '{approved_change_hash:$h, approved_at:$t, note:"human diff-review checkpoint (M5)"}' \
   > .pipeline/diff-approved
-echo "[approve-diff] recorded approval — approved_change_hash=$CURRENT"
+# CN1-2: name the host + absolute path — a marker written on the WRONG machine/filesystem
+# (e.g. the Windows clone while the run polls the WSL clone) looks identical to success.
+echo "[approve-diff] recorded approval — $(hostname 2>/dev/null || uname -n):$(pwd)/.pipeline/diff-approved (approved_change_hash=$CURRENT)"
+echo "[approve-diff] if the run doesn't advance within a minute, confirm the pipeline session is polling THIS path."

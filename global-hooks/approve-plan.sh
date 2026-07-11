@@ -46,4 +46,7 @@ if command -v jq >/dev/null 2>&1; then
 else
   : > .pipeline/plan-approved   # jq-less fallback: the empty marker is still valid
 fi
-echo "[approve-plan] recorded approval — .pipeline/plan-approved written${PLAN_SHA:+ (plan sha256 $PLAN_SHA)}"
+# CN1-2: name the host + absolute path — a marker written on the WRONG machine/filesystem
+# (e.g. the Windows clone while the run polls the WSL clone) looks identical to success.
+echo "[approve-plan] recorded approval — $(hostname 2>/dev/null || uname -n):$(pwd)/.pipeline/plan-approved written${PLAN_SHA:+ (plan sha256 $PLAN_SHA)}"
+echo "[approve-plan] if the run doesn't advance within a minute, confirm the pipeline session is polling THIS path."
