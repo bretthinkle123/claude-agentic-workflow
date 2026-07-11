@@ -1,7 +1,8 @@
 # Documentation consolidation plan (DOC side-track)
 
-> **Status: plan, awaiting approval. Revised 2026-07-09** to fold in the new `plans/`-vs-`docs/`
-> split (see Decisions). **Revised 2026-07-10** — migration destination changed to the new
+> **Status: EXECUTED 2026-07-10 (branch `docs/doc-consolidation`)** — this archived copy is the
+> plan of record; the checklist below was carried out as written. **Revised 2026-07-09** to fold
+> in the new `plans/`-vs-`docs/` split (see Decisions). **Revised 2026-07-10** — migration destination changed to the new
 > **tracked `plan/` directory** (operator decision; `plans/` stays as the gitignored scratch
 > area), cross-reference table re-verified against the current tree (deltas folded in:
 > `m4-double-prime-run-plan.md` added to the move list; new refs in `dast-plan.md`,

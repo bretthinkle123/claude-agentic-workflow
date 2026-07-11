@@ -37,7 +37,8 @@
   hook; terminal `loop-state` on GREEN exit (closes F6).
 - **PR H — the eval harness (M8)** (#10). `tests/run-eval.sh`, deterministic bash+jq, zero model
   calls — 6 suites / 74 assertions at birth against a golden Linkly fixture; the repo's safety net
-  ever since (now 21+ suites in CI). Its crown-jewel suite asserts **loop-exit ≡ deployment-gate**
+  ever since (28 suites / ~474 assertions as of 2026-07-09, run in CI). Its crown-jewel suite
+  asserts **loop-exit ≡ deployment-gate**
   from the SKILL's own predicates (#13 hardened this to read the live predicates, so drift fails
   the harness).
 - **PR I — review integrity + supply chain (M5/M6/F3)** (#11). Human-only TTY-gated
@@ -104,6 +105,8 @@ Full specs: `plan/ci-merge-gate-plan.md` (L), `plan/delivery-operations-plan.md`
   corpus. Full detail: `docs/pr-history.md` row 34; run plans under `plan/` (m3/m4 files).
 - **TA — skill & MCP overhaul** (#35) and **SK — skill enrichment** (#36). The vetted-tooling
   adaptations and the public-skill mining pass over the authoring agents' skill files.
+- **M4″ audit deltas** (#38). Full implementation of the M4-double-prime run audit's findings
+  (A, B1–B7, C1–C5); run evidence preserved under `examples/`.
 - **Regulated-data skills** (#37). `regulated-data-conventions` (regime → control router),
   `audit-trail-conventions`, `data-lifecycle-conventions`; AEAD pin in data-protection; the annual
   standards-review cadence in `global-skills/README.md`.
