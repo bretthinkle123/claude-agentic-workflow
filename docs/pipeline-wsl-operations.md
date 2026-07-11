@@ -1,8 +1,11 @@
 # Running the pipeline autonomously in WSL2 — operator guide
 
 **Audience:** anyone who wants to kick off a pipeline run, walk away, and come back only
-for the human checkpoints. This documents the setup completed 2026-07-11 (autonomy plan
-Phases 3/5/6), how to run against it, and how to maintain it.
+for the human checkpoints. This documents the sandboxed pipeline host — how to set it up
+on your own machine, run against it, and maintain it. It assumes you already know the
+basic pipeline flow (install → bootstrap a project → `PROJECT.md` → run); if not, start
+with the root [README](../README.md). The threat reasoning behind every control here is
+in [docs/pipeline-threat-model.md](pipeline-threat-model.md).
 
 **What the setup gives you, in one sentence:** a pipeline run executes with **zero
 permission prompts** between checkpoints, **pages you with a Windows toast** when it needs
@@ -23,16 +26,19 @@ still the strongest defense and are deliberately not automatable.
 
 ---
 
-## 1. One-time setup (done on this machine; repeat for a new machine)
+## 1. One-time setup (per machine)
 
-Prerequisites: Windows 11, WSL2 with an Ubuntu distro (`wsl --install -d Ubuntu`), Docker
-Desktop with WSL integration enabled for that distro.
+Prerequisites: Windows 10/11 with WSL2 and an Ubuntu distro (`wsl --install -d Ubuntu`),
+Docker Desktop with WSL integration enabled for that distro. (On a native Linux host the
+same scripts run without the WSL parts — the isolation story is then your VM/host
+hygiene.) For desktop toast notifications, install BurntToast once on the Windows side
+(PowerShell): `Install-Module BurntToast -Scope CurrentUser`.
 
-1. **Clone the framework into the WSL native filesystem** (never `/mnt/c/...` — 9P is
+1. **Clone this repo into the WSL native filesystem** (never `/mnt/c/...` — 9P is
    slow, and a pipeline writing to your Windows profile defeats the isolation):
 
    ```bash
-   git clone https://github.com/bretthinkle123/claude-agentic-workflow.git ~/repos/claude-agentic-workflow
+   git clone <this-repo-or-your-fork> ~/repos/claude-agentic-workflow
    cd ~/repos/claude-agentic-workflow
    ```
 
@@ -63,14 +69,16 @@ Desktop with WSL integration enabled for that distro.
 
 5. **Claude login:** `claude` once in the WSL terminal and complete the login flow.
 
-6. **Notifications:** `~/.claude/notify.env` is seeded by the setup script.
-   - **Toast-only (current choice):** leave `NTFY_TOPIC=` blank. Checkpoint/cap/attention
-     events pop a Windows toast (works from WSL via interop) and persist in the Windows
-     notification center. You get paged at the machine, not on a phone; a run that pauses
-     while you're out simply waits.
-   - **Phone pings (optional later):** set `NTFY_TOPIC` to a long random string
+6. **Notifications:** `~/.claude/notify.env` is seeded by the setup script. Pick one:
+   - **Desktop toast (default — leave `NTFY_TOPIC=` blank):** checkpoint/cap/attention
+     events pop a Windows toast (works from WSL via interop; needs BurntToast, see
+     prerequisites) and persist in the Windows notification center. You get paged at the
+     machine, not on a phone; a run that pauses while you're out simply waits for you.
+   - **Phone pings (ntfy):** set `NTFY_TOPIC` to a long random string
      (`openssl rand -hex 16`) and subscribe to that topic in the ntfy app. The topic IS
-     the secret. Payload is always event + feature slug + repo name, never content.
+     the secret — treat it like a password. Payload is always event + feature slug +
+     repo name, never content. Note this pages you; it does not let you approve from the
+     phone — approvals are desk-only by design (§7).
 
 7. **Target repo(s):** clone into `~/repos/<app>` and run
    `bash ~/.claude/pipeline-templates/bootstrap-project.sh` in each. **Bootstrap will not
@@ -84,6 +92,9 @@ Desktop with WSL integration enabled for that distro.
    the flip it must print `SANDBOX OK`.
 
 ## 2. Running a pipeline autonomously
+
+Precondition: the target repo is bootstrapped and its `PROJECT.md` describes the feature
+scope (the normal flow from the root README — nothing about it changes in WSL).
 
 1. Open a **fresh WSL terminal** (fresh = the proxy env from `.bashrc` is loaded).
 2. `cd ~/repos/<app>` and start `claude`. It's the same conversational interface as the

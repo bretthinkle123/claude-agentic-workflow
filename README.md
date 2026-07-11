@@ -67,6 +67,24 @@ It never runs `git` — the deployment agent makes the pipeline's first and only
 3. Open a Claude Code session in that repo and tell it to run the pipeline from planning.
    It loads the `pipeline-orchestration` skill automatically and drives each stage.
 
+## Autonomous (walk-away) runs
+
+Out of the box, a bootstrapped project runs with **zero permission prompts between the two
+human checkpoints** (plan review and diff review) and can page you — desktop toast or ntfy
+phone ping — when a checkpoint, cap-out, or unexpected prompt needs a human. Approvals stay
+human-typed in a terminal, by design.
+
+To also make unattended runs **safe against hostile inputs** (malicious dependencies,
+prompt injection in scanned content), run the pipeline inside the sandboxed WSL2 host:
+a disposable Linux userland, a default-deny egress proxy, and a repo-scoped GitHub token
+that together cap what a compromised run can reach. Setup is one script plus a token;
+verification is one script (`scripts/verify-sandbox.sh`).
+
+**[docs/pipeline-wsl-operations.md](docs/pipeline-wsl-operations.md)** is the full
+operator guide: one-time setup on your own machine, the run/checkpoint/notification flow,
+token lifecycle (create, renew, add repos), egress-allowlist maintenance, troubleshooting,
+and the security invariants that must not be relaxed.
+
 ## Why global hooks are safe
 
 Hooks fire only when a pipeline agent is explicitly invoked (wired via each agent's `Stop`
@@ -122,6 +140,7 @@ and restart Claude Code.
 - **`docs/pr-history.md`** — the same history PR-by-PR, with a by-concept summary.
 - **`docs/roadmap.md`** — forward-looking only: open items, deferred workstreams, standing cadences.
 - **`docs/pipeline-threat-model.md`** — STRIDE over the engine itself.
+- **`docs/pipeline-wsl-operations.md`** — operator guide for sandboxed walk-away runs (WSL2 host, egress proxy, scoped-token lifecycle).
 - **Reference companions** — `docs/pipeline-alternatives.md` (non-default stacks), `docs/pipeline-deployment-targets.md` (post-merge CI/CD), `docs/pipeline-mcp-config.md` (MCP wiring).
 - **`plan/`** — the tracked plan archive (historical PR plans, run plans, audits — incl. the ~2,900-line `plan/agentic-pipeline-plan.md` design log); `plans/` is gitignored scratch for new drafts (convention: `plan/README.md`).
 - **`tests/`** — the deterministic eval harness (`bash tests/run-eval.sh`), also the CI merge gate.
