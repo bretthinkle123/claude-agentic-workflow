@@ -8,9 +8,9 @@
 > was also narrowed to platform-specific markers (AndroidManifest/`.xcodeproj`/declaration, not bare
 > `build.gradle`/`Info.plist`) so a JVM/Gradle backend or a desktop app is never mis-scoped. Only the
 > higher-false-positive used-API↔declaration compares (SC-6 permission, SC-7 debug-logging, SC-9
-> Required-Reason API) remain as a Layer-C follow-up. Companion to `docs/ios-swiftui-target-plan.md` (which shipped the
+> Required-Reason API) remain as a Layer-C follow-up. Companion to `plan/ios-swiftui-target-plan.md` (which shipped the
 > Apple-side competence), `docs/pipeline-deployment-targets.md` (the post-merge Fastlane / Gradle
-> submission recipes), and `docs/asvs-determinism-roadmap.md` (whose Tier 1/2/3 promotion pattern
+> submission recipes), and `plan/asvs-determinism-roadmap.md` (whose Tier 1/2/3 promotion pattern
 > this reuses). Scope is making store-submission requirements **accountable inside the pipeline** —
 > caught at planning/gate time, not at upload — for projects whose `PROJECT.md` declares a mobile
 > store target. It is NOT a guarantee of store acceptance (final review is human, by Apple/Google).
@@ -240,8 +240,8 @@ don't gloss it.
 
 ## Tie-in
 
-Pointed to from `docs/asvs-determinism-roadmap.md` (pattern source), extends
-`docs/ios-swiftui-target-plan.md` Layer 4 (Apple accountability) to Google Play, and makes the
+Pointed to from `plan/asvs-determinism-roadmap.md` (pattern source), extends
+`plan/ios-swiftui-target-plan.md` Layer 4 (Apple accountability) to Google Play, and makes the
 `docs/pipeline-deployment-targets.md` recipes' requirements accountable upstream. Tracked as the
 **SC** row in the Track 2 (delivery/ops) table of `pipeline-june-analysis.md` (parallel to L–P,
 not on the "10/10" line); flip its ⬜ per layer as the slices land.

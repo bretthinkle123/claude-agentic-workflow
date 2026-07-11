@@ -335,7 +335,7 @@ Your gut: where it impressed you, where it disappointed. [free text]
 ```
 
 With (A) the evidence bundle + (B) this report I can grade the Track-1 gates against real output,
-extend §8 of `pipeline-june-analysis.md` with an "M2 run #2 (Ledgerly)" subsection, and — if it goes
+extend §8 of `../pipeline-june-analysis.md` with an "M2 run #2 (Ledgerly)" subsection, and — if it goes
 clean green — promote the fixture as a **second golden fixture** (non-Python, fat-core) for the PR H
 eval harness in `tests/fixtures/`.
 

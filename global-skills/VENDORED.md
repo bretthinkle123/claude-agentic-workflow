@@ -52,4 +52,4 @@ new source.
 | ponytail (concept) | github DietrichGebert/ponytail | `main` (concept) | MIT | `global-skills/code-standards/` (YAGNI section) | anti-over-engineering heuristics (no speculative abstraction / don't reinvent stdlib / earn dependencies / no dead flexibility / delete before add) — concept adapted house-style, no text copied; balances the existing SOLID table | 2026-07-07 | IMPORTED (SK-2) |
 
 *(SK first-pass imports append rows here as they land — see the SK build-ready addendum in
-`pipeline-june-analysis.md`.)*
+`plan/pipeline-june-analysis.md`.)*

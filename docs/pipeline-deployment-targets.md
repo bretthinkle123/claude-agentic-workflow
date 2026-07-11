@@ -1,4 +1,4 @@
-# Pipeline deployment targets (companion to `agentic-pipeline-plan.md`)
+# Pipeline deployment targets (companion to `system_architecture.md`)
 
 Documentation-only. **Nothing here is loaded at pipeline runtime** — this covers everything that happens *after* the deployment agent opens a PR on GitHub. The pipeline's job ends at the PR; production delivery is handled by CI/CD after the PR is merged.
 

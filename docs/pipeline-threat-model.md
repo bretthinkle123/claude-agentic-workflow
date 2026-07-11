@@ -93,9 +93,16 @@ to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
   legitimately written by their owning stage, so they cannot be blanket-guarded without
   false-positives. Mitigated by ordering, `ran_at` stamping, and the loop-exit≡gate
   invariant; the residual (a same-stage-shaped forgery by a later agent) is accepted.
-- **`curl` egress is unrestricted** (plan-audit needs it for registry reality-checks).
-  Accepted because the working tree holds no secrets to exfiltrate; the machine
-  credential is outside the repo.
+- **Registry/WebFetch egress — narrowed 2026-07-10 (#39), residual accepted.** Formerly
+  "curl egress is unrestricted (plan-audit needs it for registry reality-checks)"; now
+  plan-audit's registry reality-check goes through `registry-check.sh` (a scoped npm/PyPI
+  wrapper — no bare-curl verb in the skill), and WebFetch is domain-allowlisted
+  **deny-not-prompt** via `guard-webfetch-domains.sh` + `webfetch-domains.txt` (fails
+  closed; fragment-planted `@` bypass regression-tested). Remaining residual: an
+  allowlisted host abused as the channel, and the working tree still holds no secrets;
+  the machine credential is outside the repo. The WSL2 sandbox + enforcing proxy are
+  turnkey (`setup-wsl-pipeline.sh`, `verify-sandbox.sh`) but deliberately **not yet a
+  gate** — prove-then-codify, post-canary.
 - **Subtle prompt injection surviving the human checkpoints** (design-approved, plan-approved,
   diff-approved)**.** The human review is the
   backstop; this residual is inherent to an LLM pipeline and is why the *deterministic*
@@ -153,15 +160,18 @@ STRIDE:
   Mitigation: three human checkpoints; deterministic (never LLM-judged) gates; the
   design-spec injection report; treat untrusted input as data not instructions.
 - Repudiation (Low): run-log.jsonl + single git commit.
-- Information disclosure (Medium): injected curl egress / .env read. Mitigation: .env
-  read-deny; no secrets in the working tree; deployment pre-commit secret scan.
+- Information disclosure (Medium): injected egress / .env read. Mitigation: .env
+  read-deny; no secrets in the working tree; deployment pre-commit secret scan;
+  default-deny egress allowlists (EG proxy + WebFetch domain guard + scoped registry
+  wrapper, #39).
 - Denial of service (Low-Med): runaway loop. Mitigation: loop-guard circuit-breaker +
   maxTurns caps.
 - Elevation of privilege (Medium): agent out of lane / deployment self-authorizing.
   Mitigation: per-agent tool scoping; fail-closed deployment gate; the marker guard.
 Accepted residual: obfuscated Bash past the string scanner; cross-stage gate-status
-forgery; unrestricted curl egress; subtle injection surviving human review; no per-agent
-filesystem sandbox.
+forgery; allowlisted-host egress abuse (curl/WebFetch scoped by allowlists since #39);
+subtle injection surviving human review; no per-agent filesystem sandbox (WSL2 sandbox
+turnkey but ungated until post-canary).
 Render this as an OWASP Threat Dragon diagram. Output either (a) valid Threat Dragon
 JSON importable at app.threatdragon.com, or (b) a labeled data flow diagram with trust
 boundaries if JSON is not feasible. No additional context is available beyond what is in

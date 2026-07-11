@@ -1,6 +1,6 @@
 # M4′ proof run — plan (brownfield run #5: proof-gate attempt, post-M4-reset)
 
-> Derived from `docs/m4-proof-run-plan.md` — everything not stated here carries over
+> Derived from `plan/m4-proof-run-plan.md` — everything not stated here carries over
 > unchanged (brownfield discipline, rule-0 instrumentation, per-stage scorecard anchors,
 > from-disk audit, "success = boring"). M4 audited **RESET** (criterion 1 at 35.3% final;
 > criterion 5 process miss, cured) — see `examples/meterly/run-evidence/m4/AUDIT-REPORT.md`.

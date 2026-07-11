@@ -1,4 +1,4 @@
-# Pipeline MCP Configuration (companion to agentic-pipeline-plan.md)
+# Pipeline MCP Configuration (companion to `system_architecture.md`)
 
 **Status:** documentation-only. Nothing here loads at runtime unless you wire a
 server into `.mcp.json` and grant a subagent access to it. Treat MCP as opt-in
@@ -6,9 +6,9 @@ per agent, never global.
 
 ---
 
-## Current wiring decision (2026-06-25) — read this first
+## Current wiring decision (2026-06-25; updated 2026-07-11) — read this first
 
-After an agent-by-agent audit, only **three** servers earn their tokens, and they
+After an agent-by-agent audit, only a handful of servers earn their tokens (the table below, plus read-only Sentry on the standalone triage agent), and they
 are wired to be **project-scoped, exactly like project skills** — defined per
 project in a root `.mcp.json` (copy `templates/mcp.json`, keep only what that
 project needs, pin versions/digests), never baked into the portable agents. A
@@ -29,10 +29,12 @@ aws-knowledge/terraform schemas there bought nothing. (Briefly wired then droppe
 
 **Deliberately NOT wired (vanity / replaced / out-of-scope for this pipeline):**
 GitHub MCP (the `gh` CLI already does the deploy agent's PR + costs no schema),
-Sentry (the pipeline fixes *local* failures pre-merge — no prod issues in the loop),
+Sentry-in-the-loop (the pipeline fixes *local* failures pre-merge — Sentry MCP is wired read-only to the standalone triage agent only, PR #31, never to a pipeline stage),
 Firebase MCP (30+ tool schemas; the `auth-patterns` skill already covers the code
 side), Playwright MCP (a11y snapshots are 2k–10k tokens/step — a budget hazard;
-specs are authored from reading code). SAST stays a deterministic shell hook, never MCP.
+specs are authored from reading code; decision re-affirmed 2026-07-07 by the TA track,
+which ships repomix/markitdown as orchestrator CLI pre-steps instead of MCP servers).
+SAST stays a deterministic shell hook, never MCP.
 
 ### Figma MCP — two server options, and how to wire it (read before enabling)
 

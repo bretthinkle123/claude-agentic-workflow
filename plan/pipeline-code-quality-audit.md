@@ -1,7 +1,7 @@
 <a id="code-quality-and-scalability-audit"></a>
 # Code-quality & scalability audit (design)
 
-> **Status: design, not built.** Companion to `docs/agentic-pipeline-plan.md`. It closes the pipeline's
+> **Status: design, not built.** Companion to `system_architecture.md` (current state; the archived design log is `plan/agentic-pipeline-plan.md`). It closes the pipeline's
 > one un-verified dimension: **code quality and scale are currently *requested* of the implementation agent,
 > never *verified* after the code exists.** This doc specifies (A) a **code-audit** agent that makes
 > maintainability a checked gate the way security and tests already are, (B) a **scalability review** so
@@ -153,8 +153,8 @@ the realistic target: not a guarantee, but verification where today there is onl
 
 ## How this fits the existing roadmap
 
-The live roadmap is **[`pipeline-june-analysis.md`](../pipeline-june-analysis.md) §10** (the PR-sequenced
-master roadmap), *not* the older shipped `pipeline-revision-plan.md`. Reconciled against it honestly, most
+The live roadmap is **`roadmap.md`**; the archived PR-sequenced
+master roadmap is **[`plan/pipeline-june-analysis.md`](../plan/pipeline-june-analysis.md) §10**, *not* the older shipped `plan/pipeline-revision-plan.md`. Reconciled against it honestly, most
 of this design is **already on the roadmap — and the roadmap has better evidence than this doc does.**
 
 **The one real end-to-end run partly disconfirmed this doc's pessimism.** The M2 / Linkly run (§8) tested

@@ -1,4 +1,4 @@
-# build-provenance.yml — build + artifact provenance (PR M, docs/delivery-operations-plan.md).
+# build-provenance.yml — build + artifact provenance (PR M, plan/delivery-operations-plan.md).
 # Written to .github/workflows/build-provenance.yml by bootstrap-project.sh. Chains onto the
 # merge gate: runs only after pipeline-ci succeeds on main (workflow_run), so an artifact can
 # only exist for a commit every objective check re-verified. Self-skips when the repo has no

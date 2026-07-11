@@ -205,7 +205,7 @@ string and those files — never assume it can see the conversation.
         baseline is a signal, and it runs post-GREEN outside the security loop; the pre-merge scanners
         + human diff review stay the teeth). documentation surfaces any over-budget severity in the PR.
         The gating DAST layers (authenticated + active fuzz) live in CI against staging, not here
-        (docs/dast-plan.md Layers 2-3).
+        (plan/dast-plan.md Layers 2-3).
 
 5. Agent(documentation, "Update docs for the diff. Write pr-description.md + review-manifest.json.")  # only after GREEN
 5a. DOC-CONTRACT RE-CHECK (M4P-11 — documentation edits AFTER the last test run, so it can

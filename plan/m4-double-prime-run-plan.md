@@ -1,6 +1,6 @@
 # M4″ proof run — plan (brownfield run #6: proof-gate attempt, post-M4′-reset)
 
-> Derived from `docs/m4-prime-run-plan.md` — everything not stated here carries over
+> Derived from `plan/m4-prime-run-plan.md` — everything not stated here carries over
 > unchanged (brownfield discipline, rule-0 instrumentation, per-stage scorecard anchors,
 > from-disk audit, "success = boring"). M4′ audited **RESET on criterion 1 alone**
 > (21.4% cap tax vs <10%; 5/6 criteria held, per-stage avg 4.22) — see

@@ -11,7 +11,7 @@
 > Scope is the **engine** (a new pre-planning stage + a human checkpoint), NOT any built app.
 > This is Layer 2 of the front-end workstream (`[[deferred-frontend-workstream]]`); it is the
 > prerequisite that makes Section 1 of the Claude-Design evaluation real. Companion:
-> `docs/ios-swiftui-target-plan.md` (consumes the artifact this stage produces).
+> `plan/ios-swiftui-target-plan.md` (consumes the artifact this stage produces).
 
 ## Goal & honest scope
 
@@ -94,7 +94,7 @@ the `design/` bundle and writes **`.pipeline/design-spec.md`**, a normalized, re
 - **"Needs native mapping" section (REQUIRED)** — web idioms with no clean native equivalent
   (hover states, CSS grid, scroll-snap, web modals) flagged for the target platform, so a
   downstream native plan translates intent rather than porting markup. This is the seam that
-  `docs/ios-swiftui-target-plan.md` consumes.
+  `plan/ios-swiftui-target-plan.md` consumes.
 - **Provenance + injection report** — the source(s) used, and a verbatim list of any
   instruction-shaped text found embedded in the bundle, quoted and marked **not acted on**.
 
@@ -183,7 +183,7 @@ last; the first three layers deliver the Section-1 capability without it.
 - Not a deterministic gate on design content — the human checkpoint is the only teeth.
 - Not pixel-perfect enforcement, and not a replacement for the human's design judgment.
 - Not auto-approval — an unreviewed spec is never authoritative.
-- Not the native-translation work (that is `docs/ios-swiftui-target-plan.md`); this stage is
+- Not the native-translation work (that is `plan/ios-swiftui-target-plan.md`); this stage is
   platform-agnostic and stops at a normalized, approved spec.
 
 ## Sequencing (each slice independent; none on the critical path)

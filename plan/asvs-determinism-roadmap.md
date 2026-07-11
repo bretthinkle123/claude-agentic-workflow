@@ -25,7 +25,7 @@ This doc lists the **specific** promotions worth making, what's already covered,
 
 > **Related (out of scope here):** app-store compliance (Apple/Google submission requirements as a
 > PROJECT.md-scoped gate) reuses this doc's Tier 1/2/3 promotion pattern but is a separate
-> workstream — see `docs/store-compliance-plan.md`.
+> workstream — see `plan/store-compliance-plan.md`.
 
 ---
 
@@ -38,7 +38,7 @@ This doc lists the **specific** promotions worth making, what's already covered,
 | Dependency CVEs / lockfile / SBOM | V15.1.x, V15.2.1 | OSV CVE floor (B6), `lockfile-check.sh`, `generate-sbom.sh` |
 | **IDOR / BOLA** | **8.2.2** | **DONE (Tier 2):** plan-audit material-flags a cross-owner-denial test; `test-conventions` cross-owner shape; rides `criteria_covered` |
 | Input validation + rate limiting | 2.2.1, 2.2.2, 2.4.1 | input-controls: `input_surface` reconciliation floor + typed `validation`/`rate_limit` criteria |
-| Data-at-rest protection | 11.4.2 (at rest), 14.x | Speced in the **DP** workstream (`docs/data-protection-enforcement-plan.md`) — see it, don't duplicate |
+| Data-at-rest protection | 11.4.2 (at rest), 14.x | Speced in the **DP** workstream (`plan/data-protection-enforcement-plan.md`) — see it, don't duplicate |
 | ASVS L1/L2 catch-all (all chapters) | any | 6g agent verification + `asvs.reconciled` deterministic deploy floor |
 
 ---

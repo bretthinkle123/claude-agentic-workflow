@@ -1,4 +1,4 @@
-# Pipeline alternatives (companion to `agentic-pipeline-plan.md`)
+# Pipeline alternatives (companion to `system_architecture.md`)
 
 Documentation-only. **Nothing here is loaded at pipeline runtime** — these are the non-default scaffolds, kept so you can switch later without re-deriving them. The main plan's defaults are **AWS** (cloud/infra), **Firebase Auth** (auth), **Python** (backend), **JavaScript** (frontend). When the planning agent recommends one of these alternatives for a specific project and you approve it at the checkpoint, copy the relevant scaffold into that project (or have the pipeline regenerate it).
 

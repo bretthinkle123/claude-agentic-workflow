@@ -29,7 +29,7 @@ and every human checkpoint.
 ## Cross-cutting rules (apply to every pipeline PR)
 
 - **Mirror project-skill edits:** `global-project-skills/*` → `.agents/skills/*`. *(The `.codex/agents` Codex mirror was deleted 2026-06-29 — staying Anthropic-only; agent edits no longer need a Codex mirror.)*
-- **Keep specs in sync:** `docs/agentic-pipeline-plan.md` + `docs/system_architecture.md`.
+- **Keep specs in sync:** `plan/agentic-pipeline-plan.md` + `system_architecture.md`.
 - **After agent `skills:` changes:** re-run `scripts/list-skills.sh --annotate`.
 - **After any change:** re-run `scripts/install-global.sh` (publishes to `~/.claude/`); restart Claude Code/IDE to load.
 - **Agents stay file-based (never packaged as a plugin):** plugin subagents silently ignore `hooks:` and `mcpServers:` (per the sub-agents docs), which would disable every Stop-hook telemetry/gate. Keep them as user/project agents in `~/.claude/agents/`.
@@ -41,7 +41,7 @@ and every human checkpoint.
 
 **Goal:** make `max-pipeline-improvements.md` factually correct and forward-looking before any code change.
 
-- **P0 corrections:** telemetry is *wired* on all 8 agents (notes auto-derived; combined coverage / tier-counts / strategy surfaced) — the gap is *reading* it, not wiring; among **hooks**, only `post-deploy-check.sh` is `[UNIMPLEMENTED]` (the other `[UNIMPLEMENTED]` item is `docs/pipeline-refinement-loops.md`'s planning-quality loop, which PR 3 marks implemented). Add the `log-run.sh` model-arg coupling. Fix exec-#1 "bug" → "inert" (effort on Haiku 4.5 is gated out by the harness; it also errors at the raw-API level — either way it buys nothing).
+- **P0 corrections:** telemetry is *wired* on all 8 agents (notes auto-derived; combined coverage / tier-counts / strategy surfaced) — the gap is *reading* it, not wiring; among **hooks**, only `post-deploy-check.sh` is `[UNIMPLEMENTED]` (the other `[UNIMPLEMENTED]` item is `plan/pipeline-refinement-loops.md`'s planning-quality loop, which PR 3 marks implemented). Add the `log-run.sh` model-arg coupling. Fix exec-#1 "bug" → "inert" (effort on Haiku 4.5 is gated out by the harness; it also errors at the raw-API level — either way it buys nothing).
 - **P1 limit-aware §3.1:** add the Max 20x cap-structure preamble + decision rule; revise the table (see PR 2); drop `xhigh` from any Sonnet stage; fix "top-of-range."
 - **New recommendation sections** referencing the PRs below; **mark front-end and production-debugger DEFERRED** (point to the memory entries); have §4 phased-rollout point to this file.
 - **Soften** the three unverified MCP names; reword "only cost grounds."
@@ -84,7 +84,7 @@ and every human checkpoint.
 - `global-agents/plan-audit.md` — add a **completeness check** (all applicable layer sections present, acceptance criteria traced, STRIDE mechanisms named, test-strategy declared, files-affected concrete; validation contracts once PR 4 lands). Classify each flag **material vs advisory**; write flags + `revision_recommended: true|false` to `.pipeline/plan-audit.md`.
 - `global-agents/planning.md` — on re-invoke, read `.pipeline/plan-audit.md`, address each material flag before rewriting `plan.md`, note what changed.
 - `global-skills/pipeline-orchestration/SKILL.md` — insert the conditional re-invoke (revise once iff `revision_recommended`).
-- `docs/pipeline-refinement-loops.md` — mark the planning-quality loop **implemented** (sourced from plan-audit, not a separate evaluator).
+- `plan/pipeline-refinement-loops.md` — mark the planning-quality loop **implemented** (sourced from plan-audit, not a separate evaluator).
 
 **Divergence from advisory (deliberate):** the advisory gated the planning-quality loop on telemetry ("implement once `run-log` shows the human repeatedly sending plans back"). This PR ships a *lighter* variant now (Sonnet completeness audit + at most one Opus revision) rather than waiting, trading a small bounded cost for earlier oversight — consistent with the owner's throughput-for-oversight preference. Telemetry is already wired, so the trigger can still be confirmed retroactively.
 

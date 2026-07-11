@@ -208,7 +208,7 @@ fi
 # Writes the pipeline-ci workflow + copies the CI-re-runnable check scripts INTO the
 # project (scripts/ci/ — committed, human-reviewed, pinned at bootstrap-time version, so
 # CI never fetches them remotely). The workflow re-RUNS the objective gates on the merge
-# commit; it never re-reads .pipeline/ artifacts. See docs/ci-merge-gate-plan.md.
+# commit; it never re-reads .pipeline/ artifacts. See plan/ci-merge-gate-plan.md.
 if [[ -f "$TARGET/.github/workflows/pipeline-ci.yml" ]]; then
   note "[skip] .github/workflows/pipeline-ci.yml already exists"
 elif [[ -f "$TEMPLATES/ci/pipeline-ci.yml" ]]; then

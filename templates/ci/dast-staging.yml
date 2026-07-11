@@ -1,4 +1,4 @@
-# dast-staging.yml — DAST Layers 2 + 3 (docs/dast-plan.md): the staging-bound runtime-security
+# dast-staging.yml — DAST Layers 2 + 3 (plan/dast-plan.md): the staging-bound runtime-security
 # jobs. NOT in the PR path (staging reflects merged main, and the active scan is slow); nightly
 # scheduled + manually dispatchable, ALWAYS against STAGING — never prod, never a shared env
 # (the active scan sends real attack payloads).

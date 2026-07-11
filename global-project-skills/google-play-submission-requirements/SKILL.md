@@ -13,7 +13,7 @@ description: Google Play submission requirements made accountable — the Data s
 > from things cheap to get right up front and expensive at upload. Planning's job is to turn
 > each applicable item below into an **acceptance criterion** so it rides `criteria_covered`
 > and is verified before the PR. **Reduced-assurance note:** Android has no gate adapters yet
-> (`docs/ios-swiftui-target-plan.md` has no Android sibling), so a run is stamped
+> (`plan/ios-swiftui-target-plan.md` has no Android sibling), so a run is stamped
 > `reduced (android adapters absent)` — this skill makes submission requirements accountable
 > at the *planning/AC* level even while the deterministic gates are Python/JS-shaped.
 
