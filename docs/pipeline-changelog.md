@@ -4,7 +4,7 @@
 > design-plan lettering (PR A–K, Track 2 L–P, side-tracks), newest last. Each row: what changed ·
 > why · where the deep rationale lives (archived under `plan/`). The GitHub-PR-indexed view of the
 > same history — every actual pull request with dates — is `docs/pr-history.md`; this doc is the
-> design-unit view. Current-state reference: `docs/system_architecture.md`. No new claims here —
+> design-unit view. Current-state reference: `system_architecture.md`. No new claims here —
 > content consolidated from `plan/pipeline-june-analysis.md` §10, `plan/pipeline-revision-plan.md`,
 > and `plan/max-pipeline-improvements.md`.
 

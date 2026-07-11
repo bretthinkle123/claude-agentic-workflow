@@ -117,7 +117,7 @@ and restart Claude Code.
 
 ## Documentation map
 
-- **`docs/system_architecture.md`** — the current-state reference: every file, its role, the data flow.
+- **`system_architecture.md`** — the current-state reference: every file, its role, the data flow.
 - **`docs/pipeline-changelog.md`** — what shipped, by design unit (PR A–K, Track 2 L–P, side-tracks), and why.
 - **`docs/pr-history.md`** — the same history PR-by-PR, with a by-concept summary.
 - **`docs/roadmap.md`** — forward-looking only: open items, deferred workstreams, standing cadences.

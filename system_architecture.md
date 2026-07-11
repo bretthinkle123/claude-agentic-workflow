@@ -354,7 +354,6 @@ claude-agentic-workflow/
 │   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
 │
 ├── docs/                   Curated living documentation only (operator-placed)
-│   ├── system_architecture.md        This file — the current-state reference
 │   ├── pipeline-changelog.md         What shipped, by design unit (PR A–K, Track 2 L–P, side-tracks), with rationale links
 │   ├── roadmap.md                    Forward-looking only — open items, deferred workstreams, standing cadences
 │   ├── pr-history.md                 Every PR made against this repo + a by-concept summary
@@ -386,6 +385,8 @@ claude-agentic-workflow/
 ├── memory/                 Auto-memory persisted across Claude Code sessions — one file per durable
 │                           fact (profile, project context, settled decisions, run findings);
 │                           MEMORY.md is the index loaded each session
+│
+├── system_architecture.md  This file — the current-state reference, at root next to the README
 │
 └── README.md               Install and bootstrap instructions (entry point for new machines)
 ```

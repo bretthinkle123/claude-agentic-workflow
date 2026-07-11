@@ -2,7 +2,7 @@
 
 > Forward-looking only. Everything shipped lives in `docs/pipeline-changelog.md` (design-unit view)
 > and `docs/pr-history.md` (PR-indexed view); the current-state reference is
-> `docs/system_architecture.md`. Deep assessment behind this sequencing:
+> `system_architecture.md`. Deep assessment behind this sequencing:
 > `plan/pipeline-june-analysis.md` (§7 delivery lifecycle, §10 master roadmap — historical).
 
 ## Orientation — the two "10/10" definitions (both reached)
