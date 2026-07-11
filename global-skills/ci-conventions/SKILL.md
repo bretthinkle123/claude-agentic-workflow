@@ -94,5 +94,5 @@ snapshot/migrate/health → prod canary + alarm-driven rollback; inert until the
 `DEPLOY_ENABLED=true`). Load/failover validation is a separate dispatch/scheduled
 **`load-campaign.yml`**. Rubrics + the rollback runbook live in `delivery-conventions`; the
 `envs/` split, deploy alarms, and prod WAF in `iac-conventions`. The reserved `dast-baseline`
-slot is filled per `docs/dast-plan.md`; CodeQL (row CQ) ships as the template's `codeql` job —
+slot is filled per `plan/dast-plan.md`; CodeQL (row CQ) ships as the template's `codeql` job —
 see the honest-scope table and the branch-protection note above.

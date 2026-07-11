@@ -13,7 +13,7 @@
 # the PR. No deploy-gate / loop-exit reads it → zero loop-exit-invariant churn. Absent capture ⇒
 # no-op (Docker not provisioned, no dast.env, or a non-HTTP project) — exactly like the design-review
 # / egress / asvs-sast signal hooks. The gating layers (authenticated + active fuzzing) live in CI
-# against staging (docs/dast-plan.md Layers 2-3), not here.
+# against staging (plan/dast-plan.md Layers 2-3), not here.
 set -uo pipefail
 [ -f .pipeline/state.json ] || exit 0             # ambient no-op outside a bootstrapped project
 command -v jq >/dev/null 2>&1 || exit 0

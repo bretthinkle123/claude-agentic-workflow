@@ -24,7 +24,7 @@ platform-bound adapters, and operator-side provisioning.
   need a supervised first run on a real containerized app with AWS environments. DAST Layers 2/3
   (`dast-staging.yml`) and CodeQL execute for real at the same moment. Specs:
   `plan/ci-merge-gate-plan.md`, `plan/delivery-operations-plan.md`,
-  `plan/environments-delivery-plan.md`, `docs/dast-plan.md`.
+  `plan/environments-delivery-plan.md`, `plan/dast-plan.md`.
 - **Next real app runs.** The engine's validation era (#34) closed the M3/M4 findings; the next
   feature runs are application builds (photography app first, then the red-team/pentest app goal),
   which double as the delivery half's execution proof.
@@ -43,10 +43,10 @@ platform-bound adapters, and operator-side provisioning.
 ### Candidate designs (specced, not scheduled)
 
 - **Code-quality audit stage** — a dedicated post-implementation code-audit pass;
-  `docs/pipeline-code-quality-audit.md` is the design.
+  `plan/pipeline-code-quality-audit.md` is the design.
 - **Refinement loops** — candidate iterative-improvement designs in
-  `docs/pipeline-refinement-loops.md` (the implemented planning revision loop is in the changelog).
-- **DAST Layer 5** — Nuclei templated scan, advisory, any time (`docs/dast-plan.md`).
+  `plan/pipeline-refinement-loops.md` (the implemented planning revision loop is in the changelog).
+- **DAST Layer 5** — Nuclei templated scan, advisory, any time (`plan/dast-plan.md`).
 - **Agent-eval corpus growth** — extend `tests/agent-evals/` planted-defect trees as new finding
   classes land in `docs/finding-ledger.md` (the #34 mechanism: an escape caught once becomes a
   permanent check).

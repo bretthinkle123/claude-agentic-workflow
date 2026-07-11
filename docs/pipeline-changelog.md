@@ -37,7 +37,7 @@
   hook; terminal `loop-state` on GREEN exit (closes F6).
 - **PR H — the eval harness (M8)** (#10). `tests/run-eval.sh`, deterministic bash+jq, zero model
   calls — 6 suites / 74 assertions at birth against a golden Linkly fixture; the repo's safety net
-  ever since (28 suites / ~474 assertions as of 2026-07-09, run in CI). Its crown-jewel suite
+  ever since (31 suites / ~539 assertions as of 2026-07-11, run in CI). Its crown-jewel suite
   asserts **loop-exit ≡ deployment-gate**
   from the SKILL's own predicates (#13 hardened this to read the live predicates, so drift fails
   the harness).
@@ -61,7 +61,7 @@
   `plan/input-controls-enforcement-plan.md`.
 - **ASVS 5.0.0 + ASVS-DET** (#19/#20/#25). The 17-chapter checklist as enforced
   definition-of-done with deterministic gate floors (`asvs.reconciled`, human-owned waivers,
-  `asvs-sast.sh` Tier-1 rules). Roadmap doc: `docs/asvs-determinism-roadmap.md`.
+  `asvs-sast.sh` Tier-1 rules). Roadmap doc: `plan/asvs-determinism-roadmap.md`.
 - **DS — design-spec stage** (#21/#22). Untrusted design bundles (Claude Design / Figma / 
   screenshots) normalized into a human-vouched, hash-anchored `design-spec.md` with an injection
   report. `plan/design-spec-stage-plan.md`.
@@ -70,7 +70,7 @@
   (`plan/egress-control-plan.md`); scanner breadth (Gitleaks, `trivy fs`, per-stack Semgrep).
 - **DAST** (#26, completed #33). Runtime security in four layers, from the post-GREEN local ZAP
   passive baseline to nightly staging Schemathesis fuzz + authenticated active scan. Living
-  convention doc: `docs/dast-plan.md`.
+  convention doc: `plan/dast-plan.md`.
 - **STORE — app-store compliance gate** (#27, completed #33). Deterministic `store-compliance.sh`
   (SC-1…SC-9) blocking known auto-rejection causes for a declared iOS/Android target; reduced-
   assurance stamp for gate-unverifiable targets. `plan/store-compliance-plan.md`.

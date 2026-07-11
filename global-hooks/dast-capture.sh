@@ -9,7 +9,7 @@
 #   * no .pipeline/dast.env (project didn't opt into DAST)      → no-op
 #   * Docker not running                                         → surface + no-op (never silent-pass)
 # so backend-only-without-HTTP projects and un-provisioned hosts are unaffected. Passive baseline
-# only — the authenticated + active-fuzz layers (docs/dast-plan.md Layers 2-3) run in CI against a
+# only — the authenticated + active-fuzz layers (plan/dast-plan.md Layers 2-3) run in CI against a
 # staging env, never here. Runs POST-GREEN (after the loop exits), like design-review's ui-capture.
 #
 # .pipeline/dast.env (copy from templates/dast.env) declares:

@@ -5,7 +5,7 @@
 > Phases 2–5, §10 rows M–P). Turns a gate-verified merge commit into a signed artifact, deploys it
 > through staging to production with progressive delivery and automated rollback, observes it in
 > operation, and validates it holds under load with a tested recovery path. Chains onto
-> `plan/ci-merge-gate-plan.md` (PR L, required first). Companions: `docs/dast-plan.md` (targets the
+> `plan/ci-merge-gate-plan.md` (PR L, required first). Companions: `plan/dast-plan.md` (targets the
 > staging env PR N builds), `docs/pipeline-deployment-targets.md` (existing recipes this operationalizes),
 > and the skills `iac-conventions`, `deployment-checklist-and-rollback`, `logging-conventions`,
 > `containerization-conventions`, `secrets-management`, `ddia-patterns` (all already shipped).
@@ -148,7 +148,7 @@ real design work lives), matching how every prior workstream in this repo was bu
 > **Readiness audit (2026-07-05) — verified against the live codebase:** PR M's named inputs are
 > real and shipped — `generate-sbom.sh` exists (in **`global-hooks/`**), the OIDC/no-long-lived-keys
 > posture is already the `iac-conventions` rule, and `post-deploy-check.sh` exists as the hook PR L
-> retires into a CI job. **Post-draft status change:** `docs/dast-plan.md` **Layer 1 is now BUILT**
+> retires into a CI job. **Post-draft status change:** `plan/dast-plan.md` **Layer 1 is now BUILT**
 > (PR #26), so the DAST-in-CI slot referenced here re-homes two existing scripts rather than
 > awaiting new ones; DAST L2/L3 still wait on N's staging, as stated. The per-PR readiness verdicts
 > above (M ready · N/O need kickoff plan docs · P outline-ready) were re-checked and stand — no
@@ -174,7 +174,7 @@ first deployable repo.
 
 Chains onto `plan/ci-merge-gate-plan.md`; operationalizes the recipes in
 `docs/pipeline-deployment-targets.md`; consumes `generate-sbom.sh` (PR I) and every infra/logging/
-deploy skill already shipped; provides the staging target `docs/dast-plan.md` needs. Update
+deploy skill already shipped; provides the staging target `plan/dast-plan.md` needs. Update
 `pipeline-june-analysis.md` §10 rows M–P (and add the named audit items — continuous vuln, WAF/edge,
 feature flags, graceful shutdown, synthetics — as sub-bullets)
 when each moves from spec to build.

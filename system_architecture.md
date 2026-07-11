@@ -339,12 +339,12 @@ claude-agentic-workflow/
 │
 ├── tests/                  Eval/regression harness (M8) — deterministic, zero-LLM; run `bash tests/run-eval.sh`
 │   ├── run-eval.sh             Entry: runs every suite against golden fixtures; exit 0 iff all pass (CI-ready)
-│   ├── suites/                 28 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
+│   ├── suites/                 31 suites: static, gate, diff-approved, marker-guard, lockfile-check, loop-guard,
 │   │                           loop-exit-invariant, stamp-ran-at, record-clean, hash-determinism, asvs,
 │   │                           waiver-guard, asvs-sast, design-spec, egress, assurance, design-review, dast-review,
 │   │                           store-compliance, ci-scan-base, triage, bootstrap-integration (U-11), smoke-check
 │   │                           (U-04), tree-hygiene (U-08), scan-reconcile (U-09), doc-identifiers (U-13),
-│   │                           telemetry (U-16), vendored (B-0) — 474 assertions (2026-07-09; a few rows self-skip on hosts without python); run in CI by eval.yml
+│   │                           telemetry (U-16), vendored (B-0) — plus notify, sandbox, webfetch-guard (#39) — ~539 assertions (2026-07-11; a few rows self-skip on hosts without python); run in CI by eval.yml
 │   ├── agent-evals/            U-23 planted-defect golden trees + run-agent-evals.sh — invokes the REAL agent
 │   │                           against a frozen tree with a documented defect and greps its output for the
 │   │                           finding; needs model access, so it's a separate step, NOT part of run-eval.sh
@@ -358,29 +358,27 @@ claude-agentic-workflow/
 │   ├── roadmap.md                    Forward-looking only — open items, deferred workstreams, standing cadences
 │   ├── pr-history.md                 Every PR made against this repo + a by-concept summary
 │   ├── pipeline-threat-model.md      Engine-scope STRIDE model (PR K) — the pipeline itself as target
-│   ├── asvs-determinism-roadmap.md   ASVS-DET: agent-reasoned checks promoted to deterministic gates (Slices A–D shipped)
-│   ├── dast-plan.md                  DAST living convention doc — fully delivered: Layer 1 (PR #26) + Layers 2–4 (PR #33); Layer 5 (Nuclei) optional
 │   ├── finding-ledger.md             U-10: one row per verifier-CONFIRMED escape/incident — each becomes a permanent check (suite case, hook, or agent-eval), never a re-learned lesson
 │   ├── sk-assessment-log.md          Ongoing skill-assessment log
 │   ├── decisions/<branch>/           Design-record retention (PR L Layer 0): documentation copies plan/acceptance/plan-audit/security-report here before the review manifest
 │   ├── pipeline-alternatives.md      Non-default stack scaffolds (Cognito, GCP, JS backend)
 │   ├── pipeline-deployment-targets.md  CI/CD patterns for after the PR merges
-│   ├── pipeline-mcp-config.md        MCP server wiring per agent
-│   ├── pipeline-code-quality-audit.md  [DESIGN, not built] code-audit stage spec
-│   └── pipeline-refinement-loops.md  Candidate refinement loops (the planning loop shipped; the rest are designs)
+│   └── pipeline-mcp-config.md        MCP server wiring per agent
 │
-├── plan/                   Tracked plan archive — shipped one-shot PR plans, run plans, audits (convention: plan/README.md)
+├── plan/                   Tracked plan archive — shipped one-shot PR plans, run plans, audits, designs (convention: plan/README.md)
 │   ├── agentic-pipeline-plan.md      Full design doc — chronological design log (historical; lags the live pipeline)
 │   ├── pipeline-june-analysis.md     The original assessment + PR-sequenced master roadmap (§10) — historical
 │   ├── ci-merge-gate-plan.md / delivery-operations-plan.md / environments-delivery-plan.md / triage-agent-plan.md   Track-2 specs (built, PRs #28–#32)
 │   ├── design-spec-stage-plan.md / ios-swiftui-target-plan.md / data-protection-enforcement-plan.md / egress-control-plan.md / store-compliance-plan.md   Side-track specs (built)
+│   ├── dast-plan.md / asvs-determinism-roadmap.md   Delivered security side-track specs (DAST Layers 1–4; ASVS-DET Slices A–D)
+│   ├── pipeline-code-quality-audit.md / pipeline-refinement-loops.md   [DESIGN, not built] candidate designs (code-audit stage; scored refinement loops)
 │   ├── m3-validation-run-plan.md / m4-*-run-plan.md / eval/m2-run-*.md   Executed run plans
 │   └── …                             plus the shipped audits and plans (PIPELINE-AUDIT-REPORT, revision plan, DOC consolidation plan)
 │
 ├── plans/                  Gitignored — new private plan drafts/scratch (promoted into plan/ when a PR publishes them)
 │
 ├── .github/workflows/
-│   └── eval.yml            The engine's own CI merge gate: runs the full 28-suite / ~474-assertion harness on every push/PR to main (PR L Layer 1; `eval` is a required check)
+│   └── eval.yml            The engine's own CI merge gate: runs the full 31-suite / ~539-assertion harness on every push/PR to main (PR L Layer 1; `eval` is a required check)
 │
 ├── memory/                 Auto-memory persisted across Claude Code sessions — one file per durable
 │                           fact (profile, project context, settled decisions, run findings);
