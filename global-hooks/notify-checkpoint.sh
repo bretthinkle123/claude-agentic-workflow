@@ -41,7 +41,9 @@ if [ -n "${NTFY_TOPIC:-}" ]; then
 fi
 
 if [ -z "$sent" ] && command -v powershell.exe >/dev/null 2>&1; then
-  if powershell.exe -NoProfile -NonInteractive -Command \
+  # -ExecutionPolicy Bypass: default Restricted policy blocks module loads, which
+  # silently killed the toast backend; scoped to this invocation only.
+  if powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \
        "New-BurntToastNotification -Text 'pipeline ${EVENT}', '${MSG}'" >/dev/null 2>&1; then
     sent="toast"
   fi
