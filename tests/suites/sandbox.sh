@@ -39,6 +39,13 @@ assert_match "$out" 'cannot prove enforcement' "unreachable proxy fails the allo
 assert_match "$out" 'SANDBOX INCOMPLETE'       "unreachable proxy reports INCOMPLETE"
 rm -rf "$CLEAN"
 
+# --- check-run-host (CN2-3): the run-location tell -----------------------------------------
+RH="$REPO_ROOT/global-hooks/check-run-host.sh"
+assert_exit 0 "check-run-host parses" bash -n "$RH"
+bash "$RH" /mnt/c/Users/someone/repo >/dev/null 2>&1; assert_eq 3 "$?" "CN2-3: /mnt/* path → exit 3 (Windows FS via WSL)"
+bash "$RH" /home/u/OneDrive/repo >/dev/null 2>&1;    assert_eq 3 "$?" "CN2-3: OneDrive path → exit 3 (sync-quarantine hazard)"
+out="$(bash "$RH" /mnt/c/x 2>&1)"; assert_match "$out" 'OneDrive may sync|WINDOWS filesystem' "CN2-3: the warning names the hazard"
+
 # --- bridge-log: tinyproxy log -> {"ts","host","action"} JSON ----------------------------
 mk() { printf '%s\n' "$@" | bash "$BRIDGE" /dev/stdout; }
 deny_line='CONNECT Jan 01 00:00:00 [1]: Filtered connection to evil.example:443'

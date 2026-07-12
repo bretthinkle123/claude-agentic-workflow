@@ -436,6 +436,14 @@ the next feature with a fresh budget. Also stamp the run start —
 step 8's transcript preservation filters on (state.json won't do: security/debugging
 rewrite it mid-run, so its mtime is late).
 
+**Run-location check (CN2-3) — same kickoff moment:** run
+`bash ~/.claude/hooks/check-run-host.sh` and SURFACE its verdict to the operator
+verbatim before proceeding. Exit 0 = WSL/Linux native FS (sandbox-eligible). Non-zero
+is advisory, not a gate — but exit 3 (/mnt/* or OneDrive path) means live run state
+sits in the Windows profile where OneDrive can quarantine it mid-run (this killed a
+venv in the usage-daily canary): tell the operator plainly and let THEM decide to
+relocate or proceed. Never silently continue past a non-zero verdict.
+
 **Large / brownfield target — optional repo map (TA/B-1).** Before invoking planning on a
 large or existing-code target, you MAY generate a single-file codebase map for the planning
 agent (which has no `Bash` of its own). **Size it to fit the consumer (F-M4-6):** M4 produced
