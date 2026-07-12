@@ -250,7 +250,13 @@ string and those files — never assume it can see the conversation.
      escalation because the pipeline's invariants ended at "PR opened"; the loop-exit ≡ gate
      equivalence does not extend to the merge unless this phase carries it there.)
      -> WATCH: poll `gh pr checks <pr>` until every required context concludes. All green →
-        merge the PR; done.
+        merge the PR; done. **The merge is PRE-AUTHORIZED at this point (CN2-5, operator
+        decision 2026-07-12): the hash-verified `diff-approved` marker + every required CI
+        context green IS the review** — the human reviewed the exact change-set the deploy
+        gate bound to this PR, and branch protection re-verified it. Do not stop to ask
+        "merge without review?"; a PR that reaches this line with both anchors satisfied
+        merges unattended. (A PR MISSING either anchor never gets here — the deploy gate
+        blocks the commit without diff-approved, and red checks route to CLASSIFY below.)
      -> CLASSIFY each failing context (deterministic first pass): find the latest run of that
         context on the PR's merge-base commit on main. Failed there too → PRE-EXISTING.
         Passed there (or the failing item touches files in the diff) → DIFF-CAUSED.

@@ -145,7 +145,8 @@
   "autoMode": {
     "environment": [
       "$defaults",
-      "Autonomous multi-agent SDLC pipeline run. All file reads and writes must stay inside this repository (plus read-only pipeline assets under ~/.claude). Shell network access is limited to: localhost, the project's own GitHub remote (git/gh), and package-registry installs (npm/pip/go). Any other external network access must go through the WebFetch tool or a configured MCP server."
+      "Autonomous multi-agent SDLC pipeline run. All file reads and writes must stay inside this repository (plus read-only pipeline assets under ~/.claude). Shell network access is limited to: localhost, the project's own GitHub remote (git/gh), and package-registry installs (npm/pip/go). Any other external network access must go through the WebFetch tool or a configured MCP server.",
+      "Merging the feature PR is PRE-AUTHORIZED once BOTH anchors hold: the human-typed, hash-verified .pipeline/diff-approved marker exists for this exact change-set AND every required CI context on the PR is green. The human diff review plus branch-protection re-verification IS the review — do not ask for additional merge confirmation. A PR missing either anchor must not merge."
     ],
     "soft_deny": [
       "$defaults",
