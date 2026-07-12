@@ -97,19 +97,37 @@ Precondition: the target repo is bootstrapped and its `PROJECT.md` describes the
 scope (the normal flow from the root README — nothing about it changes in WSL).
 
 1. Open a **fresh WSL terminal** (fresh = the proxy env from `.bashrc` is loaded).
-2. `cd ~/repos/<app>` and start the session:
+2. `cd` to the app's **WSL-native clone**, then start the session. The full sequence:
 
    ```bash
-   claude --permission-mode auto
+   wsl                                  # fine as an entry point (or open the Ubuntu app)
+   cd ~/repos/meterly-pipeline-test     # THIS is the step that puts you in the sandbox
+   claude
    ```
 
-   **The flag is load-bearing on current CLI builds** (see §6): Claude Code ≥2.1.207
-   accepts `"auto"` from this flag but silently ignores it as a settings
+   **The `cd` is load-bearing — the `wsl` command keeps your Windows working directory.**
+   Typing `wsl` from a PowerShell prompt at `C:\Users\you\...` lands you at
+   `/mnt/c/Users/you/...`: a Linux-looking prompt standing on the Windows filesystem,
+   where none of the sandbox properties apply (this is exactly how a canary run ended up
+   executing in a OneDrive clone and had its venv quarantined mid-run — CN2-3). The
+   Ubuntu app from the Start menu avoids the trap by always starting at `~`.
+
+   Two checks that you're really in the sandbox:
+   - `pwd` starts with `/home/`, never `/mnt/c/` and never containing `OneDrive`;
+   - the orchestrator's kickoff self-check (`check-run-host.sh`) prints
+     `OK: WSL/Linux native filesystem — sandbox-eligible` — it announces the verdict
+     before proceeding, so a wrong location is told to you, never silent.
+
+   Plain `claude` is safe here because provisioning aliases it to
+   `claude --permission-mode auto` in `~/.bashrc`:
+
+   **That flag is load-bearing on current CLI builds** (see §6): Claude Code ≥2.1.207
+   accepts `"auto"` from the flag but silently ignores it as a settings
    `permissions.defaultMode` value — the session then opens in `default` mode and prompts
-   for every file edit, which feels like the entire autonomy setup doesn't exist. The
-   provisioning adds a `claude` alias carrying the flag to `~/.bashrc`, so a plain
-   `claude` in an interactive WSL terminal is safe; type the flag explicitly anywhere the
-   alias doesn't reach. (Mid-session, Shift+Tab cycles the permission mode live.)
+   for every file edit, which feels like the entire autonomy setup doesn't exist. Type
+   the flag explicitly anywhere the alias doesn't reach (scripts, non-interactive
+   shells), and confirm the session footer shows **auto** before kicking off.
+   (Mid-session, Shift+Tab cycles the permission mode live.)
 
    It's the same conversational interface as the VSCode extension — describe the feature
    in plain English and ask for a pipeline run.
@@ -224,6 +242,7 @@ separately from the Windows clone — the two hosts don't share a `~/.claude`.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Prompts for EVERY file edit, as if no settings exist | CLI ≥2.1.207 silently ignores `defaultMode: "auto"` in settings; session opened in `default` mode | launch with `claude --permission-mode auto` (the flag path works); Shift+Tab fixes a live session |
+| Kickoff self-check warns `/mnt/*` or OneDrive | you typed `wsl` from a Windows prompt — it keeps the Windows cwd, so you're in WSL but standing on the Windows filesystem | `cd ~/repos/<app>` before `claude` (§2); the Ubuntu Start-menu app always starts at `~` |
 | Approved a checkpoint but the run keeps waiting | approve script ran outside the run's repo/filesystem (e.g. Windows terminal vs WSL run) | re-run it in a WSL tab `cd`'d to the run's repo; the script prints host + path it wrote |
 | `attention` toast mid-run | command not in the allowlist | triage per §2.5 |
 | Deployment push 403 on the granted repo | token's Contents perm is Read-only, or token expired | §3 gotcha 1 / renew |
