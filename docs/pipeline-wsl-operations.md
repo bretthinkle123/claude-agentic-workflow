@@ -118,14 +118,21 @@ scope (the normal flow from the root README — nothing about it changes in WSL)
      `OK: WSL/Linux native filesystem — sandbox-eligible` — it announces the verdict
      before proceeding, so a wrong location is told to you, never silent.
 
-   Plain `claude` is safe here because provisioning aliases it to
-   `claude --permission-mode auto` in `~/.bashrc`:
+   Plain `claude` is safe here because `setup-wsl-pipeline.sh` installs a **scoped shell
+   function** in `~/.bashrc` (marker: `pipeline-claude-launcher`): inside a bootstrapped
+   pipeline repo (`.pipeline/state.json` present) it launches
+   `claude --permission-mode auto`; anywhere else it launches plain `claude`, so
+   non-pipeline projects keep the default permission posture. Equivalent manual launch:
+
+   ```bash
+   claude --permission-mode auto
+   ```
 
    **That flag is load-bearing on current CLI builds** (see §6): Claude Code ≥2.1.207
    accepts `"auto"` from the flag but silently ignores it as a settings
    `permissions.defaultMode` value — the session then opens in `default` mode and prompts
    for every file edit, which feels like the entire autonomy setup doesn't exist. Type
-   the flag explicitly anywhere the alias doesn't reach (scripts, non-interactive
+   the flag explicitly anywhere the launcher function doesn't reach (scripts, non-interactive
    shells), and confirm the session footer shows **auto** before kicking off.
    (Mid-session, Shift+Tab cycles the permission mode live.)
 

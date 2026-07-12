@@ -77,6 +77,26 @@ if [ ! -f "$HOME/.claude/notify.env" ] && [ -f "$HOME/.claude/pipeline-templates
   echo "  [new] ~/.claude/notify.env — set NTFY_TOPIC (openssl rand -hex 16) and subscribe in the ntfy app"
 fi
 
+# --- Shell profile: scoped auto-mode launcher (idempotent; CN1-1/F-A2) -----------------------
+# CLI >=2.1.207 ignores permissions.defaultMode:"auto" in settings (the --permission-mode
+# flag works), so interactive launches need the flag. Scoped to bootstrapped pipeline repos
+# (.pipeline/state.json present) so non-pipeline projects keep the default posture.
+say "Shell profile launcher (~/.bashrc)"
+if ! grep -q 'pipeline-claude-launcher' "$HOME/.bashrc" 2>/dev/null; then
+  cat >> "$HOME/.bashrc" <<'EOF'
+
+# pipeline-claude-launcher — auto permission mode INSIDE bootstrapped pipeline repos only
+# (CLI >=2.1.207 ignores settings defaultMode "auto"; remove when a fixed CLI honors it).
+claude() {
+  if [ -f .pipeline/state.json ]; then command claude --permission-mode auto "$@"
+  else command claude "$@"; fi
+}
+EOF
+  echo "  [new] appended the scoped claude launcher to ~/.bashrc (open a fresh terminal)"
+else
+  echo "  ~/.bashrc already has the pipeline-claude-launcher block"
+fi
+
 # --- Phase 3: GitHub auth via a fine-grained, repo-scoped token ------------------------------
 say "GitHub auth (fine-grained PAT — repo-scoped)"
 if have gh && gh auth status >/dev/null 2>&1; then

@@ -39,6 +39,11 @@ assert_match "$out" 'cannot prove enforcement' "unreachable proxy fails the allo
 assert_match "$out" 'SANDBOX INCOMPLETE'       "unreachable proxy reports INCOMPLETE"
 rm -rf "$CLEAN"
 
+# --- setup installs the scoped auto-mode launcher (F-A1: the ops guide claims it) ----------
+assert_match "$(grep -c 'pipeline-claude-launcher' "$SETUP")" '^[1-9]' "setup-wsl-pipeline installs the pipeline-claude-launcher block"
+assert_match "$(grep -c 'permission-mode auto' "$SETUP")" '^[1-9]' "launcher carries --permission-mode auto"
+assert_match "$(grep -c 'state.json' "$SETUP")" '^[1-9]' "launcher is scoped to bootstrapped pipeline repos"
+
 # --- check-run-host (CN2-3): the run-location tell -----------------------------------------
 RH="$REPO_ROOT/global-hooks/check-run-host.sh"
 assert_exit 0 "check-run-host parses" bash -n "$RH"
