@@ -23,6 +23,21 @@ jq -e . "$CAP" >/dev/null 2>&1 || exit 0           # malformed report ⇒ no-op 
 OUT=.pipeline/dast-review.json
 BUDGET=.pipeline/dast-budget.json
 
+# F5 (canary usage-daily, engine-delta 1): a capture left by a PRIOR feature run must never
+# be budget-compared as if fresh. dast-capture.sh correctly refused to scan (app didn't
+# boot), but this hook then read the previous run's dast-capture.json and emitted a
+# fresh-timestamped within_budget:true — false assurance. run-started is the per-feature
+# anchor: a capture not newer than it did not come from this run.
+if [ -f .pipeline/run-started ] && ! [ "$CAP" -nt .pipeline/run-started ]; then
+  jq -n --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg m "$(date -u -r "$CAP" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)" '
+    {status: "skipped-stale-capture", ran_at: $t, capture_mtime: $m,
+     within_budget: null,
+     note: "dast-capture.json predates run-started — no fresh DAST ran for this feature; not representative"}' > "$OUT"
+  echo "[dast-review] ADVISORY: dast-capture.json is STALE (predates this run) — DAST was effectively skipped; refusing to compare stale data to budget. Surface in the PR. See $OUT." >&2
+  exit 0
+fi
+
 # Per-severity caps with safe defaults if the project shipped none. ZAP riskcode →
 # 3 high, 2 medium, 1 low, 0 informational. A High is worth surfacing loudly (cap 0);
 # lower severities carry framework noise, so their caps are generous by default.

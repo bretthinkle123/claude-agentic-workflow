@@ -64,4 +64,24 @@ assert_eq "true" "$(review_probe "$CAP_OK" '{"target_reached":true,"status":200}
 # Backward compatible: no probe sidecar → defaults to reached:true (never a false alarm on old runs).
 assert_eq "true" "$(review_probe "$CAP_OK" __none__ '.target_reached')" "U-14: absent probe sidecar defaults target_reached=true (backward compatible)"
 
+# --- F5 stale-capture false-assurance regression (canary usage-daily, engine-delta 1) ------
+# A dast-capture.json that predates run-started came from a PRIOR feature run — it must be
+# reported skipped-stale, never budget-compared into a fresh within_budget verdict.
+#   review_started <capture> <capture-is-stale:1|0> <jq>  → jq result over the output file
+review_started() {
+  local cap="$1" stale="$2" q="$3" w; w="$(mktemp -d)"; _WORKDIRS+=("$w")
+  ( cd "$w"
+    mkdir -p .pipeline; echo '{}' > .pipeline/state.json
+    printf '%s' "$cap" > .pipeline/dast-capture.json
+    date -u +%FT%TZ > .pipeline/run-started
+    if [ "$stale" = 1 ]; then touch -d '2000-01-01T00:00:00' .pipeline/dast-capture.json
+    else                      touch -d '2000-01-01T00:00:00' .pipeline/run-started; fi
+    bash "$CHECK" ) >/dev/null 2>&1
+  jq -rc "$q" "$w/.pipeline/dast-review.json" 2>/dev/null
+}
+assert_eq "skipped-stale-capture" "$(review_started "$CAP_OK" 1 '.status')" "F5: capture older than run-started → skipped-stale-capture"
+assert_eq "null" "$(review_started "$CAP_OK" 1 '.within_budget')" "F5: stale capture never yields a within_budget verdict"
+assert_eq "advisory" "$(review_started "$CAP_OK" 0 '.status')" "F5: capture newer than run-started → normal advisory path"
+assert_eq "true" "$(review_started "$CAP_OK" 0 '.within_budget')" "F5: fresh capture still budget-compared"
+
 finish dast-review

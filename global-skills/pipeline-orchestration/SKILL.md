@@ -345,6 +345,14 @@ Each line now carries an `attempt` number (audit T2) — how many times this
 resume are distinct, countable entries instead of collapsing into one. A missing stage
 line is still a signal, but with the breadcrumb the cap is recorded, not inferred.
 
+**This applies to EVERY stage — including one whose work looks finished** (F5 canary:
+documentation had produced all its artifacts but capped while finalizing the
+review-manifest — no Stop line fired, no breadcrumb was left, and `run-summary.json`
+under-counted the run, `suspected_underlog: 1`). A cosmetic cap is still a cap. The
+deterministic tell is the log itself: **before advancing past any stage, check
+`run-log.jsonl` has a fresh line for it this attempt; if it doesn't, the stage capped —
+breadcrumb it now**, however complete its output looks.
+
 **Warm-resume prompt (U-06).** When you resume a capped `implementation` or `testing`
 stage, the resume prompt must tell it to read its progress state FIRST and not
 re-derive completed work — e.g. *"You were resumed after a cap. Read

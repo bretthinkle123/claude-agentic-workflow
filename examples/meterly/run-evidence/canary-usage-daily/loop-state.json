@@ -1,0 +1,13 @@
+{
+  "cycles": 2,
+  "max_cycles": 5,
+  "started_epoch": 1783805365,
+  "started_at": "2026-07-11T21:29:25Z",
+  "max_wall_clock_s": 7200,
+  "compute_s": 600,
+  "last_tick_epoch": 1783810459,
+  "max_compute_s": 1800,
+  "max_cycle_s": 600,
+  "status": "completed",
+  "completed_at": "2026-07-11T23:29:08Z"
+}
