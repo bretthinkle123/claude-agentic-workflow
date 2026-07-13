@@ -125,8 +125,10 @@ When invoked:
      from: scanners with a skip stamp or no stamp this pass (name each),
      `dast-review.json` `skipped-stale-capture`/absent capture, mutation not run or
      `quality_ok:false`, `.assurance != "standard"` (enumerate what the absent language
-     adapters did NOT analyze), coverage gaps concentrated in files/branches the diff
-     touched (name the files, from the coverage report), acceptance criteria neither
+     adapters did NOT analyze), coverage gaps in diff-touched files **only when a
+     per-file coverage artifact exists** (coverage.xml / .coverage / lcov — cite it;
+     if none was preserved, write "per-file coverage not preserved — aggregate only",
+     NEVER name files from memory), acceptance criteria neither
      covered nor delegated (there should be none — the gate blocks — but say so),
      design review skipped, e2e absent, perf `n/a`, and any stage the run-summary
      under-logged. An empty NOT-VERIFIED list is a claim like any other: only write it

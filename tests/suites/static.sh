@@ -71,4 +71,11 @@ if [ -d "$EVAL_DIR" ]; then
   assert_eq "" "$MISSING_MANIFEST" "every tests/agent-evals/<case>/ has an expected-findings.json (U-23)"
 fi
 
+# --- Verification-coverage map contract survives in documentation.md (operator req 2026-07-13) --
+# Brett's requirement for the App Store run: untested surface as visible as tested. The
+# section is definition-enforced (deliberately not a gate), so this drift guard is what
+# keeps a future edit from silently dropping it.
+assert_match "$(grep -c 'Verification coverage — what was and was NOT' "$REPO_ROOT/global-agents/documentation.md")" '^[1-9]' "documentation.md still requires the verification-coverage PR section"
+assert_match "$(grep -c 'per-file coverage not preserved' "$REPO_ROOT/global-agents/documentation.md")" '^[1-9]' "coverage-gap naming stays conditional on a real per-file artifact (doc-invention guard)"
+
 finish static
