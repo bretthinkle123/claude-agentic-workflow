@@ -58,14 +58,11 @@ When invoked:
      fails), skip branching: the first commit establishes the trunk. Report that
      no PR branch was created and that a PR is not applicable for the initial commit.
 2. **Pre-commit content inspection.** Do not blindly `git add -A && git commit`.
-   Inspect the pending change set **read-only — do not stage yet.** Staging
-   mid-run changes the currency hash the deployment gate recomputes on every Bash
-   command (untracked files move out of `git ls-files --others` and into
-   `git diff HEAD`), which would spuriously block your next command. Look at exactly
-   what is about to be committed using the unstaged working tree:
+   Inspect the pending change set **read-only** first. Look at exactly what is
+   about to be committed:
    - **paths**: `git status --porcelain` (staged, unstaged, and untracked)
    - **content**: `{ git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard | xargs -r cat; }`
-     — the same tracked-diff-plus-untracked-contents change set the gate hashes
+     — the same tracked-diff-plus-untracked-contents change set the human approved
      (the `2>/dev/null` tolerates a greenfield repo with no HEAD, where the untracked
      listing already covers the whole tree)
    Check both against the category list and grep patterns in the
@@ -74,23 +71,28 @@ When invoked:
    and merge-conflict/debug leftovers. If anything trips, **report the offending
    paths/lines and stop** — do not commit; a human must resolve it (add a
    `.gitignore` entry, remove the artifact, or explicitly confirm it belongs).
-   Nothing was staged, so there is nothing to unstage.
+   **Scope the commit (F1):** the approved change set may contain files that are not
+   part of the feature (operator edits like `PROJECT.md` or `.claude/settings.json`
+   that were dirty at approval — the human saw them). Commit the FEATURE's files;
+   leaving approved out-of-scope files uncommitted is fine — the gate verifies each
+   path against its approved bytes, so approved-but-uncommitted dirt does not block
+   your later `git push` / `gh pr create`. What DOES block: any path the human never
+   approved, or any approved path whose bytes have drifted since approval.
 3. **Commit the reviewed change.** Only once the inspection above is clean, stage
-   and commit as a **single** command — this is the single commit point in the
-   pipeline, capturing the exact code, tests, and docs the human reviewed before
-   invoking you: `git add -A && git commit -m "<concise summary from .pipeline/pr-description.md>"`.
-   Keep staging and commit in one command so the gate only ever sees the unstaged
-   reviewed tree (a stage left standing between commands would change the currency
-   hash and block the commit).
-   The `deployment-gate.sh` hook runs before this command and blocks unless tests
+   and commit as a **single** command with **explicit paths** — this is the single
+   commit point in the pipeline, capturing the exact code, tests, and docs the
+   human reviewed before invoking you:
+   `git add <feature paths…> && git commit -m "<concise summary from .pipeline/pr-description.md>"`.
+   (One command as a hygiene norm — the per-path gate no longer punishes a split
+   add→commit, but there is no reason to hold a stage across commands. Use
+   `git add -A` only when the entire approved change set IS the feature.)
+   The `deployment-gate.sh` hook runs before every command and blocks unless tests
    pass, security is clean, `pr-description.md` exists, a **human diff approval**
-   (`.pipeline/diff-approved`) exists, and the working tree still matches the
-   **human-approved** `approved_change_hash` in that file (currency — the bytes you
-   commit are exactly what the human reviewed and approved). This commit
-   becomes the clean baseline that future diff-scoping measures against. (Currency
-   is checked here, on the commit. Your next commands — `git push`, `gh pr create`
-   — run against a now-clean tree, so the gate passes them through without
-   re-checking the hash.)
+   (`.pipeline/diff-approved`) exists, and every changed path matches its
+   **human-approved** state (per-path currency — the bytes you commit are exactly
+   what the human reviewed; staged blobs are verified too, so an index that differs
+   from the approved bytes blocks even if the worktree matches). This commit becomes
+   the clean baseline that future diff-scoping measures against.
 4. **Push to GitHub.** Run `git push`. This command prompts for explicit human
    approval (intentionally not in the allow-list) — wait for approval before
    proceeding. A freshly created feature branch has no upstream, so use

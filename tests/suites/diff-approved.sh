@@ -55,4 +55,61 @@ assert_eq 0 "$?" "post-commit clean tree → pass (dirty-tree checks skipped)"
 # F3 regression guard: the gate must NOT read review-manifest as its currency anchor.
 grep -qF 'reviewed_change_hash' "$GATE" && _no "gate still references reviewed_change_hash (F3 vector)" || _ok "gate does not reference reviewed_change_hash (F3 closed)"
 
+# --- F1 per-path currency (events-force-rls run: two gate blocks from out-of-scope dirt) ---
+# Marker with approved_paths: the gate verifies each changed path's bytes, so a
+# diff-scoped commit that leaves APPROVED out-of-scope files dirty passes, while any
+# NEW path, byte drift, or staged tamper still blocks.
+approve_paths_marker() { # writes a new-format marker for the CURRENT change set of $1
+  ( cd "$1"
+    paths=$( { git diff HEAD --name-only 2>/dev/null; git ls-files --others --exclude-standard; } \
+      | LC_ALL=C sort -u | while IFS= read -r p; do
+          [ -n "$p" ] || continue
+          if [ -f "$p" ]; then h=$(sha256sum "$p" | cut -d' ' -f1); else h="__deleted__"; fi
+          jq -nc --arg p "$p" --arg h "$h" '{($p): $h}'
+        done | jq -sc 'add // {}')
+    jq -nc --arg h "$(bash "$HOOKS/compute-change-hash.sh")" --argjson paths "$paths" \
+      '{approved_change_hash:$h, approved_paths:$paths, approved_at:"2026-07-13T00:00:00Z"}' \
+      > .pipeline/diff-approved )
+}
+
+# Fixture: one feature file (app.py, already dirty from mk_git_fixture) + one
+# out-of-scope file, both present at approval time.
+w="$(mk_git_fixture)"
+echo 'out-of-scope operator edit' > "$w/PROJECT.md"
+approve_paths_marker "$w"
+( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
+assert_eq 0 "$?" "F1: per-path marker, tree exactly as approved → pass"
+
+# Staging an approved file must NOT block (Block 1 regression: add→commit split).
+( cd "$w" && git add app.py && bash "$GATE" ) >/dev/null 2>&1
+assert_eq 0 "$?" "F1: staging an approved file no longer shifts currency → pass"
+
+# Diff-scoped commit leaving the approved out-of-scope file dirty must NOT block
+# (Block 2 regression: post-commit residue blocked push/pr).
+( cd "$w" && git commit -qm feature -- app.py && bash "$GATE" ) >/dev/null 2>&1
+assert_eq 0 "$?" "F1: post-commit residue of APPROVED out-of-scope dirt → pass"
+
+# A NEW path created after approval is not in the approved set → block (teeth).
+echo 'sneaky' > "$w/new-unapproved.txt"
+( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
+assert_eq 2 "$?" "F1: new unapproved path after approval → block"
+rm -f "$w/new-unapproved.txt"
+
+# Byte drift in an approved file after approval → block (teeth).
+echo 'drifted' >> "$w/PROJECT.md"
+( cd "$w" && bash "$GATE" ) >/dev/null 2>&1
+assert_eq 2 "$?" "F1: approved path with drifted bytes → block"
+
+# Staged-tamper vector: stage malicious bytes, then restore the worktree to the
+# approved bytes — the commit would ship the INDEX, so the gate must block.
+w="$(mk_git_fixture)"
+approve_paths_marker "$w"
+( cd "$w"
+  cp app.py /tmp/approved-app.py.$$
+  echo 'malicious' > app.py
+  git add app.py
+  cp /tmp/approved-app.py.$$ app.py; rm -f /tmp/approved-app.py.$$
+  bash "$GATE" ) >/dev/null 2>&1
+assert_eq 2 "$?" "F1: staged bytes differ from approved while worktree matches → block (staged-tamper)"
+
 finish diff-approved

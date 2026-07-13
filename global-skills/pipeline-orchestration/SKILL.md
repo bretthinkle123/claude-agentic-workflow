@@ -176,6 +176,12 @@ string and those files — never assume it can see the conversation.
      # this script FIRST. A copied stale summary misreports the run — M4's journal quoted a
      # 35.7% cap tax from a pre-documentation stamp; the log's truth was 37.5%. Staleness is
      # detectable (totals.log_lines vs the run-log's line count) but must not be created.
+     # F7 (events-force-rls): this INCLUDES the COMMITTED copy. Documentation snapshots
+     # run-summary.json into docs/decisions/feature/<slug>/ BEFORE deployment runs, so the
+     # committed copy is the loop-GREEN 5-stage view while the gitignored live copy gets the
+     # post-deploy re-stamp — a fresh clone then sees only the stale one. At closeout (after
+     # 6b's re-stamp), re-copy the live run-summary.json over the committed snapshot and
+     # include it in the closeout docs commit (the ledger PR).
      # ASSURANCE STAMP (iOS Layer 3 + store-compliance Layer E): if run-summary.json `.assurance`
      # != "standard" (a native-mobile target — Swift/iOS or Kotlin/Android — whose language gate
      # adapters aren't built yet; the stamp names which), the deterministic gates ran but analyzed
@@ -312,6 +318,22 @@ string and those files — never assume it can see the conversation.
      # a standing session's store is CUMULATIVE across runs, and M4′ swept 23 prior-run
      # transcripts into its evidence set without it (F-M4′-7). Run it FROM the app repo
      # (it refuses a CWD with no .pipeline/state.json). Never hand-copy transcripts.
+     # F8 (events-force-rls): do NOT wait for an operator to name <dest-dir> — the default
+     # destination is the ENGINE repo's examples/<app>/run-evidence/<feature-slug>/ (commit
+     # it there; the app repo's .pipeline/ is gitignored and a separate clone cannot audit
+     # the run from committed state alone). Ask only if the engine repo is unreachable.
+
+GATE-BLOCK RECOVERY (F3, events-force-rls — sanctioned, don't improvise): when
+deployment-gate blocks the deployment agent, the agent stops and reports (correct — it
+must never work around the gate). Recovery belongs to YOU, on the main thread, in this
+order: (1) read the gate's stderr — it names the exact failing check and, for currency,
+the offending path; (2) currency block on an UNAPPROVED or DRIFTED path → that is the
+gate doing its job: surface to the operator, who either reverts the drift or re-reviews
+and re-runs approve-diff.sh — NEVER stash/reset to hide bytes from the gate; (3) an
+interlock artifact missing/stale (pr-description, test-results) → re-run the owning
+stage, not a hand-edit; (4) journal every recovery command in the interventions journal.
+The pre-F1 recoveries (git reset after a split add; stash/pop around out-of-scope dirt)
+are OBSOLETE — the per-path gate no longer blocks on staging or approved residue.
 ```
 
 ## Telemetry — logged automatically on every stage
@@ -441,6 +463,21 @@ the next feature with a fresh budget. Also stamp the run start —
 `date -u +%Y-%m-%dT%H:%M:%SZ > .pipeline/run-started` — it is the provenance anchor
 step 8's transcript preservation filters on (state.json won't do: security/debugging
 rewrite it mid-run, so its mtime is late).
+
+**Stage-launch stamp (F5, events-force-rls) — before EVERY subagent invocation:** append
+`{"ts":"<UTC now>","stage":"<stage>","event":"launch"}` to `.pipeline/stage-launches.jsonl`
+(one `printf … >>` line). Stop-hook timestamps alone make duration = launch-to-Stop
+wall-clock, which silently absorbs idle: that run's testing stage read as 16h 25m when
+its actual compute was ~5–8 min (the session sat idle across a human-away window). The
+launch stamp is the missing endpoint that separates active compute from idle/human-wait.
+Do NOT log launches through log-run.sh — it would inflate the attempt counter.
+
+**Stale-slug vs wrong-clone (F9) — reading the identity assert:** at kickoff,
+`.pipeline/state.json .feature` still naming the PREVIOUS merged feature is the normal
+carryover on a reused clone — reset it as part of 0b and proceed. STOP only on a true
+mismatch: the repo/remote isn't the expected app repo, or `.pipeline` state contradicts
+the brief in a way a feature reset doesn't explain (e.g. an un-merged feature's
+approvals still present). Don't confuse the benign case with the stop case.
 
 **Run-location check (CN2-3) — same kickoff moment:** run
 `bash ~/.claude/hooks/check-run-host.sh` and SURFACE its verdict to the operator

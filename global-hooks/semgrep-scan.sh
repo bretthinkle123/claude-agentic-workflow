@@ -26,9 +26,14 @@ HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
 
 # EG side-track: opt into the default-deny egress network when the operator provisions it
 # (export PIPELINE_EGRESS_NETWORK=<name>; see global-hooks/egress-proxy/). Unset ⇒ default bridge.
+# F6 (events-force-rls run): a container on the --internal network has NO direct route out,
+# and the host's HTTPS_PROXY points at loopback — unreachable from inside a container — so
+# registry/rule fetches silently failed and SCA coverage degraded to prose. Pass the proxy
+# env INTO the container using the docker-DNS name, which IS resolvable on that network.
 set +e
 MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
   ${PIPELINE_EGRESS_NETWORK:+--network "$PIPELINE_EGRESS_NETWORK"} \
+  ${PIPELINE_EGRESS_NETWORK:+-e HTTPS_PROXY=http://pipeline-egress-proxy:8888 -e HTTP_PROXY=http://pipeline-egress-proxy:8888 -e NO_PROXY=127.0.0.1,localhost} \
   -v "${HOST_DIR}:/src" \
   -w /src \
   "$IMAGE" \

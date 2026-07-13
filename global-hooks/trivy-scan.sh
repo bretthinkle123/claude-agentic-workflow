@@ -37,9 +37,13 @@ HOST_DIR="$(pwd -W 2>/dev/null || pwd)"
 # EG side-track: when the operator has provisioned the default-deny egress network
 # (global-hooks/egress-proxy/), export PIPELINE_EGRESS_NETWORK=<name> and this container joins it
 # (its only route out is the allow-listing proxy). Unset ⇒ default bridge, unchanged behavior.
+# F6 (events-force-rls run): on the --internal network the container has no direct route
+# out (vuln-DB pull silently skipped → SCA degraded); pass the proxy env in via the
+# docker-DNS name, which is resolvable on that network.
 set +e
 MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker run --rm \
   ${PIPELINE_EGRESS_NETWORK:+--network "$PIPELINE_EGRESS_NETWORK"} \
+  ${PIPELINE_EGRESS_NETWORK:+-e HTTPS_PROXY=http://pipeline-egress-proxy:8888 -e HTTP_PROXY=http://pipeline-egress-proxy:8888 -e NO_PROXY=127.0.0.1,localhost} \
   --entrypoint trivy \
   -v "${HOST_DIR}:/src" \
   -v trivy-cache:/root/.cache/ \

@@ -53,8 +53,24 @@ if [ "$ans" != "approve" ]; then
   exit 1
 fi
 
-jq -nc --arg h "$CURRENT" --arg t "$(date -u +%FT%TZ)" \
-  '{approved_change_hash:$h, approved_at:$t, note:"human diff-review checkpoint (M5)"}' \
+# F1 (events-force-rls run): record the per-path approved state alongside the aggregate
+# hash. The gate's currency check compared ONLY the aggregate change-set hash, so any
+# tree divergence after approval — including out-of-scope files a diff-scoped commit
+# deliberately leaves dirty, or the mere act of staging — blocked every later command
+# (two deployment-gate blocks in that run). With {path: content-sha256} recorded, the
+# gate verifies each changed path against its approved bytes: committed-at-approved-bytes
+# paths drop out of the check, still-dirty approved paths match, and any NEW or MODIFIED
+# path still blocks. "__deleted__" records an approved deletion.
+APPROVED_PATHS=$( { git diff HEAD --name-only 2>/dev/null; git ls-files --others --exclude-standard; } \
+  | LC_ALL=C sort -u | while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      if [ -f "$p" ]; then h=$(sha256sum "$p" | cut -d' ' -f1); else h="__deleted__"; fi
+      jq -nc --arg p "$p" --arg h "$h" '{($p): $h}'
+    done | jq -sc 'add // {}')
+[ -n "$APPROVED_PATHS" ] || APPROVED_PATHS='{}'
+
+jq -nc --arg h "$CURRENT" --arg t "$(date -u +%FT%TZ)" --argjson paths "$APPROVED_PATHS" \
+  '{approved_change_hash:$h, approved_paths:$paths, approved_at:$t, note:"human diff-review checkpoint (M5)"}' \
   > .pipeline/diff-approved
 # CN1-2: name the host + absolute path — a marker written on the WRONG machine/filesystem
 # (e.g. the Windows clone while the run polls the WSL clone) looks identical to success.

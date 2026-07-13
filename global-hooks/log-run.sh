@@ -147,6 +147,28 @@ if [ "$STATUS" = "auto" ]; then
         STATUS="pass"
       fi
       ;;
+    deployment)
+      # F4 (events-force-rls run): the Stop-hook default logged status:"pass" on
+      # gate-BLOCKED deployment attempts — three "pass" lines of which only the third
+      # produced a PR; an auditor could not tell them apart. Derive the outcome from
+      # what deployment observably achieved this run: a commit newer than the
+      # run-started anchor, and whether HEAD is on its upstream (pushed).
+      #   blocked   — no new commit since run-started (attempt ended before the commit)
+      #   committed — new commit exists but HEAD is not on any upstream (push pending)
+      #   pass      — new commit exists and HEAD is contained in its upstream
+      STATUS="pass"
+      # Only derivable inside a real run (run-started anchor present); fixtures and
+      # legacy invocations keep the old default.
+      if [ -f .pipeline/run-started ] && git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+        HEAD_TS=$(git log -1 --format=%ct 2>/dev/null || echo 0)
+        RUN_TS=$(date -d "$(cat .pipeline/run-started)" +%s 2>/dev/null || echo 0)
+        if [ "$RUN_TS" -gt 0 ] && [ "$HEAD_TS" -lt "$RUN_TS" ]; then
+          STATUS="blocked"
+        elif ! git merge-base --is-ancestor HEAD "@{upstream}" 2>/dev/null; then
+          STATUS="committed"
+        fi
+      fi
+      ;;
     *)
       STATUS="pass"
       ;;

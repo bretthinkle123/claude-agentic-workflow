@@ -316,12 +316,12 @@ if [ -f "$TEST_QUALITY" ]; then
 fi
 
 # Human diff-review checkpoint (M5) + currency, anchored to the HUMAN's approval (F3).
-# Applies to the COMMIT only: once the reviewed change is committed the working tree is
-# clean (git status --porcelain empty), so the later commands in the same run (git push,
-# gh pr create) pass straight through — the commit already cleared this gate. While work
-# is still uncommitted, a human must have approved the diff (`.pipeline/diff-approved`,
-# written only by approve-diff.sh, which refuses without a TTY), AND the bytes about to be
-# committed must match exactly the hash that human approved.
+# While ANY change is uncommitted, a human must have approved the diff
+# (`.pipeline/diff-approved`, written only by approve-diff.sh, which refuses without a
+# TTY), AND every changed path must match its approved state — per-path when the marker
+# carries approved_paths (F1), aggregate-hash otherwise (legacy). Once everything
+# approved is committed at its approved bytes, remaining approved-but-uncommitted paths
+# (out-of-scope dirt the human saw at approval) no longer block push/pr commands.
 #
 # The anchor is the human-owned diff-approved hash, NOT documentation's review-manifest:
 # that removes the F3 vector — the deployment agent can regenerate review-manifest (it's
@@ -339,14 +339,54 @@ if [ -n "$(git status --porcelain)" ]; then
     echo "Blocked: no human diff approval. Review the diff + the security/test/quality reports, then run approve-diff.sh (the M5 diff-review checkpoint)." >&2
     exit 2
   fi
-  APPROVED=$(jq -r '.approved_change_hash' "$DIFF_APPROVED" 2>/dev/null)
-  # Shared change-set hash helper: approve-diff.sh records approved_change_hash via this
-  # same script, so the two match byte-for-byte (see the diff-scoping-conventions skill).
-  # On an empty repo (no HEAD) both sides hash the untracked tree identically.
-  CURRENT=$(bash "$HOOK_DIR/compute-change-hash.sh")
-  if [ -z "$APPROVED" ] || [ "$APPROVED" = "null" ] || [ "$APPROVED" != "$CURRENT" ]; then
-    echo "Blocked: working tree does not match the human-approved diff ($DIFF_APPROVED approved_change_hash). Something changed after approval — re-review and re-run approve-diff.sh." >&2
-    exit 2
+  if jq -e '.approved_paths | type == "object"' "$DIFF_APPROVED" >/dev/null 2>&1; then
+    # PER-PATH currency (F1, events-force-rls run). The aggregate-hash compare treated
+    # ANY tree divergence as post-approval drift: staging alone changed the hash
+    # (untracked content moves into `git diff HEAD`), and a diff-scoped commit that
+    # correctly left two out-of-scope files dirty blocked every follow-up command.
+    # Instead: every path in the CURRENT change set must be an approved path at its
+    # approved bytes, and every STAGED blob likewise (the index holding different bytes
+    # than a matching worktree is the staged-tamper vector — commit ships the index).
+    # Teeth preserved: a NEW path, or ANY byte drift from the approved state, blocks
+    # exactly as before. What no longer blocks: approved paths already committed at
+    # their approved bytes (they leave the change set), approved paths still dirty at
+    # their approved bytes, and staging/committing any subset of the approved set.
+    VIOLATION=""
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      REC=$(jq -r --arg p "$p" '.approved_paths[$p] // empty' "$DIFF_APPROVED")
+      if [ -z "$REC" ]; then VIOLATION="path not in the human-approved set: $p"; break; fi
+      if [ -f "$p" ]; then CUR=$(sha256sum "$p" | cut -d' ' -f1); else CUR="__deleted__"; fi
+      if [ "$CUR" != "$REC" ]; then VIOLATION="bytes differ from the approved state: $p"; break; fi
+    done <<CHANGESET
+$( { git diff HEAD --name-only 2>/dev/null; git ls-files --others --exclude-standard; } | LC_ALL=C sort -u )
+CHANGESET
+    if [ -z "$VIOLATION" ]; then
+      while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        REC=$(jq -r --arg p "$p" '.approved_paths[$p] // empty' "$DIFF_APPROVED")
+        if [ -z "$REC" ]; then VIOLATION="staged path not in the human-approved set: $p"; break; fi
+        if git cat-file -e ":$p" 2>/dev/null; then CUR=$(git show ":$p" | sha256sum | cut -d' ' -f1); else CUR="__deleted__"; fi
+        if [ "$CUR" != "$REC" ]; then VIOLATION="staged bytes differ from the approved state: $p"; break; fi
+      done <<STAGED
+$(git diff --cached --name-only 2>/dev/null)
+STAGED
+    fi
+    if [ -n "$VIOLATION" ]; then
+      echo "Blocked: working tree does not match the human-approved diff — $VIOLATION. Something changed after approval — re-review and re-run approve-diff.sh." >&2
+      exit 2
+    fi
+  else
+    # Legacy aggregate compare (pre-F1 marker without approved_paths). Shared change-set
+    # hash helper: approve-diff.sh recorded approved_change_hash via this same script,
+    # so the two match byte-for-byte (see the diff-scoping-conventions skill). On an
+    # empty repo (no HEAD) both sides hash the untracked tree identically.
+    APPROVED=$(jq -r '.approved_change_hash' "$DIFF_APPROVED" 2>/dev/null)
+    CURRENT=$(bash "$HOOK_DIR/compute-change-hash.sh")
+    if [ -z "$APPROVED" ] || [ "$APPROVED" = "null" ] || [ "$APPROVED" != "$CURRENT" ]; then
+      echo "Blocked: working tree does not match the human-approved diff ($DIFF_APPROVED approved_change_hash). Something changed after approval — re-review and re-run approve-diff.sh." >&2
+      exit 2
+    fi
   fi
 fi
 
