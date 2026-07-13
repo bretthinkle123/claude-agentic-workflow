@@ -109,6 +109,31 @@ When invoked:
    passive baseline runs post-GREEN, outside the security loop; the pre-merge scanners + human
    diff review stay the teeth) — present it as reviewer context, never as a pass/fail. Note that
    the gating DAST layers run in CI against staging, not in this run.
+   **Verification coverage map (REQUIRED, operator decision 2026-07-13):** end the PR
+   description with a section titled **"Verification coverage — what was and was NOT
+   verified"** containing two explicit lists, each entry naming its evidence source.
+   The disclosures above scatter per-signal; this is the consolidated view the operator
+   audits from, and it matters most on reduced-assurance runs (native mobile) where the
+   untested list is long. Build it ONLY from artifacts — never assert coverage you
+   cannot cite:
+   - **VERIFIED** — per layer, from: `test-results.json` (tests run/passed, line+branch
+     coverage, criteria by_id covered entries), `security-status.json` +
+     `scan-log.jsonl` stamps (which scanners actually executed this pass),
+     `smoke-status.json`, `dast-review.json` when fresh, `design-review.json` when run,
+     the criteria delegated to security that security reconciled.
+   - **NOT VERIFIED** — everything the run did not exercise, with the reason, drawn
+     from: scanners with a skip stamp or no stamp this pass (name each),
+     `dast-review.json` `skipped-stale-capture`/absent capture, mutation not run or
+     `quality_ok:false`, `.assurance != "standard"` (enumerate what the absent language
+     adapters did NOT analyze), coverage gaps concentrated in files/branches the diff
+     touched (name the files, from the coverage report), acceptance criteria neither
+     covered nor delegated (there should be none — the gate blocks — but say so),
+     design review skipped, e2e absent, perf `n/a`, and any stage the run-summary
+     under-logged. An empty NOT-VERIFIED list is a claim like any other: only write it
+     if the artifacts genuinely support it.
+   This section is reviewer/audit input, not a gate — its job is to make the untested
+   surface as visible as the tested one, so follow-up feature runs (test backfills,
+   audits of existing features) can be scoped straight from it.
 6b. **Design-record retention (PR L Layer 0).** `.pipeline/` is overwritten every
    feature and never committed, so without this step a shipped app retains no plan,
    threat model, or security report — and CI-era reviewers have nothing to check the
