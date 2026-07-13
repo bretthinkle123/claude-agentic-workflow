@@ -98,17 +98,35 @@ to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
   plan-audit's registry reality-check goes through `registry-check.sh` (a scoped npm/PyPI
   wrapper — no bare-curl verb in the skill), and WebFetch is domain-allowlisted
   **deny-not-prompt** via `guard-webfetch-domains.sh` + `webfetch-domains.txt` (fails
-  closed; fragment-planted `@` bypass regression-tested). Remaining residual: an
-  allowlisted host abused as the channel, and the working tree still holds no secrets;
-  the machine credential is outside the repo. The WSL2 sandbox + enforcing proxy are
-  turnkey (`setup-wsl-pipeline.sh`, `verify-sandbox.sh`) but deliberately **not yet a
-  gate** — prove-then-codify, post-canary.
+  closed; fragment-planted `@` bypass regression-tested).
+- **MITIGATED (2026-07-13, post-canary):** shell egress is now **proxy-ENFORCED** on the
+  WSL2 pipeline host — default-deny tinyproxy, ACL derived from `egress-allowlist.txt`,
+  reconciled against a real run's log-only record, flipped via
+  `setup-wsl-pipeline.sh --enforce`, and `verify-sandbox.sh` reports `SANDBOX OK`
+  (allowlisted host passes AND a non-allowlisted host is refused AND the harness
+  completes a live round-trip through the filter). "Unrestricted curl egress" is no
+  longer an accepted residual on the sandboxed host. Remaining, stated residuals:
+  (a) an **allowlisted receiver that accepts a tenant credential** (api.anthropic.com,
+  github.com) is a bounded exfil channel — irreducible while those services are the
+  pipeline's function; multi-tenant generic receivers (e.g. the Datadog log intake) are
+  deliberately denied for exactly this reason; (b) **WebSearch query-string leakage**
+  (accepted — search is allowlisted, queries can carry short strings out);
+  (c) **notification payloads** cross ntfy/toast and are capped by the payload rule to
+  event kind + feature slug + repo name, never run content; (d) Windows-host
+  (non-sandboxed) runs keep only the env-var-honoring proxy posture — the enforcement
+  claim is WSL-host-only. The sandbox is still deliberately **not a preflight gate**
+  (prove-then-codify: one enforced canary run is the current evidence base;
+  `check-run-host.sh` surfaces the tier at every kickoff).
 - **Subtle prompt injection surviving the human checkpoints** (design-approved, plan-approved,
   diff-approved)**.** The human review is the
   backstop; this residual is inherent to an LLM pipeline and is why the *deterministic*
   gates never delegate a pass/fail to model judgement.
-- **No per-agent filesystem sandbox.** True per-subagent write isolation would need
-  SDK-level sandboxing and is out of scope for this pass.
+- **No per-agent filesystem sandbox** (SDK-level, out of scope) — **but the blast radius
+  is now the WSL2 userland**, not the operator's Windows profile: runs execute on the
+  native WSL filesystem (`check-run-host.sh` verifies), holding only a repo-scoped
+  fine-grained PAT (write-probed: denied outside its grant), with no `~/.ssh`/`~/.aws`
+  present (`verify-sandbox.sh` asserts). Escape ⇒ a disposable Linux home + one
+  low-value token, re-provisionable by one script.
 
 ## Threat-model diagram (pipeline DFD)
 
@@ -169,9 +187,10 @@ STRIDE:
 - Elevation of privilege (Medium): agent out of lane / deployment self-authorizing.
   Mitigation: per-agent tool scoping; fail-closed deployment gate; the marker guard.
 Accepted residual: obfuscated Bash past the string scanner; cross-stage gate-status
-forgery; allowlisted-host egress abuse (curl/WebFetch scoped by allowlists since #39);
-subtle injection surviving human review; no per-agent filesystem sandbox (WSL2 sandbox
-turnkey but ungated until post-canary).
+forgery; credentialed allowlisted-receiver egress abuse (shell egress proxy-ENFORCED
+default-deny on the WSL host since 2026-07-13; WebFetch domain-denied); WebSearch
+query-string leakage; subtle injection surviving human review; per-agent filesystem
+isolation is host-level (WSL2 disposable userland + repo-scoped PAT), not per-subagent.
 Render this as an OWASP Threat Dragon diagram. Output either (a) valid Threat Dragon
 JSON importable at app.threatdragon.com, or (b) a labeled data flow diagram with trust
 boundaries if JSON is not feasible. No additional context is available beyond what is in
