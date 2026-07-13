@@ -37,6 +37,26 @@ ntfy.sh
 # implementation — package installs reuse the npm/PyPI hosts above; context7 MCP endpoint
 # is added per-project ONLY when the project wires it in .mcp.json.
 
-# NOTE: api.anthropic.com (the Claude Code runtime transport) is intentionally NOT here — it is
-# the model harness, not the sandboxed tool workload, and blocking it breaks the pipeline. The
-# control targets the tools the agents invoke, never the model transport.
+# raw file fetches (install scripts, pinned docs) — pipeline + provisioning consumer
+raw.githubusercontent.com
+
+# --- Claude Code HARNESS (CN2-4, reconciled from the events-force-rls log-only run) ---
+# Host commands ride HTTPS_PROXY, so the harness's own transport flows through this proxy
+# too; without these entries an ENFORCING proxy bricks every session. This supersedes the
+# old "api.anthropic.com is intentionally not here" note, which assumed the harness
+# bypassed the proxy — with env-routed host commands it does not.
+api.anthropic.com        # model transport — blocking this kills the session
+mcp-proxy.anthropic.com  # harness MCP relay
+downloads.claude.ai      # CLI self-update
+code.claude.com          # CLI docs fetches
+platform.claude.com      # auth/account endpoints
+
+# --- Deliberately NOT listed (observed in the log-only run; DENIED under enforcement) ---
+# http-intake.logs.us5.datadoghq.com — harness telemetry, but a MULTI-TENANT log intake:
+#   any tenant's key exfiltrates through it (the paste-site rule: never allowlist a
+#   generic receiver). Telemetry failure is non-fatal to the harness.
+# VS Code / MS telemetry, extension CDNs (vsassets.io, vscode-cdn.net, exp-tas.com),
+#   Copilot hosts — host-machine noise riding the env vars, not pipeline consumers.
+# RESIDUAL (documented in the threat model): allowlisted receivers that accept a
+#   tenant credential (api.anthropic.com, github.com) remain a bounded exfil channel —
+#   irreducible while those services are the pipeline's function.
