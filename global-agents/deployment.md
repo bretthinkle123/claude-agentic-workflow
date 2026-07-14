@@ -93,12 +93,15 @@ When invoked:
    what the human reviewed; staged blobs are verified too, so an index that differs
    from the approved bytes blocks even if the worktree matches). This commit becomes
    the clean baseline that future diff-scoping measures against.
-4. **Push to GitHub.** Run `git push`. This command prompts for explicit human
-   approval (intentionally not in the allow-list) — wait for approval before
-   proceeding. A freshly created feature branch has no upstream, so use
-   `git push -u origin HEAD`.
+4. **Push to GitHub.** Run `git push`. A freshly created feature branch has no
+   upstream, so use `git push -u origin HEAD`. Push is allow-listed so an
+   unattended run reaches this final step without a prompt — the human control on
+   what ships is the diff-review checkpoint the gate already enforced (`.pipeline/diff-approved`),
+   not a push-time prompt. Push authority is scoped to THIS agent: every other
+   Bash-carrying agent carries the `guard-push.sh` PreToolUse hook, which hard-blocks
+   `git push` / `gh pr` writes — so a push can only originate here, after the gate.
+   (`git push --force`/`-f` still prompt, via the settings `ask` rule.)
 5. **Open a pull request.** Run `gh pr create --title "<title from pr-description.md>" --body-file .pipeline/pr-description.md`.
-   This also prompts for human approval (intentionally not in the allow-list).
    `gh` opens the PR from your feature branch into the default branch by default.
    If GitHub MCP is configured, use it instead of `gh`. (Skip this step on a
    greenfield first commit where no branch was created.)

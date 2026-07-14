@@ -13,6 +13,25 @@ Companion to the code guards in `global-hooks/` and the permission model in
 `.claude/settings.json` / `templates/project-settings.json`. Every threat below maps
 to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
 
+## Why host-level containment exists (the autonomy rationale)
+
+Attended runs are protected by the permission prompt: every risky action pauses for a
+human decision, so the blast radius of anything hostile is bounded by the operator's
+attention. An **autonomous** run — the point of the WSL host, zero prompts between
+checkpoints — removes that judge. And the two High-rated attack paths in this document
+never consult the permission layer at all: **supply-chain code** (a hostile dependency's
+install script runs as a side effect of a legitimately-approved command) and **prompt
+injection** (steers the model into misusing permissions it legitimately holds; model-side
+defenses are probabilistic). Settings rules are therefore *policy-level* isolation —
+constraints an orderly harness enforces on itself. Unattended operation additionally
+requires *structural* containment that holds even if the entire session is compromised.
+That is the sandbox: the **disposable WSL2 userland** caps filesystem damage, the
+**default-deny egress proxy** caps network damage (exfiltration / phone-home), and the
+**repo-scoped fine-grained PAT** caps credential damage. This is why a Windows-side run
+with the identical `settings.json` is *not* equivalent (residual (d) below): it keeps
+the policy layer but none of the structure. Operational setup:
+[docs/pipeline-wsl-operations.md](pipeline-wsl-operations.md).
+
 ## Step 1 — Assets and trust boundaries
 
 **Assets**
@@ -58,6 +77,7 @@ to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
 | **Info disclosure** | Pipeline → GitHub | A secret/junk file committed into the PR | **M** | Deployment **pre-commit content inspection** (`deployment-checklist-and-rollback` skill grep set) + GitHub secret-scanning/push-protection (repo hygiene). |
 | **DoS** | Debug/scan/test loop | A failing feature loops forever, burning the model budget | **L–M** | `loop-guard.sh` circuit-breaker (cycle + wall-clock caps → terminal `capped`, human escalation, never auto-cleared) + per-agent `maxTurns`. |
 | **Elevation of privilege** | Subagent out of lane | testing edits prod code; deployment bypasses the gate to self-authorize a deploy | **M** | Per-agent **tool scoping** (deployment has *only* Bash); `deployment-gate.sh` fail-closed PreToolUse; the marker guard closes deployment's self-approval path specifically. |
+| **Elevation of privilege** | Non-deployment subagent → git remote | An injected implementation/security/testing/debugging/documentation/plan-audit agent runs `git push` / `gh pr create` / a mutating `gh api` to ship code past the human diff-review checkpoint (`git push` is allow-listed for deployment's unattended final step, so it would not prompt) | **M** | **`guard-push.sh`** PreToolUse Bash hook on all **6 non-deployment** Bash agents (NOT deployment) hard-blocks `git push`, `gh pr` writes, and mutating `gh api` — exit 2, never a prompt, so autonomy is preserved (`tests/suites/push-guard.sh`). Push can therefore originate only from deployment, after `deployment-gate.sh`. A rogue branch push (were the guard bypassed) still cannot merge: branch protection + the `diff-approved` merge anchor. Residual: a push wrapped in a first-written script (`bash scratch.sh`) or otherwise obfuscated, and the `git -C <dir> push` form, are not matched by the string scan (below). |
 
 ## Step 3 — Severity rubric
 
@@ -121,6 +141,17 @@ to an **existing guard**, the **new PR K guard**, or a **stated accepted risk**.
   diff-approved)**.** The human review is the
   backstop; this residual is inherent to an LLM pipeline and is why the *deterministic*
   gates never delegate a pass/fail to model judgement.
+- **Windows drive-mount and interop stay ENABLED on the WSL host (deliberate trade).**
+  The sandbox does not seal the VM off from Windows: `/mnt/c` remains mounted and Windows
+  interop remains on — the toast-notification channel (BurntToast via interop) depends on
+  it. The Windows-filesystem path is **policed rather than removed**: `check-run-host.sh`
+  refuses to proceed with a run standing on `/mnt/*` or an OneDrive path (canary CN2-3
+  caught exactly this), approvals must land on the run's filesystem (the approve scripts
+  print host + path), and the WSL home holds nothing worth stealing (`verify-sandbox.sh`
+  asserts). Accepted because the compensating controls are deterministic and interop is
+  required for paging the operator. The structural close-out, if this residual ever needs
+  removing, is `/etc/wsl.conf` (`[automount] enabled=false`, `[interop] enabled=false`) at
+  the cost of toasts and `/mnt/c` convenience.
 - **No per-agent filesystem sandbox** (SDK-level, out of scope) — **but the blast radius
   is now the WSL2 userland**, not the operator's Windows profile: runs execute on the
   native WSL filesystem (`check-run-host.sh` verifies), holding only a repo-scoped
@@ -143,7 +174,7 @@ flowchart TD
         GST[(gate-status files\ntest-results · security-status · pr-description)]
     end
     subgraph enforce[Trusted enforcement — fail closed]
-        HOOKS{{Deterministic hooks\ndeployment-gate · loop-guard · stamp-ran-at\n⚠ guard-approval-markers PR K}}
+        HOOKS{{Deterministic hooks\ndeployment-gate · loop-guard · stamp-ran-at\n⚠ guard-approval-markers PR K · ⚠ guard-push}}
     end
     EXT["⚠ Untrusted inputs\nPROJECT.md · cloned repos · dep READMEs · design bundles/screenshots · MCP results"]
     GH([GitHub PR])
@@ -152,9 +183,10 @@ flowchart TD
     EXT -->|read as DATA, not instructions| SA
     SA -->|writes results| GST
     SA -.->|"⚠ forge attempt (blocked: hook + deny)"| MARK
+    SA -.->|"⚠ non-deployment push (blocked: guard-push)"| GH
     HOOKS -->|reads, gates on| MARK
     HOOKS -->|reads, gates on| GST
-    SA -->|commit + push + PR\nafter gate passes| GH
+    SA -->|"commit + push + PR\n(deployment only, after gate)"| GH
     HOOKS -.->|blocks unless every condition met| SA
 ```
 
@@ -186,11 +218,19 @@ STRIDE:
   maxTurns caps.
 - Elevation of privilege (Medium): agent out of lane / deployment self-authorizing.
   Mitigation: per-agent tool scoping; fail-closed deployment gate; the marker guard.
+- Elevation of privilege (Medium): a non-deployment Bash agent (injected) runs
+  git push / gh pr create / mutating gh api to ship code past the human diff-review
+  checkpoint. Mitigation: guard-push.sh PreToolUse hook on the 6 non-deployment Bash
+  agents hard-blocks it (exit 2, never a prompt — autonomy preserved); push originates
+  only from deployment after its gate; a bypassed push reaches at most a branch, which
+  branch protection + the diff-approved merge anchor still prevent from merging.
 Accepted residual: obfuscated Bash past the string scanner; cross-stage gate-status
 forgery; credentialed allowlisted-receiver egress abuse (shell egress proxy-ENFORCED
 default-deny on the WSL host since 2026-07-13; WebFetch domain-denied); WebSearch
 query-string leakage; subtle injection surviving human review; per-agent filesystem
-isolation is host-level (WSL2 disposable userland + repo-scoped PAT), not per-subagent.
+isolation is host-level (WSL2 disposable userland + repo-scoped PAT), not per-subagent;
+Windows drive-mount/interop stay enabled on the WSL host (run location policed by
+check-run-host.sh, not structurally removed — interop carries the toast channel).
 Render this as an OWASP Threat Dragon diagram. Output either (a) valid Threat Dragon
 JSON importable at app.threatdragon.com, or (b) a labeled data flow diagram with trust
 boundaries if JSON is not feasible. No additional context is available beyond what is in
