@@ -26,6 +26,7 @@ needed; if `shellcheck` happens to be installed, `static.sh` uses it, otherwise 
 | `gate.sh` | `deployment-gate.sh` passes the green fixture and blocks on each failure (tests fail, criteria incomplete, **perf F1**, security not clean, missing pr-description) |
 | `diff-approved.sh` | M5 human diff-review + F3 currency: `approve-diff.sh` is human-only (TTY) and project-guarded; the gate, in a real git repo, requires `diff-approved` with a matching `approved_change_hash` |
 | `marker-guard.sh` | `guard-approval-markers.sh` (PR K) blocks a subagent forging a human-owned approval marker via Bash, while every legitimate command (reads, `write-review-manifest.sh`) passes |
+| `push-guard.sh` | `guard-push.sh` blocks `git push` / `gh pr` writes / mutating `gh api` from the 6 non-deployment Bash agents (incl. subshell/brace/backtick/chained forms), passes legitimate git reads/commits (even a commit message containing "push"), and asserts the hook is wired on the 6 and **not** on deployment |
 | `lockfile-check.sh` | supply-chain integrity (M6): manifest-without-lockfile blocks (exit 2), unpinned deps / bare re-lock warn (exit 1), in-sync is clean |
 | `loop-guard.sh` | `reset`/`tick`; cycle cap + wall-clock cap → `capped` exit 2; `done` → `completed`; `done` won't overwrite `capped`; no-op outside a project |
 | `loop-exit-invariant.sh` | **`deployment-gate.sh` verdict ⟺ the canonical loop-exit predicate** across a matrix, plus a substring guard that the orchestration SKILL still carries the perf-pairing clause |

@@ -21,6 +21,8 @@ hooks:
       hooks:
         - type: command
           command: "$HOME/.claude/hooks/guard-approval-markers.sh"
+        - type: command
+          command: "$HOME/.claude/hooks/guard-push.sh"
   Stop:
     - hooks:
         - type: command

@@ -116,6 +116,7 @@ the containment layer that makes eased prompting safe:
 | Hook | What it blocks/records under autonomy |
 |---|---|
 | `guard-approval-markers.sh` | Any tool call that would create or modify `plan-approved` / `diff-approved` / `design-approved` / `waivers.json`, including indirect routes (`echo >`, scripts) a permission glob would miss |
+| `guard-push.sh` | `git push` / `gh pr` writes / mutating `gh api` from any **non-deployment** Bash agent — so a prompt injection at any earlier stage cannot publish code to the remote; only the deployment stage (which does not carry this hook) reaches GitHub, and only after its gate |
 | `deployment-gate.sh` | The final commit, unless it *recomputes* from `.pipeline/*` files that security is clean, tests pass, criteria are covered, `diff-approved` exists, and the tree matches the approved hash — it never trusts agent claims |
 | `egress-check.sh` (+ `egress-allowlist.txt`) | Shell network access outside the git remote / package registries |
 | `loop-guard.sh` | Runaway retry loops — cap hit means stop and escalate to the human |
@@ -126,7 +127,9 @@ never invokes a stage before its interlock file exists (deployment requires `dif
 re-verifies currency hashes so approvals can't be reused against regenerated content, and each
 subagent runs with a minimal toolset (deployment: Bash only; testing: no web; triage: no Bash, no
 Edit). The agents exposed to untrusted content — web pages, dependency docs, design bundles,
-telemetry — are never the agents that can push.
+telemetry — are never the agents that can push: that boundary is *enforced*, not just sequenced,
+by `guard-push.sh` (a PreToolUse Bash hook on all six non-deployment Bash agents that blocks
+`git push` / `gh pr` writes / mutating `gh api`), so only the deployment stage can reach GitHub.
 
 ### Human checkpoints under autonomy
 
@@ -247,6 +250,7 @@ claude-agentic-workflow/
 │   ├── asvs-sast.sh            security Stop hook: deterministic ASVS Tier-1 SAST (JWT-none/pw-KDF/CSPRNG/cipher) → asvs-sast.json; gate blocks on critical>0 (ASVS-DET)
 │   ├── store-compliance.sh     security Stop hook: deterministic app-store checks (privacy manifest, usage strings, Required-Reason API compare, targetSdk floor, debuggable release, permission declared↔used, debug-log flood) for a declared Apple/Play target → store-compliance.json; gate blocks on critical>0 (store-compliance Layer C, SC-1…SC-9); no store target ⇒ no-op
 │   ├── guard-approval-markers.sh  PreToolUse Bash hook on all Bash-carrying subagents: blocks a subagent from writing the human-owned markers diff-approved/plan-approved/design-approved + waivers.json (PR K + Option B + DS structural guard)
+│   ├── guard-push.sh           PreToolUse Bash hook on the 6 NON-deployment Bash agents (impl/security/testing/debugging/documentation/plan-audit): blocks git push / gh pr writes / mutating gh api → only deployment can reach the remote, so an injection at an earlier stage can't publish code (exit 2, never a prompt — autonomy preserved)
 │   ├── guard-source-markers.sh  Stop hook on implementation + debugging AND a deployment-gate hard block (audit E3): greps the change set for revert/do-not-commit-class markers (TEMP-REVERT, DO NOT COMMIT, …) and blocks; plain TODO/FIXME pass
 │   ├── guard-tree-hygiene.sh   Stop hook on security + debugging (U-08): blocks scanner/scratch junk (reports/, scratch_*, raw tool dumps) left untracked in the repo tree — the deterministic form of the "tool output goes to .pipeline/, never the tree" rule
 │   ├── check-doc-identifiers.sh  documentation Stop hook (U-13, warn-first): every identifier written into a README must resolve in the tree and documented signatures must match the def site — blocks invented API names once promoted to enforce; persists its tally to .pipeline/doc-identifiers.json every run (F-M4-9)
@@ -819,8 +823,10 @@ and are the pipeline's mechanism for deterministic enforcement. Published to `~/
   tree-hygiene guard, ASVS Tier-1 SAST, store compliance, egress detection, scan-count
   reconciliation, doc-identifier check, ran-at stamping, record-clean, log-run.
 - **`PreToolUse` (declared in agent frontmatter)** — fires before a specific tool runs. Used
-  for: the deployment gate (blocks the git commit Bash call) and `guard-approval-markers.sh`
-  (on all 7 Bash-carrying agents — blocks a subagent from forging a human approval marker).
+  for: the deployment gate (blocks the git commit Bash call); `guard-approval-markers.sh`
+  (on all 7 Bash-carrying agents — blocks a subagent from forging a human approval marker);
+  and `guard-push.sh` (on the 6 non-deployment Bash agents — blocks `git push` / `gh pr`
+  writes / mutating `gh api`, so only deployment can publish to the remote).
 
 **Global safety rule:** every ambient Stop hook (smoke-check, record-clean, infra-validate,
 log-run, stamp-ran-at, asvs-sast, store-compliance, egress-check, guard-source-markers,
@@ -1042,6 +1048,37 @@ writes it legitimately, and post-F3 the gate ignores it). This is the PR K struc
 marker-fabrication vector; paired with a settings `Write`/`Edit` deny on the human-owned markers
 (plan/diff/design-approved + waivers.json — the non-Bash tool vector). Residual obfuscated-Bash risk
 is documented in `docs/pipeline-threat-model.md`.
+
+---
+
+### guard-push.sh
+
+**Fires:** as a `PreToolUse` Bash hook on the **6 non-deployment Bash-carrying subagents**
+(implementation, security, testing, debugging, documentation, plan-audit). It is deliberately
+**not** wired on deployment — deployment is the one stage that must reach the remote.
+
+**Logic:** Reads the PreToolUse event on stdin, extracts `.tool_input.command` (falls back to
+scanning the raw payload if absent — fail toward inspection), and **blocks (exit 2)** any command
+that publishes to the git remote: `git push` (matched as the git *subcommand*, so a commit message
+that merely contains the word "push" passes), a `gh pr` **write** subcommand
+(create/merge/comment/edit/ready/close/reopen/review — reads like `gh pr view` pass), or a `gh api`
+call with a mutating HTTP method (`-X`/`--method POST|PUT|PATCH|DELETE`; default-GET `gh api` reads
+pass). The command-position anchor also catches subshell `(git push)`, brace-group `{ git push; }`,
+backtick, and separator-chained (`;`/`&&`/`|`) forms.
+
+**Why a hook and not an `ask` rule:** `git push` stays allow-listed so the *deployment* stage pushes
+without a prompt — an `ask` rule would stall an unattended run at the final step. A PreToolUse exit 2
+overrides the allow-list for the agents it is wired onto, so deployment (no `guard-push`) pushes
+freely while the other six are hard-blocked with no prompt — autonomy preserved, injection contained.
+Agent **identity** is established by *which* agents carry the hook (same design as
+`guard-approval-markers.sh`), so the hook never has to detect the caller.
+
+**Teeth vs. the merge:** even if the guard were bypassed (a push wrapped in a first-written script,
+an `eval`/`sh -c` wrapper, or the option-laden `git -C <dir> push` form — the documented residuals),
+the result is at worst a **rogue branch** that still cannot **merge**: branch protection plus the
+human-typed `diff-approved` anchor gate the merge, and neither can be forged. Verified by
+`tests/suites/push-guard.sh` (block shapes, legit-git allow cases, gh reads-vs-writes, raw-payload
+fallback, and the on-the-6-not-on-deployment wiring assertion).
 
 ---
 
