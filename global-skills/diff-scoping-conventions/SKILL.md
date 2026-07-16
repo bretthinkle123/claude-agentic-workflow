@@ -53,6 +53,10 @@ Three callers use the hook, never a re-typed copy:
 - **testing** runs `compute-change-hash.sh` and records the result as
   `tested_change_hash` in `test-results.json` — its record of exactly what the
   test run covered.
+- **security** runs the same hook and records it as `scanned_change_hash` in
+  `security-status.json` — its record of exactly what the scan covered. Symmetric with
+  `tested_change_hash`: a deterministic driver compares both against the current tree to
+  tell a CURRENT gate status from a STALE one (so debugging's edits force a re-scan/re-test).
 - **documentation** runs it via `$HOME/.claude/hooks/write-review-manifest.sh`, which
   writes `reviewed_change_hash` to `.pipeline/review-manifest.json` **last**, after
   every README and `system_architecture.md` edit. This is the deployment gate's

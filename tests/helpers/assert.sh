@@ -12,7 +12,7 @@ HOOKS="$REPO_ROOT/global-hooks"
 # Fixture is stored as `pipeline/` (no dot) so the repo's `.pipeline/` gitignore does
 # not swallow it; mk_fixture copies it INTO a real `.pipeline/` in the throwaway workdir.
 FIXTURE="$REPO_ROOT/tests/fixtures/linkly-green/pipeline"
-LOOP_EXIT_PREDICATE="$HELPERS_DIR/loop-exit-predicate.jq"
+LOOP_EXIT_PREDICATE="$HOOKS/loop-exit-predicate.jq"   # canonical GREEN predicate — lives in global-hooks/ so it PUBLISHES to ~/.claude with the hooks (next-stage.sh consumes it at runtime)
 
 command -v jq >/dev/null 2>&1 || { echo "eval-harness: jq is required on PATH." >&2; exit 2; }
 
