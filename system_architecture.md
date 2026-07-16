@@ -244,6 +244,8 @@ claude-agentic-workflow/
 │   ├── record-clean.sh         resets per-cycle retry counters when both gates pass; fires on testing Stop
 │   ├── stamp-ran-at.sh         stamps real UTC ran_at into test-results/security-status JSON; fires first on testing + security Stop (F6)
 │   ├── loop-guard.sh           circuit-breaker; orchestrator calls reset@feature / tick@cycle / done@GREEN-exit (caps the loop)
+│   ├── next-stage.sh           orchestrator-facing DETERMINISTIC transition function (L1): reads .pipeline/* + the canonical GREEN predicates → prints ONE next-action token (run:<stage> / run:debugging:<conjunct> / checkpoint:plan|diff / mark:loop-completed / stop:capped / run:deployment). ADVISORY today; tests/suites/next-stage.sh pins driver≡gate. The "when to start an agent" lever
+│   ├── stage-prompt.sh         orchestrator-facing DETERMINISTIC context registry (L1): an action token → agent name + a prompt whose slots are filled from .pipeline/* by jq (the failing security conjunct's CVSS/lists, the failing test's names) — a reproducible Agent(<name>,"<prompt>") instead of an improvised prose prompt. The "what context to pass" lever
 │   ├── deployment-gate.sh      blocks git commit unless 5 conditions met (incl. human diff-approval); PreToolUse on deployment
 │   ├── approve-diff.sh         human-only (TTY) M5 checkpoint: writes diff-approved (approved_change_hash); the gate's review + currency anchor
 │   ├── record-waiver.sh        human-only (TTY) waiver recorder: writes .pipeline/waivers.json (osv/asvs); the gate honors only human-recorded waivers (Option B)
@@ -355,7 +357,7 @@ claude-agentic-workflow/
 │   ├── fixtures/linkly-green/  Golden pipeline snapshot (Linkly, perf corrected to a passing state)
 │   ├── fixtures/m3/            Preserved evidence from all three M3-series validation runs (run3 .pipeline
 │   │                           snapshot, decision records, reconstructed artifacts) — audit corpus + suite fixtures
-│   └── helpers/                assert.sh helpers + loop-exit-predicate.jq (canonical GREEN predicate)
+│   └── helpers/                assert.sh helpers (the canonical loop-exit-predicate.jq now lives in global-hooks/ so it publishes with the hooks — next-stage.sh consumes it at runtime)
 │
 ├── docs/                   Curated living documentation only (operator-placed)
 │   ├── pipeline-changelog.md         What shipped, by design unit (PR A–K, Track 2 L–P, side-tracks), with rationale links
@@ -1082,6 +1084,43 @@ fallback, and the on-the-6-not-on-deployment wiring assertion).
 
 ---
 
+### next-stage.sh + stage-prompt.sh — the deterministic driver (L1)
+
+Orchestration is a hybrid: the **gates and the loop-exit condition** are already deterministic
+(`deployment-gate.sh`, the canonical GREEN predicate), but the **driver** — deciding *which* stage
+runs next and *with what prompt* — has been an LLM following the `pipeline-orchestration` SKILL as
+prose. These two hooks make that driver a pure, tested function of `.pipeline/*` state (the L1 step).
+
+**`next-stage.sh` (when).** Reads the interlock files + the SAME `jq` GREEN predicates the deploy
+gate uses, and prints ONE action token via a first-match cascade: bootstrapped? → planning →
+plan-audit → (one-shot revision) → `checkpoint:plan` → implementation/smoke → the run-to-condition
+loop → `mark:loop-completed` → advisory stages → documentation → `checkpoint:diff` → deployment. Loop
+ordering (security first, re-scan after debugging) is not a remembered cursor — it **emerges from a
+change-set hash**: after debugging edits code the hash moves, so the prior `security-status`/
+`test-results` verdicts go stale (`scanned_change_hash`/`tested_change_hash` ≠ the tree) and re-run
+in order, which is exactly the SKILL's "remediation re-runs both gates."
+
+**`stage-prompt.sh` (what).** Turns each token into the agent name + a prompt whose variable slots are
+filled from state by `jq` — the debugging payloads pull the failing security conjunct's actual CVSS
+and offending lists, or the failing test's names — so `Agent(<name>,"<prompt>")` is reproducible,
+not re-improvised.
+
+**Drift safety.** The GREEN decision reuses the canonical predicates verbatim (the `SEC_PRED` string
+is byte-identical to the gate's, the test clause is `loop-exit-predicate.jq`), and
+`tests/suites/next-stage.sh` pins **driver ≡ gate ≡ SKILL**: every action the driver emits must be
+handled by `stage-prompt.sh` and documented in the SKILL, so the three cannot silently diverge — the
+same guarantee the `loop-exit ≡ gate` invariant already gives, extended to sequencing + context.
+
+**Boundaries (stay non-deterministic by design).** Human checkpoints (the driver emits
+`checkpoint:*` and waits — it never forges a marker); cap-out observation (a `maxTurns` cap fires no
+Stop hook, so noticing it stays observational); the ambiguous tails (gate-block recovery, the
+post-deploy CI-watch/merge phase depend on stderr / remote CI, not local files — the driver's
+authority ends at `run:deployment`); and the agents' generation itself. **STATUS: advisory** — the
+hooks are wired into the SKILL and tested, but the orchestrator is not yet *compelled* to obey them
+(that behavioral enforcement is L2).
+
+---
+
 ### The scan-evidence chain (U-09): wrappers → stamp-scan.sh → reconcile-scans.sh
 
 **Why it exists:** the M3-series runs shipped security reports whose "Semgrep/OSV executed this
@@ -1193,7 +1232,7 @@ commit; until then, all changes live in the working tree.
 | `surface-delta.md` | implementation agent | security agent (6f STRIDE-delta reconciliation) | Best-effort hint listing new/changed attack surface (entry points, trust boundaries, data flows, privilege surface); non-authoritative — the diff is the source of truth |
 | `debug-notes.md` | debugging agent | human (advisory) | Append-only root-cause hypothesis log: cause, evidence, what was tried, the closing fix + regression test |
 | `security-report.md` | security agent | human, documentation | Human-readable findings detail |
-| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,"osv_max_cvss":0,"input_surface":{...,"reconciled":true},"data_surface":{"classified":N,"sensitive":M,"unprotected":[],"reconciled":true},"asvs":{"l1_l2_universal":true,"in_scope_l3":[],"triggered_chapters":[...],"l1_l2_missing":[],"l3_in_scope_missing":[],"reconciled":true},...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`); the `asvs` object (ASVS 5.0.0 6g — L1/L2 universal, in-scope L3) and `data_surface` (DP — per-field at-rest protection) are deterministic floors: `deployment-gate.sh` + loop-exit block on `asvs.reconciled==false` and on `data_surface.unprotected` non-empty |
+| `security-status.json` | security agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Machine-readable gate status: `{"status":"clean","critical_count":0,"warning_count":0,"fixed_count":0,"total_findings":0,"stride_new_threats":0,"osv_max_cvss":0,"input_surface":{...,"reconciled":true},"data_surface":{"classified":N,"sensitive":M,"unprotected":[],"reconciled":true},"asvs":{"l1_l2_universal":true,"in_scope_l3":[],"triggered_chapters":[...],"l1_l2_missing":[],"l3_in_scope_missing":[],"reconciled":true},...}`. Includes `lockfile-check.sh` supply-chain violations (block → `critical_count`); the `asvs` object (ASVS 5.0.0 6g — L1/L2 universal, in-scope L3) and `data_surface` (DP — per-field at-rest protection) are deterministic floors: `deployment-gate.sh` + loop-exit block on `asvs.reconciled==false` and on `data_surface.unprotected` non-empty. Also carries `scanned_change_hash` (the change set the scan covered, via `compute-change-hash.sh`, symmetric with testing's `tested_change_hash`) — `next-stage.sh` compares it to the tree to tell a CURRENT clean status from a STALE one (re-scan after debugging edits) |
 | `sbom.cdx.json` | `generate-sbom.sh` (via security) | documentation (surfaces component count in the PR) | CycloneDX SBOM (M6); **best-effort, non-gating** — absent when Docker is unavailable |
 | `scan-log.jsonl` | `stamp-scan.sh` (called by every scanner wrapper) | reconcile-scans.sh, security agent (may only claim "executed this pass" for a this-pass stamp) | Append-only scan-execution stamps (U-09): `{tool, exit_code, artifact_sha256, ts}` per real scanner run — the evidence behind every count |
 | `<tool>.json` (semgrep/osv/trivy-config/checkov/gitleaks) | the scanner wrappers | reconcile-scans.sh (recounts findings from these exact artifacts) | Raw scanner output, kept in gitignored `.pipeline/` — never the repo tree (guard-tree-hygiene blocks) and never OS temp (how the M3 evidence was lost) |
@@ -1202,7 +1241,7 @@ commit; until then, all changes live in the working tree.
 | `design-src/` | orchestrator (`markitdown`, TA/B-4 — only when the design bundle has PDF/DOCX/PPTX) | design-spec (reads the conversions instead of binaries it can't open) | Mechanical Markdown conversions of non-text design docs — **still untrusted bundle content** |
 | `asvs-sast.json` | `asvs-sast.sh` (security Stop hook) | deployment-gate.sh (blocks on `critical>0`), security agent (fixes findings) | `{"critical":N,"warning":M,"findings":[{rule,asvs,severity,file,line,match}]}` — deterministic ASVS Tier-1 SAST (ASVS-DET); absent ⇒ 0 ⇒ no-op |
 | `store-compliance.json` | `store-compliance.sh` (security Stop hook) | deployment-gate.sh (blocks on `critical>0`), security agent (fixes findings) | `{"ran_at","scope":"apple\|android\|apple+android","critical":N,"warning":M,"findings":[{store,rule,severity,match}]}` — deterministic app-store submission checks (store-compliance Layer C); **repo-state scoped**, activated by a declared Apple/Play target; absent ⇒ 0 ⇒ no-op (deploy-only, not in loop-exit) |
-| `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
+| `test-results.json` | testing agent (+ `stamp-ran-at.sh` normalizes `ran_at`) | deployment-gate.sh, record-clean.sh, log-run.sh, `next-stage.sh` (reads `tested_change_hash` for staleness) | Test pass/fail + `tested_change_hash` + `test_strategy` + `tests_by_type` + `criteria_covered` + `perf` (budget/measured — gate enforces criterion-completeness) + `coverage` (gated `combined` lines + surfaced `branches` + best-effort per-suite) |
 | `test-quality.json` | testing agent | documentation (surfaces in PR description) | **Advisory — no gate/loop-exit reads it.** Mutation over changed core modules (`{tool,scope,score,killed,survived}`) + adversarial `gaps[]` ("what the tests don't catch") + `quality_ok` |
 | `doc-identifiers.json` | `check-doc-identifiers.sh` (documentation Stop hook) | human / audit (the persisted warn-phase tally; F-M4-9) | `{checked, unresolved, ...}` per run — makes the U-13 warn-first signal auditable instead of stderr-only |
 | `pr-description.md` | documentation agent | deployment agent, deployment-gate.sh | PR body; also required by the gate |

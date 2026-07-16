@@ -13,6 +13,41 @@ sees only its system prompt + the prompt string you pass. All cross-stage state
 travels through `.pipeline/*` files. Pass everything a stage needs via its prompt
 string and those files — never assume it can see the conversation.
 
+## Deterministic driver (L1) — consult it, obey it
+
+Sequencing and context assembly are a **pure function of `.pipeline/* state`, not your
+judgment.** Two hooks compute them; run them at every step and do what they say:
+
+```
+ACTION=$(bash ~/.claude/hooks/next-stage.sh)          # WHAT runs next (one action token)
+bash ~/.claude/hooks/stage-prompt.sh "$ACTION"        # the AGENT + the exact PROMPT, or a DIRECTIVE
+```
+
+`next-stage.sh` reads the interlock files + the SAME `jq` GREEN predicates as the deploy
+gate and prints one token: `run:<stage>` / `run:debugging:<conjunct>` / `checkpoint:plan`
+/ `checkpoint:diff` / `mark:loop-completed` / `stop:capped` / `run:design-review` /
+`run:dast` / `run:documentation` / `run:deployment` / `error:not-bootstrapped`.
+`stage-prompt.sh` turns that token into the agent name + a prompt whose slots are filled
+from state (the failing security conjunct's CVSS/list, the failing test's names) — so
+`Agent(<name>, "<prompt>")` is reproducible, never re-improvised. This makes the routing
+in the **Stage sequence below the RATIONALE**, and the driver the source of truth: they
+are pinned equivalent by `tests/suites/next-stage.sh` (`driver ≡ gate`), so they cannot
+drift. When you find yourself deciding "which stage now / what do I tell it," you have
+already lost — call the driver.
+
+**What the driver deliberately does NOT decide (the escape hatches — stay human/LLM):**
+- **Human checkpoints.** It emits `checkpoint:plan`/`checkpoint:diff` and STOPS; a human
+  writes the marker (it never forges one). The pipeline waits.
+- **Cap-out observation.** A `maxTurns` cap fires no Stop hook, so "notice the cap and
+  breadcrumb it" is still observational (see Telemetry below) — the driver can't see it.
+- **The ambiguous tails.** Gate-block recovery and the post-deploy CI-watch/merge phase
+  (step 6c) depend on stderr / REMOTE CI state, not local `.pipeline/` files; those stay
+  prose + operator judgment. The driver's authority ends at `run:deployment`.
+- **The work itself.** The driver is deterministic; the agents' generation is not.
+
+STATUS: L1 prototype — the hooks exist and are tested, but are ADVISORY today (this
+section is the adoption step; the prose sequence still stands as the human-readable spec).
+
 ## Stage sequence
 
 ```

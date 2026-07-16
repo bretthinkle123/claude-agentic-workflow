@@ -6,7 +6,8 @@
 # There are THREE copies of the GREEN predicate that must agree:
 #   1. deployment-gate.sh          (bash + jq — the deploy gate)
 #   2. pipeline-orchestration/SKILL.md  (inline jq — what the human orchestrator runs)
-#   3. loop-exit-predicate.jq      (this harness's canonical copy)
+#   3. global-hooks/loop-exit-predicate.jq  (the PUBLISHED canonical copy — shipped to
+#      ~/.claude/hooks/ and consumed at runtime by next-stage.sh; the harness reads it too)
 # This suite pins all three together, transitively:
 #   (a) gate ⟺ canonical  — run deployment-gate.sh over a fixture matrix and assert
 #       its verdict matches (security-clean AND canonical predicate).

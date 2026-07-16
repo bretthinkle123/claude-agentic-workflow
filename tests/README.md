@@ -30,6 +30,8 @@ needed; if `shellcheck` happens to be installed, `static.sh` uses it, otherwise 
 | `lockfile-check.sh` | supply-chain integrity (M6): manifest-without-lockfile blocks (exit 2), unpinned deps / bare re-lock warn (exit 1), in-sync is clean |
 | `loop-guard.sh` | `reset`/`tick`; cycle cap + wall-clock cap → `capped` exit 2; `done` → `completed`; `done` won't overwrite `capped`; no-op outside a project |
 | `loop-exit-invariant.sh` | **`deployment-gate.sh` verdict ⟺ the canonical loop-exit predicate** across a matrix, plus a substring guard that the orchestration SKILL still carries the perf-pairing clause |
+| `next-stage.sh` | the deterministic driver (`next-stage.sh`): a `.pipeline/*` state→action matrix, the GREEN decision pinned byte-identical to the gate's predicates (`driver≡gate`), and a vocabulary guard (every action is handled by `stage-prompt.sh` and documented in the SKILL) |
+| `stage-prompt.sh` | the context registry (`stage-prompt.sh`): each action token → the right agent + a prompt whose slots (feature slug, failing security conjunct's CVSS/lists, failing test's names) are filled deterministically from state; unknown token fails closed |
 | `stamp-ran-at.sh` | placeholder `ran_at` → real UTC on both artifacts; no-op on missing/unknown/outside-project; malformed JSON left unchanged |
 | `record-clean.sh` | resets `debug_retry_count` iff both gates clean; no-op otherwise |
 | `hash-determinism.sh` | audit E1: `compute-change-hash.sh` is stable across locale and odd filenames, so the human diff-approval gate can't become unpassable from a differently-configured shell |
@@ -58,7 +60,7 @@ Option B waivers, the assurance stamp, FE Layer 4).
 - Suites run the **real** hooks by absolute path from a throwaway `mktemp -d` workdir (outside any
   git repo, so the gate's currency check self-skips). `helpers/assert.sh` holds the helpers and cleans
   up every workdir on exit.
-- `helpers/loop-exit-predicate.jq` is the harness's own canonical copy of the GREEN condition; it must
+- `global-hooks/loop-exit-predicate.jq` is the canonical copy of the GREEN condition (it lives in `global-hooks/` so it publishes to `~/.claude/hooks/` and `next-stage.sh` can consume it at runtime); it must
   stay equivalent to `deployment-gate.sh` and the orchestrator's inline jq — `loop-exit-invariant.sh`
   is what enforces that.
 

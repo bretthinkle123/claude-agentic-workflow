@@ -523,6 +523,7 @@ When invoked:
    { "status": "clean", "critical_count": 0, "warning_count": 1,
      "fixed_count": 3, "total_findings": 4, "ran_at": "<ISO timestamp>",
      "scope": "diff", "since_commit": "<hash|null>",
+     "scanned_change_hash": "<sha256 via compute-change-hash.sh>",
      "stride_mechanisms_verified": 4, "stride_mechanisms_missing": 0,
      "stride_new_threats": 0,
      "asvs": { "l1_l2_universal": true, "in_scope_l3": [], "triggered_chapters": ["V1","V2","V8","V13"],
@@ -535,6 +536,12 @@ When invoked:
      "input_surface": { "declared": 0, "implemented": 0, "uncontrolled": [], "reconciled": true },
      "data_surface": { "classified": 0, "sensitive": 0, "unprotected": [], "reconciled": true } }
    ```
+   - **`scanned_change_hash` (REQUIRED).** Run `compute-change-hash.sh` (the shared
+     `diff-scoping-conventions` hook) and record its output — the exact change set you
+     scanned, mirroring testing's `tested_change_hash`. It lets a deterministic driver tell
+     a CURRENT clean status from a STALE one: after debugging edits code the hash moves, so a
+     prior `clean` no longer matches the tree and security must re-scan. Absent, staleness is
+     un-detectable and the driver falls back to "present ⇒ fresh".
    - **`scan_artifacts` + per-tool counts (REQUIRED when you ran a scanner this pass; U-09).**
      Run each scanner through its WRAPPER (`semgrep-scan.sh`, `osv-scan.sh`, `checkov-scan.sh`,
      `trivy-scan.sh`), writing raw output to the conventional `.pipeline/<tool>.json` path
