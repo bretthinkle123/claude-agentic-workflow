@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # The human plan checkpoint (M4″-A1) — the plan-side twin of approve-diff.sh.
 #
 # Why a helper instead of `touch .pipeline/plan-approved`: in the M4″ run the operator

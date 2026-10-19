@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # notify-checkpoint.sh — page the operator when the pipeline needs a human (autonomy plan
 # Phase 2). Called by the ORCHESTRATOR at the three pause points, and wired as a
 # settings-level `Notification` hook so any unexpected permission/input wait pages too

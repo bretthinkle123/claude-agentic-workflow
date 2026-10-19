@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # The human diff-review checkpoint (M5). After the pipeline goes GREEN and
 # documentation writes its files, a HUMAN reviews the full diff + the
 # security/test/quality reports and runs THIS script to record approval. The deploy

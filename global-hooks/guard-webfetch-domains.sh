@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # guard-webfetch-domains.sh — deterministic domain allowlist for WebFetch (autonomy plan
 # 4.2). Wired as a settings-level PreToolUse hook (matcher: WebFetch) — no pipeline
 # SUBAGENT holds WebFetch (only planning has WebSearch), so the surface this guards is

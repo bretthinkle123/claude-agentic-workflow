@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Single source of truth for the working-tree change-set hash: a SHA-256 over the
 # tracked diff plus the contents of every untracked file (see the
 # diff-scoping-conventions skill). Both documentation (via write-review-manifest.sh,

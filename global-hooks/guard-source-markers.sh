@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # guard-source-markers.sh — deterministic block (audit E3) against shipping a tree
 # that still carries an experimental / reverted-fix marker in CHANGED source.
 #

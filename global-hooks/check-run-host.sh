@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # check-run-host.sh — name the isolation tier of the current run location (CN2-3).
 #
 # The usage-daily canary executed in the OneDrive/Windows clone because nothing at

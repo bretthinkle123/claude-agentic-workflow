@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # build-filter.sh — turn egress-allowlist.txt into a tinyproxy Filter file (EG Layer 2).
 #
 # tinyproxy with `FilterDefaultDeny Yes` + `Filter <file>` ALLOWS only hosts matching a line in

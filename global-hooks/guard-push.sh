@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # guard-push.sh — structural block against a NON-deployment subagent publishing to the
 # git remote. Only the deployment stage is allowed to push / open / merge a PR, and only
 # after deployment-gate.sh passes; every other Bash-carrying agent (implementation,

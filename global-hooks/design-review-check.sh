@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # design-review-check.sh — FE Layer 4 budget compare (deterministic; the testable half).
 #
 # The runtime-heavy capture (render the built screens with Playwright, diff each against its

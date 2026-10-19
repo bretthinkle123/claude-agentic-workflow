@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # asvs-sast.sh — Tier-1 deterministic ASVS 5.0.0 checks (ASVS-DET roadmap, slice A).
 #
 # Promotes a small set of HIGH-value, HIGH-precision ASVS requirements from agent-reasoned (security

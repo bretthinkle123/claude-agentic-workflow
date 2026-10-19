@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # egress-check.sh — Layer 3 detection for the default-deny egress control (EG side-track).
 #
 # The ENFORCEMENT is Layer 2 (a default-deny forward proxy; see global-hooks/egress-proxy/). This
