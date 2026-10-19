@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Confirms the app boots and responds (default: Python backend). Always runs,
 # zero LLM cost. Fill START_CMD / HEALTH_URL from CLAUDE.md's Start: line, or
 # export the SMOKE_* env vars.

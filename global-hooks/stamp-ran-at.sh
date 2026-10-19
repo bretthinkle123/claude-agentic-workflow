@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Deterministically stamps a REAL `ran_at` (UTC, at Stop time) into a stage's JSON
 # result artifact, so the recorded timestamp can never be a model-invented
 # placeholder. F6: `test-results.json` and `security-status.json` were both seen

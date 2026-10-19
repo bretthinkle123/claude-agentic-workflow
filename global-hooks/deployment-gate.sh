@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Blocks deployment unless interlock files show a clean, CURRENT, documented state.
 #
 # Installed globally at ~/.claude/hooks/ and wired as the deployment agent's Bash

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # check-doc-identifiers.sh — U-13: documentation identifiers must resolve in the tree.
 #
 # The documentation agent invented nonexistent API names in READMEs it was updating on

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Circuit-breaker for the orchestrator-driven post-approval loop (PR C).
 #
 # The orchestrator calls this ONCE at the top of every full

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # dast-review.sh — DAST Layer 1 budget compare (deterministic; the testable half).
 #
 # The runtime-heavy scan (boot the app, run OWASP ZAP's passive baseline against it) is done by

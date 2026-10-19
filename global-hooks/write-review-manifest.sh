@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Documentation's final action: write .pipeline/review-manifest.json — a
 # reviewed_change_hash sanity anchor (approve-diff.sh checks the tree still matches
 # it before recording a human approval), plus a UTC timestamp. It is NOT the deploy

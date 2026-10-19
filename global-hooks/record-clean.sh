@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Resets the debug retry counters when, and only when, both gate reports are
 # clean/passing. Safe to fire on every testing-completion event; no-ops otherwise.
 #

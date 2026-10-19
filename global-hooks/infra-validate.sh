@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Deterministic infra gate: format, validate, and produce a reviewable plan.
 # No-ops when the change has no infra/ directory.
 set -e

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # guard-tree-hygiene.sh — U-08: deterministic block on scanner/scratch junk leaking
 # into the repo tree.
 #

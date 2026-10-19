@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # store-compliance.sh — Tier-1 deterministic app-store submission checks (store-compliance plan, Layer C).
 #
 # Makes the mechanically-checkable subset of Apple App Store / Google Play submission requirements a

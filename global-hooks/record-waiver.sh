@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # record-waiver.sh — HUMAN-ONLY recorder for security waivers (Option B).
 #
 # A waiver excuses an otherwise-blocking finding AFTER a human accepts the risk:

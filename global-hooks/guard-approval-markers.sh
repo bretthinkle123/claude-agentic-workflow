@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # guard-approval-markers.sh — structural block (PR K, M9) against a subagent
 # FABRICATING a human-owned gate marker:
 #   .pipeline/diff-approved   — the M5 human diff-review approval (deployment gate anchor)

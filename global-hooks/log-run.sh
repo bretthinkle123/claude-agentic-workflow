@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Appends one line to .pipeline/run-log.jsonl — per-stage pipeline telemetry.
 # Wired as a Stop hook on every agent. Zero-LLM, deterministic.
 #

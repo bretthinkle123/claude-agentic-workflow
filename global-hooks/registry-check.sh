@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # registry-check.sh — plan-audit's dependency reality-check, scoped (autonomy plan 1.2b).
 #
 # The anti-slopsquatting lookup (dependency-audit-policy skill) needs ONE network verb:
